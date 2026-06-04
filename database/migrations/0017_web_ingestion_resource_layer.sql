@@ -73,7 +73,7 @@ create table if not exists web_resources (
   raw_payload_json jsonb not null default '{}'::jsonb,
   extraction_state text not null default 'pending',
   extraction_error text,
-  projected_article_id uuid references articles (doc_id) on delete set null,
+  projected_signal_candidate_id uuid references signal_candidates (doc_id) on delete set null,
   discovered_at timestamptz not null default now(),
   enriched_at timestamptz,
   created_at timestamptz not null default now(),
@@ -123,8 +123,8 @@ create index if not exists web_resources_resource_kind_idx
 create index if not exists web_resources_extraction_state_idx
   on web_resources (extraction_state);
 
-create index if not exists web_resources_projected_article_id_idx
-  on web_resources (projected_article_id);
+create index if not exists web_resources_projected_signal_candidate_id_idx
+  on web_resources (projected_signal_candidate_id);
 
 insert into sequences (
   sequence_id,

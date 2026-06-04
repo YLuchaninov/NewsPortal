@@ -147,7 +147,7 @@ async def fetch_canonical_document_vector(
     await cursor.execute(
         """
         select er.embedding_json
-        from article_vector_registry avr
+        from signal_candidate_vector_registry avr
         join embedding_registry er on er.embedding_id = avr.embedding_id
         where avr.doc_id = %s
           and avr.vector_type = 'e_event'
@@ -198,7 +198,7 @@ async def fetch_canonical_document_features(
           af.entities,
           af.places
         from canonical_documents cd
-        left join article_features af on af.doc_id = cd.canonical_document_id
+        left join signal_candidate_features af on af.doc_id = cd.canonical_document_id
         where cd.canonical_document_id = %s
         limit 1
         """,
@@ -386,7 +386,7 @@ async def rebuild_story_cluster_state(
           af.places
         from story_cluster_members scm
         join canonical_documents cd on cd.canonical_document_id = scm.canonical_document_id
-        left join article_features af on af.doc_id = cd.canonical_document_id
+        left join signal_candidate_features af on af.doc_id = cd.canonical_document_id
         where scm.story_cluster_id = %s
         order by cd.published_at desc nulls last, scm.created_at desc
         """,
@@ -613,11 +613,11 @@ async def create_or_update_story_cluster(
 async def sync_story_cluster_and_verification(
     cursor: psycopg.AsyncCursor[Any],
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     vector_version: int,
 ) -> dict[str, Any]:
     canonical_document_id = uuid.UUID(
-        str(article.get("canonical_doc_id") or article["doc_id"])
+        str(signal_candidate.get("canonical_doc_id") or signal_candidate["doc_id"])
     )
     try:
         canonical_verification = await refresh_canonical_document_verification(
@@ -636,7 +636,7 @@ async def sync_story_cluster_and_verification(
             "isNewStoryCluster": False,
         }
     membership = await fetch_story_cluster_membership(cursor, canonical_document_id)
-    if uuid.UUID(str(article["doc_id"])) != canonical_document_id:
+    if uuid.UUID(str(signal_candidate["doc_id"])) != canonical_document_id:
         cluster_result = None
         if membership is not None:
             cluster_result = await rebuild_story_cluster_state(

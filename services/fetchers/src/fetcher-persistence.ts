@@ -6,7 +6,7 @@ import type { FetchersConfig } from "./config";
 import type {
   ChannelPollCompletion,
   CursorMap,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   PersistResourceInput,
   SourceChannelRow
 } from "./fetcher-persistence-types";
@@ -18,7 +18,7 @@ export {
   type CursorUpdateInput,
   type DuplicatePreflightDecision,
   type FetchCursorRow,
-  type PersistArticleInput,
+  type PersistSignalCandidateInput,
   type PersistResourceInput,
   type SourceChannelRow
 } from "./fetcher-persistence-types";
@@ -48,11 +48,11 @@ export class FetcherPersistenceRepository {
     return this.channelState.loadCursorMap(channelId);
   }
 
-  persistArticlesWithPreflight(
+  persistSignalCandidatesWithPreflight(
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ): Promise<{ ingestedCount: number; duplicateCount: number }> {
-    return this.content.persistArticlesWithPreflight(channelId, inputs);
+    return this.content.persistSignalCandidatesWithPreflight(channelId, inputs);
   }
 
   persistWebsiteResourcesWithPreflight(

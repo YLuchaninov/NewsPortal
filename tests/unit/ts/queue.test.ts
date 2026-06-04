@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ARTICLE_CRITERIA_MATCHED_EVENT,
-  ARTICLE_CLUSTERED_EVENT,
-  ARTICLE_EMBEDDED_EVENT,
-  ARTICLE_INGEST_REQUESTED_EVENT,
-  ARTICLE_INTERESTS_MATCHED_EVENT,
-  ARTICLE_NORMALIZED_EVENT,
+  SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+  SIGNAL_CANDIDATE_CLUSTERED_EVENT,
+  SIGNAL_CANDIDATE_EMBEDDED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT,
+  SIGNAL_CANDIDATE_NORMALIZED_EVENT,
   CRITERION_COMPILE_REQUESTED_EVENT,
   FETCH_QUEUE,
   FOUNDATION_SMOKE_EVENT,
@@ -25,7 +25,7 @@ import {
   SEQUENCE_STATUSES,
   SEQUENCE_TASK_RUN_STATUSES,
   SEQUENCE_TRIGGER_TYPES,
-  isArticleOutboxEvent,
+  isSignalCandidateOutboxEvent,
   isCriterionCompileOutboxEvent,
   isInterestCompileOutboxEvent,
   isLlmReviewOutboxEvent,
@@ -41,7 +41,7 @@ test("default outbox queue map keeps only non-sequence relay fanout", () => {
 
   assert.deepEqual(queueMap[FOUNDATION_SMOKE_EVENT], [FOUNDATION_SMOKE_QUEUE]);
   assert.deepEqual(queueMap["source.channel.sync.requested"], [FETCH_QUEUE]);
-  assert.equal(queueMap[ARTICLE_INGEST_REQUESTED_EVENT], undefined);
+  assert.equal(queueMap[SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT], undefined);
   assert.deepEqual(queueMap, OUTBOX_EVENT_QUEUE_MAP);
 });
 
@@ -53,7 +53,7 @@ test("legacy embed fanout option is a no-op after sequence-first cutover", () =>
 
 test("sequence-managed events are explicit after relay cutover", () => {
   assert.deepEqual(SEQUENCE_MANAGED_OUTBOX_EVENTS, [
-    ARTICLE_INGEST_REQUESTED_EVENT,
+    SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
     RESOURCE_INGEST_REQUESTED_EVENT,
     INTEREST_COMPILE_REQUESTED_EVENT,
     CRITERION_COMPILE_REQUESTED_EVENT,
@@ -61,16 +61,16 @@ test("sequence-managed events are explicit after relay cutover", () => {
     NOTIFICATION_FEEDBACK_RECORDED_EVENT,
     REINDEX_REQUESTED_EVENT
   ]);
-  assert.equal(isSequenceManagedOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), true);
+  assert.equal(isSequenceManagedOutboxEvent(SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT), true);
   assert.equal(isSequenceManagedOutboxEvent("source.channel.sync.requested"), false);
 });
 
-test("event classifiers distinguish article, compile, review, feedback and reindex events", () => {
-  assert.equal(isArticleOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), true);
-  assert.equal(isArticleOutboxEvent(ARTICLE_CRITERIA_MATCHED_EVENT), true);
-  assert.equal(isArticleOutboxEvent(INTEREST_COMPILE_REQUESTED_EVENT), false);
+test("event classifiers distinguish signal_candidate, compile, review, feedback and reindex events", () => {
+  assert.equal(isSignalCandidateOutboxEvent(SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT), true);
+  assert.equal(isSignalCandidateOutboxEvent(SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT), true);
+  assert.equal(isSignalCandidateOutboxEvent(INTEREST_COMPILE_REQUESTED_EVENT), false);
   assert.equal(isResourceOutboxEvent(RESOURCE_INGEST_REQUESTED_EVENT), true);
-  assert.equal(isResourceOutboxEvent(ARTICLE_INGEST_REQUESTED_EVENT), false);
+  assert.equal(isResourceOutboxEvent(SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT), false);
 
   assert.equal(isInterestCompileOutboxEvent(INTEREST_COMPILE_REQUESTED_EVENT), true);
   assert.equal(isCriterionCompileOutboxEvent(CRITERION_COMPILE_REQUESTED_EVENT), true);

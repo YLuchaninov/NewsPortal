@@ -38,12 +38,12 @@ The canonical parser module is `services/fetchers/src/feed-parser/index.ts` plus
 ## Strategy behavior
 
 - Reddit search: keep Reddit permalink item URL, body/summary from feed content, no generic parser hard-fail on bounded XML entity issues.
-- HN comments: classify linked article, discussion thread, or dropped comment update; preserve `discussionUrl`; drop pure comment updates.
+- HN comments: classify linked signal_candidate, discussion thread, or dropped comment update; preserve `discussionUrl`; drop pure comment updates.
 - Google News: bounded attempt to resolve publisher URL; fallback to wrapper URL is non-fatal.
 
 ## Provenance
 
-`articles.raw_payload_json.feedAdapter` should include `strategy`, `sourceUrl`, `canonicalUrl`, `canonicalResolved`, `discussionUrl`, `discussionOnly`, and `itemKind` where relevant.
+`signal_candidates.raw_payload_json.feedAdapter` should include `strategy`, `sourceUrl`, `canonicalUrl`, `canonicalResolved`, `discussionUrl`, `discussionOnly`, and `itemKind` where relevant.
 
 ## Proof expectations
 

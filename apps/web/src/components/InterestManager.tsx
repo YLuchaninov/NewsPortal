@@ -261,7 +261,7 @@ export function InterestManager({
             {emptyStateDescription ?? (
               hasAnyInterests
                 ? "Use the pager below to return to another page of interests"
-                : "Add your first interest to start receiving personalized news"
+                : "Add your first interest to start receiving personalized signals"
             )}
           </p>
         </div>

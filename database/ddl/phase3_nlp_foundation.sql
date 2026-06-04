@@ -1,15 +1,15 @@
-alter table articles
+alter table signal_candidates
   add column if not exists search_vector tsvector;
 
-alter table articles
+alter table signal_candidates
   add column if not exists embedded_at timestamptz;
 
-create index if not exists articles_search_vector_idx
-  on articles
+create index if not exists signal_candidates_search_vector_idx
+  on signal_candidates
   using gin (search_vector);
 
-create table if not exists article_features (
-  doc_id uuid primary key references articles (doc_id) on delete cascade,
+create table if not exists signal_candidate_features (
+  doc_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   numbers text[] not null default '{}'::text[],
   short_tokens text[] not null default '{}'::text[],
   places text[] not null default '{}'::text[],
@@ -18,9 +18,9 @@ create table if not exists article_features (
   feature_version integer not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint article_features_search_vector_version_check
+  constraint signal_candidate_features_search_vector_version_check
     check (search_vector_version > 0),
-  constraint article_features_feature_version_check
+  constraint signal_candidate_features_feature_version_check
     check (feature_version > 0)
 );
 
@@ -111,7 +111,7 @@ create table if not exists embedding_registry (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint embedding_registry_entity_type_check
-    check (entity_type in ('article', 'interest', 'criterion', 'event_cluster')),
+    check (entity_type in ('signal_candidate', 'interest', 'criterion', 'event_cluster')),
   constraint embedding_registry_vector_version_check
     check (vector_version > 0),
   constraint embedding_registry_dimensions_check
@@ -160,9 +160,9 @@ create table if not exists user_interests_compiled (
     check (compile_status in ('pending', 'compiled', 'failed'))
 );
 
-create table if not exists article_vector_registry (
-  article_vector_registry_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+create table if not exists signal_candidate_vector_registry (
+  signal_candidate_vector_registry_id uuid primary key default gen_random_uuid(),
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   vector_type text not null,
   embedding_id uuid not null references embedding_registry (embedding_id) on delete cascade,
   hnsw_index_name text,
@@ -170,16 +170,16 @@ create table if not exists article_vector_registry (
   is_active boolean not null default true,
   vector_version integer not null default 1,
   updated_at timestamptz not null default now(),
-  constraint article_vector_registry_vector_type_check
+  constraint signal_candidate_vector_registry_vector_type_check
     check (vector_type in ('e_title', 'e_lead', 'e_body', 'e_event')),
-  constraint article_vector_registry_vector_version_check
+  constraint signal_candidate_vector_registry_vector_version_check
     check (vector_version > 0),
-  constraint article_vector_registry_doc_vector_version_unique
+  constraint signal_candidate_vector_registry_doc_vector_version_unique
     unique (doc_id, vector_type, vector_version)
 );
 
-create index if not exists article_vector_registry_doc_idx
-  on article_vector_registry (doc_id, is_active);
+create index if not exists signal_candidate_vector_registry_doc_idx
+  on signal_candidate_vector_registry (doc_id, is_active);
 
 create table if not exists interest_vector_registry (
   interest_vector_registry_id uuid primary key default gen_random_uuid(),
@@ -216,7 +216,7 @@ create table if not exists event_vector_registry (
   vector_version integer not null default 1,
   updated_at timestamptz not null default now(),
   constraint event_vector_registry_entity_type_check
-    check (entity_type in ('article', 'event_cluster')),
+    check (entity_type in ('signal_candidate', 'event_cluster')),
   constraint event_vector_registry_vector_version_check
     check (vector_version > 0),
   constraint event_vector_registry_entity_vector_version_unique
@@ -254,7 +254,7 @@ create table if not exists hnsw_registry (
 create table if not exists event_clusters (
   cluster_id uuid primary key default gen_random_uuid(),
   centroid_embedding_id uuid,
-  article_count integer not null default 0,
+  signal_candidate_count integer not null default 0,
   primary_title text,
   top_entities text[] not null default '{}'::text[],
   top_places text[] not null default '{}'::text[],
@@ -262,13 +262,13 @@ create table if not exists event_clusters (
   max_published_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint event_clusters_article_count_check
-    check (article_count >= 0)
+  constraint event_clusters_signal_candidate_count_check
+    check (signal_candidate_count >= 0)
 );
 
 create table if not exists event_cluster_members (
   cluster_id uuid not null references event_clusters (cluster_id) on delete cascade,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (cluster_id, doc_id),
   constraint event_cluster_members_doc_unique
@@ -393,7 +393,7 @@ create index if not exists reindex_jobs_status_requested_at_idx
 create table if not exists reindex_job_targets (
   reindex_job_id uuid not null references reindex_jobs (reindex_job_id) on delete cascade,
   target_position bigint not null,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (reindex_job_id, target_position),
   constraint reindex_job_targets_doc_unique

@@ -440,7 +440,7 @@ export function shapePaginatedContentItems(
 
 export function shapeExplainPayload(
   value: unknown,
-  itemKey: "article" | "content_item",
+  itemKey: "signal_candidate" | "content_item",
   args: Record<string, unknown>
 ): Record<string, unknown> {
   const payload = asObject(value) ?? {};

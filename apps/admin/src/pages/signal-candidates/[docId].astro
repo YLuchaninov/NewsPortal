@@ -1,5 +1,5 @@
 ---
-import type { ArticleDetail, ArticleMediaAsset } from "@signalops/contracts";
+import type { SignalCandidateDetail, SignalCandidateMediaAsset } from "@signalops/contracts";
 import { readRuntimeConfig } from "@signalops/config";
 import { sanitizeHtmlFragment } from "@signalops/content-safety";
 import { createSignalOpsSdk } from "@signalops/sdk";
@@ -7,9 +7,9 @@ import { createSignalOpsSdk } from "@signalops/sdk";
 import AdminShell from "../../layouts/AdminShell.astro";
 import { resolveAdminSession } from "../../lib/server/auth";
 import {
-  resolveArticleOperatorGuidance,
-  resolveArticleOperatorState,
-  resolveArticleSelectionDiagnostics,
+  resolveSignalCandidateOperatorGuidance,
+  resolveSignalCandidateOperatorState,
+  resolveSignalCandidateSelectionDiagnostics,
 } from "../../lib/server/operator-surfaces";
 import {
   buildAdminSignInPath,
@@ -40,14 +40,14 @@ const sdk = createSignalOpsSdk({ baseUrl: runtimeConfig.apiBaseUrl, fetchImpl: f
 const docId = String(Astro.params.docId ?? "").trim();
 
 if (!docId) {
-  return new Response("Article not found.", { status: 404 });
+  return new Response("SignalCandidate not found.", { status: 404 });
 }
 
-let article: ArticleDetail;
+let signal_candidate: SignalCandidateDetail;
 try {
-  article = await sdk.getArticle<ArticleDetail>(docId);
+  signal_candidate = await sdk.getSignalCandidate<SignalCandidateDetail>(docId);
 } catch {
-  return new Response("Article not found.", { status: 404 });
+  return new Response("SignalCandidate not found.", { status: 404 });
 }
 
 function resolveSafeHref(rawValue: unknown): string | null {
@@ -75,8 +75,8 @@ function formatReadTime(rawValue: unknown): string {
   return `${Math.max(1, Math.round(seconds / 60))} min`;
 }
 
-function toMediaAssets(rawValue: unknown): ArticleMediaAsset[] {
-  return Array.isArray(rawValue) ? (rawValue as ArticleMediaAsset[]) : [];
+function toMediaAssets(rawValue: unknown): SignalCandidateMediaAsset[] {
+  return Array.isArray(rawValue) ? (rawValue as SignalCandidateMediaAsset[]) : [];
 }
 
 function shortId(rawValue: unknown): string {
@@ -84,23 +84,23 @@ function shortId(rawValue: unknown): string {
   return normalized ? normalized.slice(0, 8) : "—";
 }
 
-const sourceHref = resolveSafeHref(article.url);
-const canonicalHref = resolveSafeHref(article.canonical_document_url);
-const articleHtml = sanitizeHtmlFragment(article.full_content_html ?? null, {
+const sourceHref = resolveSafeHref(signal_candidate.url);
+const canonicalHref = resolveSafeHref(signal_candidate.canonical_document_url);
+const signalCandidateHtml = sanitizeHtmlFragment(signal_candidate.full_content_html ?? null, {
   baseUrl: canonicalHref ?? sourceHref,
 });
-const mediaAssets = toMediaAssets(article.media_assets);
-const retryPath = appPath("/bff/admin/articles/enrichment-retry");
+const mediaAssets = toMediaAssets(signal_candidate.media_assets);
+const retryPath = appPath("/bff/admin/signal-candidates/enrichment-retry");
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
-const operatorState = resolveArticleOperatorState(article);
-const operatorGuidance = resolveArticleOperatorGuidance(article);
-const selectionDiagnostics = resolveArticleSelectionDiagnostics(
-  { selection_diagnostics: article.selection_diagnostics },
-  article
+const operatorState = resolveSignalCandidateOperatorState(signal_candidate);
+const operatorGuidance = resolveSignalCandidateOperatorGuidance(signal_candidate);
+const selectionDiagnostics = resolveSignalCandidateSelectionDiagnostics(
+  { selection_diagnostics: signal_candidate.selection_diagnostics },
+  signal_candidate
 );
 const analysisSummary =
-  article.analysis_summary && typeof article.analysis_summary === "object"
-    ? (article.analysis_summary as Record<string, unknown>)
+  signal_candidate.analysis_summary && typeof signal_candidate.analysis_summary === "object"
+    ? (signal_candidate.analysis_summary as Record<string, unknown>)
     : {};
 const analysisEntities = Array.isArray(analysisSummary.entities)
   ? (analysisSummary.entities as Record<string, unknown>[])
@@ -145,12 +145,12 @@ const verificationColor: Record<string, string> = {
 };
 ---
 
-<AdminShell title="Article Detail — Admin" session={session} flash={flash} activeNav="articles">
+<AdminShell title="SignalCandidate Detail — Admin" session={session} flash={flash} activeNav="signal_candidates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <a href={appPath("/articles")} class="hover:text-foreground">Articles</a>
+      <a href={appPath("/signal-candidates")} class="hover:text-foreground">Signal Candidates</a>
       <span>/</span>
       <span class="text-foreground font-medium">Detail</span>
     </nav>
@@ -206,50 +206,50 @@ const verificationColor: Record<string, string> = {
           </span>
         )}
         <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 font-medium text-secondary-foreground">
-          raw:{String(article.processing_state ?? "raw")}
+          raw:{String(signal_candidate.processing_state ?? "raw")}
         </span>
         <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium">
-          enrich:{String(article.enrichment_state ?? "pending")}
+          enrich:{String(signal_candidate.enrichment_state ?? "pending")}
         </span>
-        {article.system_feed_decision && (
-          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${systemFeedColor[String(article.system_feed_decision)] ?? "bg-muted text-muted-foreground"}`}>
-            compat:{String(article.system_feed_decision)}
+        {signal_candidate.system_feed_decision && (
+          <span class={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${systemFeedColor[String(signal_candidate.system_feed_decision)] ?? "bg-muted text-muted-foreground"}`}>
+            compat:{String(signal_candidate.system_feed_decision)}
           </span>
         )}
         <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
           {operatorState.selectionSummary}
         </span>
       </div>
-      <h1 class="mt-4 text-2xl font-semibold tracking-tight">{String(article.title ?? "Untitled article")}</h1>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(article.lead ?? "")}</p>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">{String(signal_candidate.title ?? "Untitled signal_candidate")}</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(signal_candidate.lead ?? "")}</p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</p>
-          <p class="mt-2 font-medium">{String(article.source_name ?? article.channel_name ?? "Unknown")}</p>
-          <p class="mt-1 text-sm text-muted-foreground">Author: {String(article.author_name ?? article.extracted_author ?? "Unknown")}</p>
+          <p class="mt-2 font-medium">{String(signal_candidate.source_name ?? signal_candidate.channel_name ?? "Unknown")}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Author: {String(signal_candidate.author_name ?? signal_candidate.extracted_author ?? "Unknown")}</p>
         </div>
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Published</p>
-          <p class="mt-2 font-medium">{formatTimestamp(article.extracted_published_at ?? article.published_at)}</p>
-          <p class="mt-1 text-sm text-muted-foreground">Read time: {formatReadTime(article.read_time_seconds ?? article.extracted_ttr_seconds)}</p>
+          <p class="mt-2 font-medium">{formatTimestamp(signal_candidate.extracted_published_at ?? signal_candidate.published_at)}</p>
+          <p class="mt-1 text-sm text-muted-foreground">Read time: {formatReadTime(signal_candidate.read_time_seconds ?? signal_candidate.extracted_ttr_seconds)}</p>
         </div>
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Canonical Doc</p>
-          <p class="mt-2 font-medium">{article.canonical_document_id ? shortId(article.canonical_document_id) : "Pending"}</p>
+          <p class="mt-2 font-medium">{signal_candidate.canonical_document_id ? shortId(signal_candidate.canonical_document_id) : "Pending"}</p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {article.canonical_domain ? `${String(article.canonical_domain)} · ` : ""}{String(article.canonical_observation_count ?? 0)} observation{Number(article.canonical_observation_count ?? 0) === 1 ? "" : "s"}
+            {signal_candidate.canonical_domain ? `${String(signal_candidate.canonical_domain)} · ` : ""}{String(signal_candidate.canonical_observation_count ?? 0)} observation{Number(signal_candidate.canonical_observation_count ?? 0) === 1 ? "" : "s"}
           </p>
         </div>
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Story Cluster</p>
-          <p class="mt-2 font-medium">{article.story_cluster_id ? shortId(article.story_cluster_id) : "—"}</p>
+          <p class="mt-2 font-medium">{signal_candidate.story_cluster_id ? shortId(signal_candidate.story_cluster_id) : "—"}</p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {String(article.story_cluster_verification_state ?? "unverified")} · {String(article.story_cluster_source_family_count ?? 0)} source families
+            {String(signal_candidate.story_cluster_verification_state ?? "unverified")} · {String(signal_candidate.story_cluster_source_family_count ?? 0)} source families
           </p>
         </div>
       </div>
       <div class={`mt-4 ${ADMIN_BACKGROUND_TILE_CLASS} text-sm text-muted-foreground`}>
-        This page is an operator view for one editorial article observation. Canonical document ownership, story-cluster verification, and final selection are the durable selection truth; <code class="rounded bg-muted px-1 py-0.5">processing_state</code> stays here as raw pipeline telemetry.
+        This page is an operator view for one editorial signal_candidate observation. Canonical document ownership, story-cluster verification, and final selection are the durable selection truth; <code class="rounded bg-muted px-1 py-0.5">processing_state</code> stays here as raw pipeline telemetry.
       </div>
       <div class={`mt-4 rounded-2xl border p-4 text-sm ${
         operatorGuidance.tone === "positive"
@@ -291,16 +291,16 @@ const verificationColor: Record<string, string> = {
         <div class="mb-4">
           <h2 class="text-base font-semibold">Content preview</h2>
           <p class="mt-1 text-sm text-muted-foreground">
-            Editorial maintenance detail for the underlying article observation. Public readers now use the universal <code class="rounded bg-muted px-1 py-0.5">/content/&lt;contentItemId&gt;</code> surface, while operators should reason from canonical, verification, and final-selection fields below.
+            Editorial maintenance detail for the underlying signal_candidate observation. Public readers now use the universal <code class="rounded bg-muted px-1 py-0.5">/content/&lt;contentItemId&gt;</code> surface, while operators should reason from canonical, verification, and final-selection fields below.
           </p>
         </div>
-        {articleHtml ? (
+        {signalCandidateHtml ? (
           <article
             class="prose prose-neutral max-w-none prose-headings:text-foreground prose-a:text-primary dark:prose-invert"
-            set:html={articleHtml}
+            set:html={signalCandidateHtml}
           />
         ) : (
-          <pre class="whitespace-pre-wrap text-sm leading-6 text-foreground">{String(article.body ?? "")}</pre>
+          <pre class="whitespace-pre-wrap text-sm leading-6 text-foreground">{String(signal_candidate.body ?? "")}</pre>
         )}
       </section>
 
@@ -320,7 +320,7 @@ const verificationColor: Record<string, string> = {
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Canonical document</dt>
               <dd class="mt-1 text-foreground">
-                {article.canonical_document_id ? String(article.canonical_document_id) : "Not materialized yet"}
+                {signal_candidate.canonical_document_id ? String(signal_candidate.canonical_document_id) : "Not materialized yet"}
               </dd>
               {canonicalHref && (
                 <a href={canonicalHref} target="_blank" rel="noopener noreferrer" class="mt-1 inline-block break-all text-xs text-primary hover:underline">
@@ -331,28 +331,28 @@ const verificationColor: Record<string, string> = {
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Verification</dt>
               <dd class="mt-1 text-foreground">
-                Final: {String(article.final_selection_verification_state ?? "—")} · Canonical: {String(article.canonical_verification_state ?? "—")} · Cluster: {String(article.story_cluster_verification_state ?? "—")}
+                Final: {String(signal_candidate.final_selection_verification_state ?? "—")} · Canonical: {String(signal_candidate.canonical_verification_state ?? "—")} · Cluster: {String(signal_candidate.story_cluster_verification_state ?? "—")}
               </dd>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Story cluster</dt>
               <dd class="mt-1 text-foreground">
-                {article.story_cluster_id ? String(article.story_cluster_id) : "Not clustered yet"}
+                {signal_candidate.story_cluster_id ? String(signal_candidate.story_cluster_id) : "Not clustered yet"}
               </dd>
               <p class="mt-1 text-xs text-muted-foreground">
-                {String(article.story_cluster_title ?? "—")} · {String(article.story_cluster_document_count ?? 0)} canonical docs · {String(article.story_cluster_corroboration_count ?? 0)} corroborations
+                {String(signal_candidate.story_cluster_title ?? "—")} · {String(signal_candidate.story_cluster_document_count ?? 0)} canonical docs · {String(signal_candidate.story_cluster_corroboration_count ?? 0)} corroborations
               </p>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Observation state</dt>
               <dd class="mt-1 text-foreground">
-                {String(article.observation_state ?? "—")} · duplicate: {String(article.duplicate_kind ?? "—")}
+                {String(signal_candidate.observation_state ?? "—")} · duplicate: {String(signal_candidate.duplicate_kind ?? "—")}
               </dd>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selection decision</dt>
               <dd class="mt-1 text-foreground">
-                Final: {String(article.final_selection_decision ?? "—")} · Compatibility: {String(article.system_feed_decision ?? "—")}
+                Final: {String(signal_candidate.final_selection_decision ?? "—")} · Compatibility: {String(signal_candidate.system_feed_decision ?? "—")}
               </dd>
               <p class="mt-1 text-xs text-muted-foreground">
                 {operatorState.selectionSummary}
@@ -422,21 +422,21 @@ const verificationColor: Record<string, string> = {
           <div class="mb-4">
             <h2 class="text-base font-semibold">Extraction metadata</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Persisted article enrichment fields exposed for operator debugging.
+              Persisted signal_candidate enrichment fields exposed for operator debugging.
             </p>
           </div>
           <dl class="grid gap-3 text-sm">
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Description</dt>
-              <dd class="mt-1 text-foreground">{String(article.extracted_description ?? "—")}</dd>
+              <dd class="mt-1 text-foreground">{String(signal_candidate.extracted_description ?? "—")}</dd>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Image URL</dt>
-              <dd class="mt-1 break-all text-foreground">{String(article.extracted_image_url ?? "—")}</dd>
+              <dd class="mt-1 break-all text-foreground">{String(signal_candidate.extracted_image_url ?? "—")}</dd>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Favicon URL</dt>
-              <dd class="mt-1 break-all text-foreground">{String(article.extracted_favicon_url ?? "—")}</dd>
+              <dd class="mt-1 break-all text-foreground">{String(signal_candidate.extracted_favicon_url ?? "—")}</dd>
             </div>
           </dl>
         </section>
@@ -445,7 +445,7 @@ const verificationColor: Record<string, string> = {
           <div class="mb-4">
             <h2 class="text-base font-semibold">Media assets</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              `article_media_assets` owned by the enrichment path for this observation row.
+              `signal_candidate_media_assets` owned by the enrichment path for this observation row.
             </p>
           </div>
           {mediaAssets.length === 0 ? (
@@ -473,7 +473,7 @@ const verificationColor: Record<string, string> = {
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </span>
       </summary>
-      <pre class="mt-4 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(article.enrichment_debug ?? {}, null, 2)}</pre>
+      <pre class="mt-4 overflow-x-auto rounded-2xl bg-background p-4 text-xs leading-6 text-foreground">{JSON.stringify(signal_candidate.enrichment_debug ?? {}, null, 2)}</pre>
     </details>
   </div>
 </AdminShell>

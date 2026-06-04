@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
   const pool = getPool();
   await pool.query(
     `
-      insert into user_article_reactions (
+      insert into user_signal_candidate_reactions (
         reaction_id,
         doc_id,
         user_id,

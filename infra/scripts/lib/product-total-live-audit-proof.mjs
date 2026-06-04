@@ -262,9 +262,9 @@ function megaFlowEvidence(commandResults) {
     finalVerdict,
     runtimeVerdict: artifact.runtimeVerdict ?? null,
     yieldVerdict: artifact.yieldVerdict ?? null,
-    liveSelectedArticleCounts: asArray(artifact.scenarios).map((scenario) => ({
+    liveSelectedSignalCandidateCounts: asArray(artifact.scenarios).map((scenario) => ({
       key: scenario.key,
-      selectedFinalRows: scenario.liveSelectedArticleEvidence?.selectedFinalRows ?? 0,
+      selectedFinalRows: scenario.liveSelectedSignalCandidateEvidence?.selectedFinalRows ?? 0,
     })),
   };
 }

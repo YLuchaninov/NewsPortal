@@ -82,13 +82,13 @@ export interface ChannelBottleneckRow {
     duplicates: number;
   };
   contentStats: {
-    articles: number;
+    signalCandidateCount: number;
     selectedRows: number;
     selectedUniqueContent: number;
     grayRows: number;
     rejectedRows: number;
-    visibleArticles: number;
-    duplicateArticles: number;
+    visibleSignalCandidates: number;
+    duplicateSignalCandidates: number;
   };
   projectionStats: {
     resources: number;
@@ -167,13 +167,13 @@ interface RawChannelBottleneckRow {
   fetchedItemCount7d: number;
   newItemCount7d: number;
   duplicateCount7d: number;
-  articleCount: number;
+  signalCandidateCount: number;
   selectedRows: number;
   selectedUniqueContent: number;
   grayRows: number;
   rejectedRows: number;
-  visibleArticles: number;
-  duplicateArticles: number;
+  visibleSignalCandidates: number;
+  duplicateSignalCandidates: number;
   webResourceCount: number;
   projectedResourceCount: number;
   resourceOnlyCount: number;
@@ -339,7 +339,7 @@ function classifyFailureBucket(
   }
 
   const selectedUnique = toNumber(row.selectedUniqueContent) + toNumber(row.projectedSelectedRows);
-  const observed = toNumber(row.articleCount) + toNumber(row.webResourceCount);
+  const observed = toNumber(row.signalCandidateCount) + toNumber(row.webResourceCount);
   const recentActivity =
     toNumber(row.fetchedItemCount7d) + toNumber(row.newItemCount7d) + toNumber(row.duplicateCount7d);
   const rejectedOrGray =
@@ -452,13 +452,13 @@ function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
       duplicates: toNumber(row.duplicateCount7d),
     },
     contentStats: {
-      articles: toNumber(row.articleCount),
+      signalCandidateCount: toNumber(row.signalCandidateCount),
       selectedRows: toNumber(row.selectedRows),
       selectedUniqueContent: toNumber(row.selectedUniqueContent),
       grayRows: toNumber(row.grayRows),
       rejectedRows: toNumber(row.rejectedRows),
-      visibleArticles: toNumber(row.visibleArticles),
-      duplicateArticles: toNumber(row.duplicateArticles),
+      visibleSignalCandidates: toNumber(row.visibleSignalCandidates),
+      duplicateSignalCandidates: toNumber(row.duplicateSignalCandidates),
     },
     projectionStats: {
       resources: toNumber(row.webResourceCount),
@@ -527,13 +527,13 @@ async function readRawBottleneckRows(
         coalesce(runs.fetched_item_count_7d, 0)::int as "fetchedItemCount7d",
         coalesce(runs.new_item_count_7d, 0)::int as "newItemCount7d",
         coalesce(runs.duplicate_count_7d, 0)::int as "duplicateCount7d",
-        coalesce(article_stats.article_count, 0)::int as "articleCount",
-        coalesce(article_stats.selected_rows, 0)::int as "selectedRows",
-        coalesce(article_stats.selected_unique_content, 0)::int as "selectedUniqueContent",
-        coalesce(article_stats.gray_rows, 0)::int as "grayRows",
-        coalesce(article_stats.rejected_rows, 0)::int as "rejectedRows",
-        coalesce(article_stats.visible_articles, 0)::int as "visibleArticles",
-        coalesce(article_stats.duplicate_articles, 0)::int as "duplicateArticles",
+        coalesce(signal_candidate_stats.signal_candidate_count, 0)::int as "signalCandidateCount",
+        coalesce(signal_candidate_stats.selected_rows, 0)::int as "selectedRows",
+        coalesce(signal_candidate_stats.selected_unique_content, 0)::int as "selectedUniqueContent",
+        coalesce(signal_candidate_stats.gray_rows, 0)::int as "grayRows",
+        coalesce(signal_candidate_stats.rejected_rows, 0)::int as "rejectedRows",
+        coalesce(signal_candidate_stats.visible_signal_candidates, 0)::int as "visibleSignalCandidates",
+        coalesce(signal_candidate_stats.duplicate_signal_candidates, 0)::int as "duplicateSignalCandidates",
         coalesce(web_stats.web_resource_count, 0)::int as "webResourceCount",
         coalesce(web_stats.projected_resource_count, 0)::int as "projectedResourceCount",
         coalesce(web_stats.resource_only_count, 0)::int as "resourceOnlyCount",
@@ -577,7 +577,7 @@ async function readRawBottleneckRows(
               and cfr.outcome_kind in ('rate_limited', 'transient_failure', 'hard_failure')
           )::int as failure_count_24h,
           coalesce(sum(cfr.fetched_item_count) filter (where cfr.started_at >= now() - interval '24 hours'), 0)::int as fetched_item_count_24h,
-          coalesce(sum(cfr.new_article_count) filter (where cfr.started_at >= now() - interval '24 hours'), 0)::int as new_item_count_24h,
+          coalesce(sum(cfr.new_signal_candidate_count) filter (where cfr.started_at >= now() - interval '24 hours'), 0)::int as new_item_count_24h,
           coalesce(sum(cfr.duplicate_suppressed_count) filter (where cfr.started_at >= now() - interval '24 hours'), 0)::int as duplicate_count_24h,
           count(*) filter (where cfr.started_at >= now() - interval '7 days')::int as run_count_7d,
           count(*) filter (
@@ -585,7 +585,7 @@ async function readRawBottleneckRows(
               and cfr.outcome_kind in ('rate_limited', 'transient_failure', 'hard_failure')
           )::int as failure_count_7d,
           coalesce(sum(cfr.fetched_item_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as fetched_item_count_7d,
-          coalesce(sum(cfr.new_article_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as new_item_count_7d,
+          coalesce(sum(cfr.new_signal_candidate_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as new_item_count_7d,
           coalesce(sum(cfr.duplicate_suppressed_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as duplicate_count_7d
         from channel_fetch_runs cfr
         where cfr.channel_id = sc.channel_id
@@ -593,28 +593,28 @@ async function readRawBottleneckRows(
       ) runs on true
       left join lateral (
         select
-          count(*)::int as article_count,
+          count(*)::int as signal_candidate_count,
           count(*) filter (where fsr.final_decision = 'selected')::int as selected_rows,
           count(distinct coalesce(fsr.canonical_document_id, a.canonical_doc_id, a.doc_id)) filter (where fsr.is_selected = true)::int as selected_unique_content,
           count(*) filter (where fsr.final_decision = 'gray_zone')::int as gray_rows,
           count(*) filter (where fsr.final_decision = 'rejected')::int as rejected_rows,
-          count(*) filter (where a.visibility_state = 'visible')::int as visible_articles,
-          count(*) filter (where a.is_exact_duplicate = true or a.is_near_duplicate = true or a.canonical_doc_id is not null)::int as duplicate_articles
-        from articles a
+          count(*) filter (where a.visibility_state = 'visible')::int as visible_signal_candidates,
+          count(*) filter (where a.is_exact_duplicate = true or a.is_near_duplicate = true or a.canonical_doc_id is not null)::int as duplicate_signal_candidates
+        from signal_candidates a
         left join final_selection_results fsr on fsr.doc_id = a.doc_id
         where a.channel_id = sc.channel_id
-      ) article_stats on true
+      ) signal_candidate_stats on true
       left join lateral (
         select
           count(*)::int as web_resource_count,
-          count(*) filter (where wr.projected_article_id is not null)::int as projected_resource_count,
-          count(*) filter (where wr.projected_article_id is null)::int as resource_only_count,
+          count(*) filter (where wr.projected_signal_candidate_id is not null)::int as projected_resource_count,
+          count(*) filter (where wr.projected_signal_candidate_id is null)::int as resource_only_count,
           count(*) filter (where wr.extraction_state = 'failed')::int as extraction_failed_count,
           count(*) filter (where fsr.final_decision = 'selected')::int as projected_selected_rows,
           count(*) filter (where fsr.final_decision = 'gray_zone')::int as projected_gray_rows,
           count(*) filter (where fsr.final_decision = 'rejected')::int as projected_rejected_rows
         from web_resources wr
-        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
         where wr.channel_id = sc.channel_id
       ) web_stats on true
       where

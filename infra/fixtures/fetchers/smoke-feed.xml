@@ -5,10 +5,10 @@
     <language>en-us</language>
     <item>
       <guid>smoke-item-1</guid>
-      <title>Smoke Test Article</title>
-      <link>https://example.com/articles/smoke-article?utm_source=rss</link>
-      <description><![CDATA[<p>Smoke summary for the first phase 2 article.</p>]]></description>
-      <content:encoded><![CDATA[<p>Smoke summary for the first phase 2 article.</p><p>This article should move from raw to normalized and then deduped.</p>]]></content:encoded>
+      <title>Smoke Test SignalCandidate</title>
+      <link>https://example.com/signal-candidates/smoke-signal_candidate?utm_source=rss</link>
+      <description><![CDATA[<p>Smoke summary for the first phase 2 signal_candidate.</p>]]></description>
+      <content:encoded><![CDATA[<p>Smoke summary for the first phase 2 signal_candidate.</p><p>This signal_candidate should move from raw to normalized and then deduped.</p>]]></content:encoded>
       <pubDate>Fri, 13 Mar 2026 09:00:00 GMT</pubDate>
     </item>
   </channel>

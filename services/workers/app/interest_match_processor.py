@@ -10,7 +10,7 @@ from psycopg.types.json import Json
 
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool, coerce_optional_string
-from .worker_queues import ARTICLE_INTERESTS_MATCHED_EVENT, INTEREST_MATCH_CONSUMER
+from .worker_queues import SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT, INTEREST_MATCH_CONSUMER
 
 
 @dataclass(frozen=True)
@@ -18,11 +18,11 @@ class InterestMatchProcessorDependencies:
     open_connection: Callable[[], Awaitable[Any]]
     suppress_downstream_outbox: Callable[[Any], bool]
     is_event_processed: Callable[..., Awaitable[bool]]
-    fetch_article_for_update: Callable[..., Awaitable[dict[str, Any]]]
+    fetch_signal_candidate_for_update: Callable[..., Awaitable[dict[str, Any]]]
     fetch_selection_gate_result_row: Callable[..., Awaitable[dict[str, Any] | None]]
     record_processed_event: Callable[..., Awaitable[None]]
-    fetch_article_features_row: Callable[..., Awaitable[dict[str, Any]]]
-    fetch_article_vectors: Callable[..., Awaitable[dict[str, list[float]]]]
+    fetch_signal_candidate_features_row: Callable[..., Awaitable[dict[str, Any]]]
+    fetch_signal_candidate_vectors: Callable[..., Awaitable[dict[str, list[float]]]]
     resolve_interest_filter_context: Callable[..., Awaitable[dict[str, Any]]]
     list_compiled_interests: Callable[..., Awaitable[list[dict[str, Any]]]]
     passes_hard_filters: Callable[..., tuple[bool, list[str], bool]]
@@ -46,11 +46,11 @@ def build_interest_match_processor_dependencies() -> InterestMatchProcessorDepen
         open_connection=legacy_main.open_connection,
         suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
         is_event_processed=legacy_main.is_event_processed,
-        fetch_article_for_update=legacy_main.fetch_article_for_update,
+        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
         fetch_selection_gate_result_row=legacy_main.fetch_selection_gate_result_row,
         record_processed_event=legacy_main.record_processed_event,
-        fetch_article_features_row=legacy_main.fetch_article_features_row,
-        fetch_article_vectors=legacy_main.fetch_article_vectors,
+        fetch_signal_candidate_features_row=legacy_main.fetch_signal_candidate_features_row,
+        fetch_signal_candidate_vectors=legacy_main.fetch_signal_candidate_vectors,
         resolve_interest_filter_context=legacy_main.resolve_interest_filter_context,
         list_compiled_interests=legacy_main.list_compiled_interests,
         passes_hard_filters=legacy_main.passes_hard_filters,
@@ -90,10 +90,10 @@ async def process_match_interests_with_dependencies(
                 if await deps.is_event_processed(cursor, INTEREST_MATCH_CONSUMER, event_id):
                     return {"status": "duplicate-event", "docId": doc_id}
 
-                article = await deps.fetch_article_for_update(cursor, doc_id)
+                signal_candidate = await deps.fetch_signal_candidate_for_update(cursor, doc_id)
                 selection_gate = await deps.fetch_selection_gate_result_row(
                     cursor,
-                    article["doc_id"],
+                    signal_candidate["doc_id"],
                 )
                 if selection_gate is None or not bool(selection_gate.get("is_selected")):
                     await deps.record_processed_event(
@@ -121,19 +121,19 @@ async def process_match_interests_with_dependencies(
                             else False
                         ),
                     }
-                article_features = await deps.fetch_article_features_row(
+                signal_candidate_features = await deps.fetch_signal_candidate_features_row(
                     cursor,
-                    article["doc_id"],
+                    signal_candidate["doc_id"],
                 )
-                article_vectors = await deps.fetch_article_vectors(cursor, article["doc_id"])
+                signal_candidate_vectors = await deps.fetch_signal_candidate_vectors(cursor, signal_candidate["doc_id"])
                 filter_context = await deps.resolve_interest_filter_context(
                     cursor,
-                    article=article,
+                    signal_candidate=signal_candidate,
                     prefer_story_cluster=True,
                 )
                 if scoped_user_id or scoped_interest_id:
                     cleanup_filters = ["doc_id = %s"]
-                    cleanup_params: list[Any] = [article["doc_id"]]
+                    cleanup_params: list[Any] = [signal_candidate["doc_id"]]
                     if scoped_user_id:
                         cleanup_filters.append("user_id = %s")
                         cleanup_params.append(scoped_user_id)
@@ -151,7 +151,7 @@ async def process_match_interests_with_dependencies(
                         "doc_id = %s",
                         "filter_scope = 'user_interest'",
                     ]
-                    interest_filter_cleanup_params: list[Any] = [article["doc_id"]]
+                    interest_filter_cleanup_params: list[Any] = [signal_candidate["doc_id"]]
                     if scoped_user_id:
                         interest_filter_cleanup_filters.append("user_id = %s")
                         interest_filter_cleanup_params.append(scoped_user_id)
@@ -179,14 +179,14 @@ async def process_match_interests_with_dependencies(
                         compiled_json.get("hard_constraints")
                     )
                     pass_filters, filter_reasons, _within_window = deps.passes_hard_filters(
-                        article=article,
-                        article_features=article_features,
+                        signal_candidate=signal_candidate,
+                        signal_candidate_features=signal_candidate_features,
                         hard_constraints=hard_constraints,
                     )
                     user_id = uuid.UUID(str(interest["user_id"]))
                     interest_id = uuid.UUID(str(interest["interest_id"]))
-                    cluster_id = article.get("event_cluster_id")
-                    family_id = article.get("family_id")
+                    cluster_id = signal_candidate.get("event_cluster_id")
+                    family_id = signal_candidate.get("family_id")
 
                     target_features = coerce_json_object(compiled_json.get("target_features"))
                     positive_vectors = await deps.fetch_embedding_vectors_by_ids(
@@ -211,21 +211,21 @@ async def process_match_interests_with_dependencies(
                             interest_id=interest_id,
                             cluster_id=cluster_id,
                             family_id=family_id,
-                            article_features=article_features,
+                            signal_candidate_features=signal_candidate_features,
                         )
                         positive_score = deps.semantic_prototype_score(
-                            title_vector=article_vectors.get("e_title", []),
-                            lead_vector=article_vectors.get("e_lead", []),
-                            body_vector=article_vectors.get("e_body", []),
+                            title_vector=signal_candidate_vectors.get("e_title", []),
+                            lead_vector=signal_candidate_vectors.get("e_lead", []),
+                            body_vector=signal_candidate_vectors.get("e_body", []),
                             prototypes=positive_vectors,
                             title_weight=0.45,
                             lead_weight=0.35,
                             body_weight=0.20,
                         )
                         negative_score = deps.semantic_prototype_score(
-                            title_vector=article_vectors.get("e_title", []),
-                            lead_vector=article_vectors.get("e_lead", []),
-                            body_vector=article_vectors.get("e_body", []),
+                            title_vector=signal_candidate_vectors.get("e_title", []),
+                            lead_vector=signal_candidate_vectors.get("e_lead", []),
+                            body_vector=signal_candidate_vectors.get("e_body", []),
                             prototypes=negative_vectors,
                             title_weight=0.45,
                             lead_weight=0.35,
@@ -239,11 +239,11 @@ async def process_match_interests_with_dependencies(
                         }
                         language_allowed = (
                             not allowed_languages
-                            or str(article.get("lang") or "").casefold()
+                            or str(signal_candidate.get("lang") or "").casefold()
                             in allowed_languages
                         )
                         meta_score, meta_components = deps.compute_interest_meta_score(
-                            article_features=article_features,
+                            signal_candidate_features=signal_candidate_features,
                             target_features=target_features,
                             place_constraints=coerce_text_list(hard_constraints.get("places")),
                             language_allowed=language_allowed,
@@ -274,7 +274,7 @@ async def process_match_interests_with_dependencies(
                     )
                     pending_rows.append(
                         {
-                            "doc_id": article["doc_id"],
+                            "doc_id": signal_candidate["doc_id"],
                             "user_id": user_id,
                             "interest_id": interest_id,
                             "cluster_id": cluster_id,
@@ -391,26 +391,26 @@ async def process_match_interests_with_dependencies(
                     )
 
                 next_state = deps.advance_processing_state(
-                    article.get("processing_state"),
+                    signal_candidate.get("processing_state"),
                     "matched",
                 )
                 await cursor.execute(
                     """
-                    update articles
+                    update signal_candidates
                     set
                       processing_state = %s,
                       updated_at = now()
                     where doc_id = %s
                     """,
-                    (next_state, article["doc_id"]),
+                    (next_state, signal_candidate["doc_id"]),
                 )
                 if should_trigger_notify and not historical_backfill and not suppress_pipeline_fanout:
                     await deps.insert_outbox_event(
                         cursor,
-                        ARTICLE_INTERESTS_MATCHED_EVENT,
-                        "article",
-                        article["doc_id"],
-                        {"docId": str(article["doc_id"]), "version": 1},
+                        SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT,
+                        "signal_candidate",
+                        signal_candidate["doc_id"],
+                        {"docId": str(signal_candidate["doc_id"]), "version": 1},
                     )
                 await deps.record_processed_event(cursor, INTEREST_MATCH_CONSUMER, event_id)
 

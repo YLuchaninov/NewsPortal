@@ -15,7 +15,7 @@ from .criteria_review_policy import (
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool
 from .worker_queues import (
-    ARTICLE_CRITERIA_MATCHED_EVENT,
+    SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
     CRITERIA_MATCH_CONSUMER,
     LLM_REVIEW_REQUESTED_EVENT,
 )
@@ -26,9 +26,9 @@ class CriteriaMatchProcessorDependencies:
     open_connection: Callable[[], Awaitable[Any]]
     suppress_downstream_outbox: Callable[[Any], bool]
     is_event_processed: Callable[..., Awaitable[bool]]
-    fetch_article_for_update: Callable[..., Awaitable[dict[str, Any]]]
-    fetch_article_features_row: Callable[..., Awaitable[dict[str, Any]]]
-    fetch_article_vectors: Callable[..., Awaitable[dict[str, list[float]]]]
+    fetch_signal_candidate_for_update: Callable[..., Awaitable[dict[str, Any]]]
+    fetch_signal_candidate_features_row: Callable[..., Awaitable[dict[str, Any]]]
+    fetch_signal_candidate_vectors: Callable[..., Awaitable[dict[str, list[float]]]]
     list_compiled_criteria: Callable[..., Awaitable[list[dict[str, Any]]]]
     find_prompt_template: Callable[..., Awaitable[dict[str, Any] | None]]
     get_llm_review_monthly_quota_snapshot: Callable[..., Awaitable[dict[str, Any]]]
@@ -67,9 +67,9 @@ def build_criteria_match_processor_dependencies() -> CriteriaMatchProcessorDepen
         open_connection=legacy_main.open_connection,
         suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
         is_event_processed=legacy_main.is_event_processed,
-        fetch_article_for_update=legacy_main.fetch_article_for_update,
-        fetch_article_features_row=legacy_main.fetch_article_features_row,
-        fetch_article_vectors=legacy_main.fetch_article_vectors,
+        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
+        fetch_signal_candidate_features_row=legacy_main.fetch_signal_candidate_features_row,
+        fetch_signal_candidate_vectors=legacy_main.fetch_signal_candidate_vectors,
         list_compiled_criteria=legacy_main.list_compiled_criteria,
         find_prompt_template=legacy_main.find_prompt_template,
         get_llm_review_monthly_quota_snapshot=legacy_main.get_llm_review_monthly_quota_snapshot,
@@ -122,15 +122,15 @@ async def process_match_criteria_with_dependencies(
                 if await deps.is_event_processed(cursor, CRITERIA_MATCH_CONSUMER, event_id):
                     return {"status": "duplicate-event", "docId": doc_id}
 
-                article = await deps.fetch_article_for_update(cursor, doc_id)
-                article_features = await deps.fetch_article_features_row(cursor, article["doc_id"])
-                article_vectors = await deps.fetch_article_vectors(cursor, article["doc_id"])
+                signal_candidate = await deps.fetch_signal_candidate_for_update(cursor, doc_id)
+                signal_candidate_features = await deps.fetch_signal_candidate_features_row(cursor, signal_candidate["doc_id"])
+                signal_candidate_vectors = await deps.fetch_signal_candidate_vectors(cursor, signal_candidate["doc_id"])
                 criteria_rows = await deps.list_compiled_criteria(cursor)
                 prompt_template = await deps.find_prompt_template(cursor, "criteria")
                 llm_quota_snapshot = await deps.get_llm_review_monthly_quota_snapshot(cursor)
                 filter_context = await deps.resolve_interest_filter_context(
                     cursor,
-                    article=article,
+                    signal_candidate=signal_candidate,
                     prefer_story_cluster=False,
                 )
                 criteria_count = 0
@@ -139,15 +139,15 @@ async def process_match_criteria_with_dependencies(
                     compiled_json = coerce_json_object(criterion.get("compiled_json"))
                     hard_constraints = coerce_json_object(compiled_json.get("hard_constraints"))
                     base_pass_filters, filter_reasons, within_window = deps.passes_hard_filters(
-                        article=article,
-                        article_features=article_features,
+                        signal_candidate=signal_candidate,
+                        signal_candidate_features=signal_candidate_features,
                         hard_constraints=hard_constraints,
                     )
                     allowed_content_kinds = coerce_text_list(
                         criterion.get("allowed_content_kinds")
                     )
-                    content_kind_allowed, article_content_kind = deps.passes_allowed_content_kind(
-                        article=article,
+                    content_kind_allowed, signal_candidate_content_kind = deps.passes_allowed_content_kind(
+                        signal_candidate=signal_candidate,
                         allowed_content_kinds=allowed_content_kinds,
                     )
                     if not content_kind_allowed:
@@ -155,7 +155,7 @@ async def process_match_criteria_with_dependencies(
                     pass_filters = base_pass_filters and content_kind_allowed
                     lexical_score = await deps.compute_lexical_score(
                         cursor,
-                        article["doc_id"],
+                        signal_candidate["doc_id"],
                         str(compiled_json.get("lexical_query") or ""),
                     )
                     target_features = coerce_json_object(compiled_json.get("target_features"))
@@ -173,25 +173,25 @@ async def process_match_criteria_with_dependencies(
                     meta_components: dict[str, float] = {}
                     if pass_filters:
                         positive_score = deps.semantic_prototype_score(
-                            title_vector=article_vectors.get("e_title", []),
-                            lead_vector=article_vectors.get("e_lead", []),
-                            body_vector=article_vectors.get("e_body", []),
+                            title_vector=signal_candidate_vectors.get("e_title", []),
+                            lead_vector=signal_candidate_vectors.get("e_lead", []),
+                            body_vector=signal_candidate_vectors.get("e_body", []),
                             prototypes=positive_vectors,
                             title_weight=0.50,
                             lead_weight=0.30,
                             body_weight=0.20,
                         )
                         negative_score = deps.semantic_prototype_score(
-                            title_vector=article_vectors.get("e_title", []),
-                            lead_vector=article_vectors.get("e_lead", []),
-                            body_vector=article_vectors.get("e_body", []),
+                            title_vector=signal_candidate_vectors.get("e_title", []),
+                            lead_vector=signal_candidate_vectors.get("e_lead", []),
+                            body_vector=signal_candidate_vectors.get("e_body", []),
                             prototypes=negative_vectors,
                             title_weight=0.50,
                             lead_weight=0.30,
                             body_weight=0.20,
                         )
                         meta_score, meta_components = deps.compute_criterion_meta_score(
-                            article_features=article_features,
+                            signal_candidate_features=signal_candidate_features,
                             target_features=target_features,
                             place_constraints=coerce_text_list(hard_constraints.get("places")),
                             is_within_time_window=within_window,
@@ -208,9 +208,9 @@ async def process_match_criteria_with_dependencies(
                     )
                     decision = deps.decide_criterion(score_final) if pass_filters else "irrelevant"
                     decision, candidate_signal_explain = deps.apply_document_candidate_signal_uplift(
-                        title=str(article.get("title") or ""),
-                        lead=str(article.get("lead") or ""),
-                        body=str(article.get("body") or ""),
+                        title=str(signal_candidate.get("title") or ""),
+                        lead=str(signal_candidate.get("lead") or ""),
+                        body=str(signal_candidate.get("body") or ""),
                         score_final=score_final,
                         positive_score=positive_score,
                         lexical_score=lexical_score,
@@ -236,7 +236,7 @@ async def process_match_criteria_with_dependencies(
                     explain_json = {
                         "filterReasons": filter_reasons,
                         "contentKind": {
-                            "article": article_content_kind,
+                            "signal_candidate": signal_candidate_content_kind,
                             "allowed": allowed_content_kinds,
                             "matched": content_kind_allowed,
                         },
@@ -339,7 +339,7 @@ async def process_match_criteria_with_dependencies(
                           created_at = now()
                         """,
                         (
-                            article["doc_id"],
+                            signal_candidate["doc_id"],
                             criterion["criterion_id"],
                             positive_score,
                             negative_score,
@@ -357,7 +357,7 @@ async def process_match_criteria_with_dependencies(
                     await deps.upsert_interest_filter_result(
                         cursor,
                         filter_scope="system_criterion",
-                        doc_id=uuid.UUID(str(article["doc_id"])),
+                        doc_id=uuid.UUID(str(signal_candidate["doc_id"])),
                         canonical_document_id=filter_context["canonicalDocumentId"],
                         story_cluster_id=filter_context["storyClusterId"],
                         user_id=None,
@@ -383,7 +383,7 @@ async def process_match_criteria_with_dependencies(
                     if llm_review_queued:
                         reused_review = await deps.find_reusable_criterion_llm_review(
                             cursor,
-                            doc_id=article["doc_id"],
+                            doc_id=signal_candidate["doc_id"],
                             criterion_id=criterion["criterion_id"],
                             canonical_document_id=filter_context["canonicalDocumentId"],
                             prompt_template_id=(
@@ -401,7 +401,7 @@ async def process_match_criteria_with_dependencies(
                         if reused_review is not None:
                             await deps.persist_criterion_review_resolution(
                                 cursor,
-                                article=article,
+                                signal_candidate=signal_candidate,
                                 criterion_id=criterion["criterion_id"],
                                 review_context={"explain_json": explain_json},
                                 provider_decision=str(
@@ -444,7 +444,7 @@ async def process_match_criteria_with_dependencies(
                             "criterion",
                             uuid.UUID(criterion["criterion_id"]),
                             {
-                                "docId": str(article["doc_id"]),
+                                "docId": str(signal_candidate["doc_id"]),
                                 "scope": "criterion",
                                 "targetId": str(criterion["criterion_id"]),
                                 "promptTemplateId": (
@@ -457,7 +457,7 @@ async def process_match_criteria_with_dependencies(
                         )
                     criteria_count += 1
 
-                system_feed_result = await deps.upsert_system_feed_result(cursor, article["doc_id"])
+                system_feed_result = await deps.upsert_system_feed_result(cursor, signal_candidate["doc_id"])
                 if (
                     deps.should_dispatch_clustering(system_feed_result)
                     and not historical_backfill
@@ -465,10 +465,10 @@ async def process_match_criteria_with_dependencies(
                 ):
                     await deps.insert_outbox_event(
                         cursor,
-                        ARTICLE_CRITERIA_MATCHED_EVENT,
-                        "article",
-                        article["doc_id"],
-                        {"docId": str(article["doc_id"]), "version": 1},
+                        SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+                        "signal_candidate",
+                        signal_candidate["doc_id"],
+                        {"docId": str(signal_candidate["doc_id"]), "version": 1},
                     )
                 await deps.record_processed_event(cursor, CRITERIA_MATCH_CONSUMER, event_id)
 

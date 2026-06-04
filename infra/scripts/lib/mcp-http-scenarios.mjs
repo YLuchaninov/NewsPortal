@@ -58,7 +58,7 @@ async function seedContentAnalysisCanaryRows(harness) {
           source_hash
         )
         values (
-          'article',
+          'signal_candidate',
           ${sqlLiteral(subjectId)},
           ${sqlLiteral(analysisType)},
           ${sqlLiteral(provider)},
@@ -91,8 +91,8 @@ async function seedContentAnalysisCanaryRows(harness) {
       analysis_id
     )
     values
-      ('article', ${sqlLiteral(subjectId)}, 'OpenAI', 'openai', 'ORG', 0.9, 0.95, 1, '[{"offset":0,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)}),
-      ('article', ${sqlLiteral(subjectId)}, 'Warsaw', 'warsaw', 'GPE', 0.7, 0.9, 1, '[{"offset":12,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)})
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'OpenAI', 'openai', 'ORG', 0.9, 0.95, 1, '[{"offset":0,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)}),
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'Warsaw', 'warsaw', 'GPE', 0.7, 0.9, 1, '[{"offset":12,"length":6}]'::jsonb, ${sqlLiteral(provider)}, 'ner-canary-v1', ${sqlLiteral(analysisIds.ner)})
     on conflict do nothing;
   `);
 
@@ -110,11 +110,11 @@ async function seedContentAnalysisCanaryRows(harness) {
       analysis_id
     )
     values
-      ('article', ${sqlLiteral(subjectId)}, 'taxonomy', 'ai', 'AI', 'match', 0.88, 0.9, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.category)}),
-      ('article', ${sqlLiteral(subjectId)}, 'sentiment', 'positive', 'Positive', 'match', 0.72, 0.86, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
-      ('article', ${sqlLiteral(subjectId)}, 'tone', 'neutral', 'Neutral', 'match', 0.67, 0.8, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
-      ('article', ${sqlLiteral(subjectId)}, 'risk', 'low', 'Low risk', 'match', 0.2, 0.78, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
-      ('article', ${sqlLiteral(subjectId)}, 'system_interest', 'mcp_canary_interest', 'MCP Canary Interest', 'match', 0.81, 0.84, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.system_interest_label)})
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'taxonomy', 'ai', 'AI', 'match', 0.88, 0.9, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.category)}),
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'sentiment', 'positive', 'Positive', 'match', 0.72, 0.86, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'tone', 'neutral', 'Neutral', 'match', 0.67, 0.8, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'risk', 'low', 'Low risk', 'match', 0.2, 0.78, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.sentiment)}),
+      ('signal_candidate', ${sqlLiteral(subjectId)}, 'system_interest', 'mcp_canary_interest', 'MCP Canary Interest', 'match', 0.81, 0.84, '{"source":"mcp-canary"}'::jsonb, ${sqlLiteral(analysisIds.system_interest_label)})
     on conflict do nothing;
   `);
 
@@ -133,7 +133,7 @@ async function seedContentAnalysisCanaryRows(harness) {
       explain_json
     )
     values (
-      'article',
+      'signal_candidate',
       ${sqlLiteral(subjectId)},
       ${sqlLiteral(`mcp_canary_filter_${runKey}`)},
       1,
@@ -150,10 +150,10 @@ async function seedContentAnalysisCanaryRows(harness) {
 
   harness.addCleanup("delete-content-analysis-canary-rows", async () => {
     await harness.queryPostgres(`
-      delete from content_filter_results where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
-      delete from content_labels where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
-      delete from content_entities where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
-      delete from content_analysis_results where subject_type = 'article' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_filter_results where subject_type = 'signal_candidate' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_labels where subject_type = 'signal_candidate' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_entities where subject_type = 'signal_candidate' and subject_id = ${sqlLiteral(subjectId)};
+      delete from content_analysis_results where subject_type = 'signal_candidate' and subject_id = ${sqlLiteral(subjectId)};
       delete from content_filter_policies where policy_key = ${sqlLiteral(`mcp_canary_filter_policy_${runKey}`)};
       delete from content_analysis_policies where policy_key = ${sqlLiteral(`mcp_canary_analysis_policy_${runKey}`)};
       delete from content_analysis_policies where policy_key = ${sqlLiteral(`mcp_canary_structured_extraction_${runKey}`)};
@@ -200,9 +200,9 @@ async function seedReadOnlyContentCanaryRows(harness) {
 
   const docId = firstResultLine(
     await harness.queryPostgres(`
-      insert into articles (
+      insert into signal_candidates (
         channel_id,
-        source_article_id,
+        source_signal_candidate_id,
         url,
         published_at,
         title,
@@ -217,9 +217,9 @@ async function seedReadOnlyContentCanaryRows(harness) {
       values (
         ${sqlLiteral(channelId)},
         ${sqlLiteral(`mcp-read-canary-${suffix}`)},
-        ${sqlLiteral(`https://example.com/${suffix}/article`)},
+        ${sqlLiteral(`https://example.com/${suffix}/signal_candidate`)},
         now(),
-        ${sqlLiteral(`MCP read canary article ${suffix}`)},
+        ${sqlLiteral(`MCP read canary signal_candidate ${suffix}`)},
         'Deterministic MCP read canary lead.',
         'Deterministic MCP read canary body with enough text for read and explain paths.',
         'en',
@@ -228,14 +228,14 @@ async function seedReadOnlyContentCanaryRows(harness) {
         now(),
         '{"source":"mcp-read-canary"}'::jsonb
       )
-      on conflict (channel_id, source_article_id)
-      where source_article_id is not null
+      on conflict (channel_id, source_signal_candidate_id)
+      where source_signal_candidate_id is not null
       do update
       set title = excluded.title, updated_at = now()
       returning doc_id::text;
     `)
   );
-  assert(docId, "Failed to seed MCP read canary article.");
+  assert(docId, "Failed to seed MCP read canary signal_candidate.");
 
   const resourceId = firstResultLine(
     await harness.queryPostgres(`
@@ -284,7 +284,7 @@ async function seedReadOnlyContentCanaryRows(harness) {
   harness.addCleanup("delete-read-only-content-canary-rows", async () => {
     await harness.queryPostgres(`
       delete from web_resources where resource_id = ${sqlLiteral(resourceId)};
-      delete from articles where doc_id = ${sqlLiteral(docId)};
+      delete from signal_candidates where doc_id = ${sqlLiteral(docId)};
       delete from source_channels where channel_id = ${sqlLiteral(channelId)};
     `);
   });
@@ -292,7 +292,7 @@ async function seedReadOnlyContentCanaryRows(harness) {
   return {
     channelId,
     docId,
-    contentItemId: `editorial:${docId}`,
+    contentItemId: `signal_candidate:${docId}`,
     resourceId,
   };
 }
@@ -925,7 +925,7 @@ async function scenarioSequenceOperatorFlows(harness) {
       taskGraph: [
         {
           key: "normalize",
-          module: "article.normalize",
+          module: "signal_candidate.normalize",
           options: {},
         },
       ],
@@ -948,7 +948,7 @@ async function scenarioSequenceOperatorFlows(harness) {
       taskGraph: [
         {
           key: "normalize",
-          module: "article.normalize",
+          module: "signal_candidate.normalize",
           options: {},
         },
       ],
@@ -999,7 +999,7 @@ async function scenarioSequenceOperatorFlows(harness) {
   const targetBackfillDocId = firstResultLine(
     await harness.queryPostgres(`
       select doc_id::text
-      from public.articles
+      from public.signal_candidates
       order by created_at desc
       limit 1;
     `)
@@ -1046,7 +1046,7 @@ async function scenarioSequenceOperatorFlows(harness) {
       select status || '|' || job_kind || '|' || index_name || '|' ||
              coalesce(options_json->>'batchSize', '') || '|' ||
              coalesce(options_json->>'retroNotifications', '') || '|' ||
-             coalesce(options_json->>'replayExistingArticles', '') || '|' ||
+             coalesce(options_json->>'replayExistingSignalCandidates', '') || '|' ||
              coalesce(options_json->>'includeEnrichment', '') || '|' ||
              coalesce(options_json->>'forceEnrichment', '')
       from public.reindex_jobs
@@ -1059,7 +1059,7 @@ async function scenarioSequenceOperatorFlows(harness) {
     finalReindexIndexName,
     finalReindexBatchSize,
     finalReindexRetroNotifications,
-    finalReindexReplayExistingArticles,
+    finalReindexReplayExistingSignalCandidates,
     finalReindexIncludeEnrichment,
     finalReindexForceEnrichment,
   ] = reindexJobEvidence.split("|");
@@ -1072,8 +1072,8 @@ async function scenarioSequenceOperatorFlows(harness) {
     "Backfill reindex job should skip retro notifications by default."
   );
   assert(
-    finalReindexReplayExistingArticles === "true",
-    "Backfill reindex job should replay existing articles by default."
+    finalReindexReplayExistingSignalCandidates === "true",
+    "Backfill reindex job should replay existing signal_candidates by default."
   );
   assert(finalReindexIncludeEnrichment === "false", "Backfill reindex job should not include enrichment by default.");
   assert(finalReindexForceEnrichment === "false", "Backfill reindex job should not force enrichment by default.");
@@ -1085,8 +1085,8 @@ async function scenarioSequenceOperatorFlows(harness) {
       description: "Deterministic HTTP failed retry path.",
       taskGraph: [
         {
-          key: "normalize_missing_article",
-          module: "article.normalize",
+          key: "normalize_missing_signal_candidate",
+          module: "signal_candidate.normalize",
           options: {},
         },
       ],
@@ -1606,9 +1606,9 @@ function buildReadToolCalls() {
     { name: "discovery.rollback_actions.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.eval_runs.list", args: { page: 1, pageSize: 20 } },
     { name: "discovery.source_families.coverage", args: { includeExamples: false } },
-    { name: "articles.list", args: { page: 1, pageSize: 20 } },
+    { name: "signal_candidates.list", args: { page: 1, pageSize: 20 } },
     { name: "content_items.list", args: { page: 1, pageSize: 20 } },
-    { name: "articles.residuals.summary", args: {} },
+    { name: "signal_candidates.residuals.summary", args: {} },
     { name: "web_resources.list", args: { page: 1, pageSize: 20 } },
     { name: "fetch_runs.list", args: { page: 1, pageSize: 20 } },
     { name: "llm_budget.summary", args: {} },
@@ -1633,7 +1633,7 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
   const analysisList = await harness.mcpToolCall(token, "content_analysis.list", {
     page: 1,
     pageSize: 20,
-    subjectType: "article",
+    subjectType: "signal_candidate",
     subjectId: canary.subjectId,
   });
   assert(readRows(analysisList).length > 0, "content_analysis.list should expose seeded canary rows.");
@@ -1642,7 +1642,7 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
   const entityList = await harness.mcpToolCall(token, "content_entities.list", {
     page: 1,
     pageSize: 20,
-    subjectType: "article",
+    subjectType: "signal_candidate",
     subjectId: canary.subjectId,
   });
   assert(readRows(entityList).length > 0, "content_entities.list should expose seeded canary entities.");
@@ -1650,7 +1650,7 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
   const labelList = await harness.mcpToolCall(token, "content_labels.list", {
     page: 1,
     pageSize: 20,
-    subjectType: "article",
+    subjectType: "signal_candidate",
     subjectId: canary.subjectId,
   });
   assert(readRows(labelList).length > 0, "content_labels.list should expose seeded canary labels.");
@@ -1658,7 +1658,7 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
   const filterResults = await harness.mcpToolCall(token, "content_filter_results.list", {
     page: 1,
     pageSize: 20,
-    subjectType: "article",
+    subjectType: "signal_candidate",
     subjectId: canary.subjectId,
   });
   assert(readRows(filterResults).length > 0, "content_filter_results.list should expose seeded dry-run canary results.");
@@ -1802,7 +1802,7 @@ async function scenarioContentAnalysisOperatorFlows(harness) {
 
   const backfill = await harness.mcpToolCall(token, "content_analysis.backfill.request", {
     payload: {
-      subjectTypes: ["article"],
+      subjectTypes: ["signal_candidate"],
       modules: ["ner", "structured_extraction"],
       missingOnly: true,
       batchSize: 1,
@@ -1838,22 +1838,22 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
   const readOnlyCanary = await seedReadOnlyContentCanaryRows(harness);
   const results = [];
   const listResults = {};
-  let articleList = null;
+  let signalCandidateList = null;
   let contentItemList = null;
-  let articleResidualSummary = null;
+  let signalCandidateResidualSummary = null;
   let webResourceList = null;
 
   for (const call of buildReadToolCalls()) {
     const output = await harness.mcpToolCall(token, call.name, call.args);
     listResults[call.name] = output;
-    if (call.name === "articles.list") {
-      articleList = output;
+    if (call.name === "signal_candidates.list") {
+      signalCandidateList = output;
     }
     if (call.name === "content_items.list") {
       contentItemList = output;
     }
-    if (call.name === "articles.residuals.summary") {
-      articleResidualSummary = output;
+    if (call.name === "signal_candidates.residuals.summary") {
+      signalCandidateResidualSummary = output;
     }
     if (call.name === "web_resources.list") {
       webResourceList = output;
@@ -1935,14 +1935,14 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
     });
   }
 
-  const firstArticle = readFirstRow(articleList ?? {});
-  const articleDocId = readIdentifier(firstArticle, ["doc_id", "docId"]) || readOnlyCanary.docId;
-  if (articleDocId) {
-    await harness.mcpToolCall(token, "articles.read", {
-      docId: articleDocId,
+  const firstSignalCandidate = readFirstRow(signalCandidateList ?? {});
+  const signalCandidateDocId = readIdentifier(firstSignalCandidate, ["doc_id", "docId"]) || readOnlyCanary.docId;
+  if (signalCandidateDocId) {
+    await harness.mcpToolCall(token, "signal_candidates.read", {
+      docId: signalCandidateDocId,
     });
-    await harness.mcpToolCall(token, "articles.explain", {
-      docId: articleDocId,
+    await harness.mcpToolCall(token, "signal_candidates.explain", {
+      docId: signalCandidateDocId,
     });
   }
 
@@ -1958,12 +1958,12 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
     });
   }
 
-  const residualSummaryRow = extractFirstObjectRow(articleResidualSummary);
+  const residualSummaryRow = extractFirstObjectRow(signalCandidateResidualSummary);
   const residualGroups = residualSummaryRow?.groups;
   const firstResidualBucket = Array.isArray(residualGroups?.downstreamLossBuckets)
     ? residualGroups.downstreamLossBuckets[0]?.value
     : null;
-  const residualList = await harness.mcpToolCall(token, "articles.residuals.list", {
+  const residualList = await harness.mcpToolCall(token, "signal_candidates.residuals.list", {
     page: 1,
     pageSize: 20,
     ...(firstResidualBucket ? { downstreamLossBucket: firstResidualBucket } : {}),
@@ -1975,7 +1975,7 @@ async function scenarioReadOnlyOperatorNeeds(harness) {
         firstResidualBucket ||
         String(firstResidualRow?.selection_diagnostics?.downstreamLossBucket ?? "") ===
           String(firstResidualBucket),
-      "articles.residuals.list should agree with the chosen residual bucket filter."
+      "signal_candidates.residuals.list should agree with the chosen residual bucket filter."
     );
   }
 
@@ -2510,7 +2510,7 @@ async function scenarioNegativeScopeAndDestructivePolicy(harness) {
         name: "maintenance.reindex.request",
         arguments: {
           payload: {
-            indexName: "articles",
+            indexName: "signal_candidates",
             jobKind: "backfill",
           },
         },
@@ -2776,7 +2776,7 @@ async function scenarioIngressAdapterOperatorFlows(harness) {
       providerType: "api",
       title: `MCP operator JSON API ${harness.runId}`,
       description: "Deterministic MCP coverage adapter.",
-      outputMode: "articles",
+      outputMode: "signal_candidates",
       status: "draft",
       matchRules: { urlHostContains: ["example.com"], allowAutoSelect: false },
       configSchema: {},

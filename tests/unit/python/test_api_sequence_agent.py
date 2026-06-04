@@ -21,7 +21,7 @@ class ApiSequenceAgentTests(unittest.TestCase):
         self.assertEqual(result["sequenceDefaults"]["status"], "draft")
         self.assertEqual(result["sequenceDefaults"]["triggerType"], "agent")
         modules = {item["module"] for item in result["availablePlugins"]}
-        self.assertIn("article.normalize", modules)
+        self.assertIn("signal_candidate.normalize", modules)
         self.assertIn("discovery.web_search", modules)
 
     def test_normalize_sequence_cron_accepts_valid_expression(self) -> None:

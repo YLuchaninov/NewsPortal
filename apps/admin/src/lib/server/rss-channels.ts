@@ -86,7 +86,7 @@ export type RssChannelDeleteMode = "delete" | "archive";
 
 export interface DeleteOrArchiveRssChannelResult {
   mode: RssChannelDeleteMode;
-  articleCount: number;
+  signalCandidateCount: number;
 }
 
 function readOptionalFeedIngressAdapterStrategy(
@@ -202,8 +202,8 @@ export function parseBulkRssAdminChannelInputs(payload: unknown): NormalizedRssA
   });
 }
 
-export function resolveRssChannelDeleteMode(articleCount: number): RssChannelDeleteMode {
-  return articleCount > 0 ? "archive" : "delete";
+export function resolveRssChannelDeleteMode(signalCandidateCount: number): RssChannelDeleteMode {
+  return signalCandidateCount > 0 ? "archive" : "delete";
 }
 
 export function countRssChannelsRequiringOverwriteConfirmation(
@@ -535,13 +535,13 @@ export async function deleteOrArchiveRssChannel(
   try {
     await client.query("begin");
 
-    const channelLookup = await client.query<{ article_count: number }>(
+    const channelLookup = await client.query<{ signal_candidate_count: number }>(
       `
         select (
           select count(*)::int
-          from articles a
+          from signal_candidates a
           where a.channel_id = sc.channel_id
-        ) as article_count
+        ) as signal_candidate_count
         from source_channels sc
         where sc.channel_id = $1
           and sc.provider_type = 'rss'
@@ -550,12 +550,12 @@ export async function deleteOrArchiveRssChannel(
       [channelId]
     );
 
-    const articleCount = channelLookup.rows[0]?.article_count;
-    if (articleCount == null) {
+    const signalCandidateCount = channelLookup.rows[0]?.signal_candidate_count;
+    if (signalCandidateCount == null) {
       throw new Error(`RSS channel ${channelId} was not found.`);
     }
 
-    const mode = resolveRssChannelDeleteMode(articleCount);
+    const mode = resolveRssChannelDeleteMode(signalCandidateCount);
     if (mode === "archive") {
       await client.query(
         `
@@ -597,7 +597,7 @@ export async function deleteOrArchiveRssChannel(
 
     return {
       mode,
-      articleCount
+      signalCandidateCount
     };
   } catch (error) {
     await client.query("rollback");

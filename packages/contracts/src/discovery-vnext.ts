@@ -323,7 +323,7 @@ export const SOURCE_UNDERSTANDING_PAYLOAD_SCHEMA = {
         "recurring_feed",
         "official_update",
         "static_service_page",
-        "evergreen_article",
+        "evergreen_signal_candidate",
         "documentation_or_guide",
         "dataset_or_registry",
         "community_thread",

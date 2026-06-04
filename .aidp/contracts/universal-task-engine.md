@@ -15,7 +15,7 @@ Universal Task Engine is the sequence-based execution model for SignalOps: decla
 - Discovery and enrichment use the same engine through later migrations.
 - Content analysis plugins may extend default sequences with persisted analysis steps such as `content.ner_extract`, `content.system_interest_label_project` and `content.filter_gate`; their durable truth lives in PostgreSQL analysis/gate tables.
 - Direct fallback queue fanout remains only for non-sequence events such as `foundation.smoke.requested` and `source.channel.sync.requested`.
-- Legacy intermediate article events are compatibility constants and not default fallback fanout.
+- Legacy intermediate signal_candidate events are compatibility constants and not default fallback fanout.
 
 ## Data model
 
@@ -45,7 +45,7 @@ Universal Task Engine is the sequence-based execution model for SignalOps: decla
 
 ## Discovery/enrichment adjunct
 
-Discovery domain truth lives in `.aidp/contracts/discovery-agent.md`; UTE only governs sequence/plugin boundary. Fetchers remain owner of full article/media extraction when `enrichment.article_extract` calls fetchers internal endpoint.
+Discovery domain truth lives in `.aidp/contracts/discovery-agent.md`; UTE only governs sequence/plugin boundary. Fetchers remain owner of full signal_candidate/media extraction when `enrichment.signal_candidate_extract` calls fetchers internal endpoint.
 
 ## Runtime flags
 

@@ -104,7 +104,7 @@ const ADMIN_ACTION_TOKEN_PREFIX_SCOPES = new Map<string, string>([
 ]);
 
 export const ADMIN_ACTION_TOKEN_TARGETS = [
-  { scope: "articles.enrichment-retry", targetPath: "/bff/admin/articles/enrichment-retry" },
+  { scope: "signal_candidates.enrichment-retry", targetPath: "/bff/admin/signal-candidates/enrichment-retry" },
   { scope: "automation", targetPath: "/bff/admin/automation" },
   { scope: "channels", targetPath: "/bff/admin/channels" },
   { scope: "channels.bulk", targetPath: "/bff/admin/channels/bulk" },

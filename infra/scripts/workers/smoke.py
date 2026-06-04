@@ -57,7 +57,7 @@ class FakeJob:
 
 async def ensure_embed_fixture() -> str:
     channel_id = stable_uuid("embed-channel")
-    doc_id = stable_uuid("embed-article")
+    doc_id = stable_uuid("embed-signal_candidate")
     smoke_title = (
         "European Union AI policy implementation request for proposal reaches Brussels and Warsaw"
     )
@@ -104,10 +104,10 @@ async def ensure_embed_fixture() -> str:
                 )
                 await cursor.execute(
                     """
-                    insert into articles (
+                    insert into signal_candidates (
                       doc_id,
                       channel_id,
-                      source_article_id,
+                      source_signal_candidate_id,
                       url,
                       published_at,
                       title,
@@ -124,7 +124,7 @@ async def ensure_embed_fixture() -> str:
                       %s,
                       %s,
                       'phase3-embed-smoke',
-                      'https://example.test/articles/phase3-embed-smoke',
+                      'https://example.test/signal-candidates/phase3-embed-smoke',
                       now(),
                       %s,
                       %s,
@@ -197,8 +197,8 @@ async def ensure_embed_fixture() -> str:
                     values (
                       %s,
                       'editorial',
-                      'article',
-                      'https://example.test/articles/phase3-embed-smoke',
+                      'signal_candidate',
+                      'https://example.test/signal-candidates/phase3-embed-smoke',
                       'example.test',
                       %s,
                       %s,
@@ -242,11 +242,11 @@ async def ensure_embed_fixture() -> str:
                       observation_state
                     )
                     values (
-                      'article',
+                      'signal_candidate',
                       %s,
                       %s,
                       'phase3-embed-smoke',
-                      'https://example.test/articles/phase3-embed-smoke',
+                      'https://example.test/signal-candidates/phase3-embed-smoke',
                       now(),
                       now(),
                       %s,
@@ -534,7 +534,7 @@ async def align_phase4_criterion_prototype(doc_id: str, criterion_id: str) -> No
                     select
                       avr.vector_type,
                       er.embedding_json
-                    from article_vector_registry avr
+                    from signal_candidate_vector_registry avr
                     join embedding_registry er on er.embedding_id = avr.embedding_id
                     where avr.doc_id = %s
                       and avr.vector_type in ('e_title', 'e_lead', 'e_body')
@@ -550,7 +550,7 @@ async def align_phase4_criterion_prototype(doc_id: str, criterion_id: str) -> No
                 }
                 if not {"e_title", "e_lead", "e_body"}.issubset(vectors):
                     raise RuntimeError(
-                        "Phase 4 smoke setup failed: missing article vectors for criterion prototype."
+                        "Phase 4 smoke setup failed: missing signal_candidate vectors for criterion prototype."
                     )
                 prototype = [
                     0.50 * title + 0.30 * lead + 0.20 * body
@@ -632,7 +632,7 @@ async def align_phase4_interest_prototype(doc_id: str, interest_id: str) -> None
                     select
                       avr.vector_type,
                       er.embedding_json
-                    from article_vector_registry avr
+                    from signal_candidate_vector_registry avr
                     join embedding_registry er on er.embedding_id = avr.embedding_id
                     where avr.doc_id = %s
                       and avr.vector_type in ('e_title', 'e_lead', 'e_body')
@@ -648,7 +648,7 @@ async def align_phase4_interest_prototype(doc_id: str, interest_id: str) -> None
                 }
                 if not {"e_title", "e_lead", "e_body"}.issubset(vectors):
                     raise RuntimeError(
-                        "Phase 4 smoke setup failed: missing article vectors for interest prototype."
+                        "Phase 4 smoke setup failed: missing signal_candidate vectors for interest prototype."
                     )
                 prototype = [
                     0.55 * title + 0.30 * lead + 0.15 * body
@@ -784,10 +784,10 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                 )
                 await cursor.execute(
                     """
-                    insert into articles (
+                    insert into signal_candidates (
                       doc_id,
                       channel_id,
-                      source_article_id,
+                      source_signal_candidate_id,
                       url,
                       published_at,
                       title,
@@ -807,7 +807,7 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                       %s,
                       now(),
                       'European Union AI policy response reaches Brussels and Warsaw',
-                      'Synthetic LLM proof article for provider usage metadata.',
+                      'Synthetic LLM proof signal_candidate for provider usage metadata.',
                       'European Union AI policy response reaches Brussels and Warsaw while regulators publish a detailed compliance package for AI governance.',
                       'en',
                       0.9,
@@ -821,7 +821,7 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                         doc_id,
                         channel_id,
                         f"llm-cost-proof-{doc_id}",
-                        f"https://example.test/articles/llm-cost-proof/{doc_id}",
+                        f"https://example.test/signal-candidates/llm-cost-proof/{doc_id}",
                     ),
                 )
                 await cursor.execute(
@@ -845,11 +845,11 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                     values (
                       %s,
                       'editorial',
-                      'article',
+                      'signal_candidate',
                       %s,
                       'example.test',
                       'European Union AI policy response reaches Brussels and Warsaw',
-                      'Synthetic LLM proof article for provider usage metadata.',
+                      'Synthetic LLM proof signal_candidate for provider usage metadata.',
                       'European Union AI policy response reaches Brussels and Warsaw while regulators publish a detailed compliance package for AI governance.',
                       'en',
                       0.9,
@@ -873,7 +873,7 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                       observation_count = excluded.observation_count,
                       updated_at = now()
                     """,
-                    (doc_id, f"https://example.test/articles/llm-cost-proof/{doc_id}"),
+                    (doc_id, f"https://example.test/signal-candidates/llm-cost-proof/{doc_id}"),
                 )
                 await cursor.execute(
                     """
@@ -890,7 +890,7 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                       observation_state
                     )
                     values (
-                      'article',
+                      'signal_candidate',
                       %s,
                       %s,
                       %s,
@@ -917,7 +917,7 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                         doc_id,
                         channel_id,
                         f"llm-cost-proof-{doc_id}",
-                        f"https://example.test/articles/llm-cost-proof/{doc_id}",
+                        f"https://example.test/signal-candidates/llm-cost-proof/{doc_id}",
                         doc_id,
                     ),
                 )
@@ -1114,7 +1114,7 @@ async def reset_phase4_runtime_state(
                 )
                 await cursor.execute(
                     """
-                    delete from article_media_assets
+                    delete from signal_candidate_media_assets
                     where doc_id = %s
                     """,
                     (doc_id,),
@@ -1122,7 +1122,7 @@ async def reset_phase4_runtime_state(
                 await cursor.execute(
                     """
                     delete from outbox_events
-                    where aggregate_type = 'article'
+                    where aggregate_type = 'signal_candidate'
                       and aggregate_id = %s
                     """,
                     (doc_id,),
@@ -1198,7 +1198,7 @@ async def cleanup_llm_cost_review_fixture(
                 )
                 await cursor.execute(
                     """
-                    delete from articles
+                    delete from signal_candidates
                     where doc_id = %s
                     """,
                     (doc_id,),
@@ -1206,7 +1206,7 @@ async def cleanup_llm_cost_review_fixture(
                 await cursor.execute(
                     """
                     delete from document_observations
-                    where origin_type = 'article' and origin_id = %s
+                    where origin_type = 'signal_candidate' and origin_id = %s
                     """,
                     (doc_id,),
                 )
@@ -1226,7 +1226,7 @@ async def cleanup_llm_cost_review_fixture(
                 )
 
 
-async def fetch_latest_article_event_id(doc_id: str, event_type: str) -> str:
+async def fetch_latest_signal_candidate_event_id(doc_id: str, event_type: str) -> str:
     diagnostic: dict[str, Any] = {}
     async with await open_connection() as connection:
         async with connection.cursor() as cursor:
@@ -1234,7 +1234,7 @@ async def fetch_latest_article_event_id(doc_id: str, event_type: str) -> str:
                 """
                 select event_id::text as event_id
                 from outbox_events
-                where aggregate_type = 'article'
+                where aggregate_type = 'signal_candidate'
                   and aggregate_id = %s
                   and event_type = %s
                 order by created_at desc
@@ -1702,11 +1702,11 @@ def verify_system_feed_result_consistency(
 
 async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
     channel_id = stable_uuid("phase2-channel")
-    doc_id = stable_uuid("phase2-article")
+    doc_id = stable_uuid("phase2-signal_candidate")
     raw_payload = {
         "fetcher": "rss",
         "rss": {
-            "title": "  Phase 2 <b>Smoke</b> Article  ",
+            "title": "  Phase 2 <b>Smoke</b> SignalCandidate  ",
             "description": "Phase 2 <i>summary</i> with &amp; entities.",
             "contentEncoded": "<p>Phase 2 body for normalize and dedup smoke.</p>",
         },
@@ -1718,7 +1718,7 @@ async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
                 await cursor.execute(
                     """
                     delete from outbox_events
-                    where aggregate_type = 'article'
+                    where aggregate_type = 'signal_candidate'
                       and aggregate_id = %s
                     """,
                     (doc_id,),
@@ -1746,10 +1746,10 @@ async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
                 )
                 await cursor.execute(
                     """
-                    insert into articles (
+                    insert into signal_candidates (
                       doc_id,
                       channel_id,
-                      source_article_id,
+                      source_signal_candidate_id,
                       url,
                       published_at,
                       title,
@@ -1773,7 +1773,7 @@ async def ensure_normalize_dedup_fixture() -> tuple[str, str]:
                       %s,
                       %s,
                       'phase2-normalize-dedup-smoke',
-                      'https://example.test/articles/phase2-normalize-dedup-smoke',
+                      'https://example.test/signal-candidates/phase2-normalize-dedup-smoke',
                       now(),
                       '',
                       '',
@@ -1823,9 +1823,9 @@ async def fetch_latest_normalized_event_id(doc_id: str) -> str:
                 """
                 select event_id::text as event_id
                 from outbox_events
-                where aggregate_type = 'article'
+                where aggregate_type = 'signal_candidate'
                   and aggregate_id = %s
-                  and event_type = 'article.normalized'
+                  and event_type = 'signal_candidate.normalized'
                 order by created_at desc
                 limit 1
                 """,
@@ -1834,7 +1834,7 @@ async def fetch_latest_normalized_event_id(doc_id: str) -> str:
             event = await cursor.fetchone()
 
     if not event:
-        raise RuntimeError("Normalize smoke verification failed: article.normalized outbox event is missing.")
+        raise RuntimeError("Normalize smoke verification failed: signal_candidate.normalized outbox event is missing.")
 
     return str(event["event_id"])
 
@@ -1858,17 +1858,17 @@ async def verify_normalize_dedup(doc_id: str, ingest_event_id: str, normalized_e
                   is_near_duplicate,
                   normalized_at,
                   deduped_at
-                from articles
+                from signal_candidates
                 where doc_id = %s
                 """,
                 (doc_id,),
             )
-            article = await cursor.fetchone()
+            signal_candidate = await cursor.fetchone()
             await cursor.execute(
                 """
                 select event_type, status
                 from outbox_events
-                where aggregate_type = 'article'
+                where aggregate_type = 'signal_candidate'
                   and aggregate_id = %s
                 order by created_at
                 """,
@@ -1886,35 +1886,35 @@ async def verify_normalize_dedup(doc_id: str, ingest_event_id: str, normalized_e
             )
             inbox_rows = await cursor.fetchall()
 
-    if not article:
-        raise RuntimeError("Normalize/dedup smoke verification failed: article row is missing.")
-    if article["processing_state"] not in {"deduped", "embedded", "clustered", "matched", "notified"}:
+    if not signal_candidate:
+        raise RuntimeError("Normalize/dedup smoke verification failed: signal_candidate row is missing.")
+    if signal_candidate["processing_state"] not in {"deduped", "embedded", "clustered", "matched", "notified"}:
         raise RuntimeError(
-            "Normalize/dedup smoke verification failed: article did not reach the deduped stage."
+            "Normalize/dedup smoke verification failed: signal_candidate did not reach the deduped stage."
         )
-    if not article["title"] or "<" in article["title"]:
+    if not signal_candidate["title"] or "<" in signal_candidate["title"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: title was not normalized.")
-    if not article["lead"] or "&amp;" in article["lead"]:
+    if not signal_candidate["lead"] or "&amp;" in signal_candidate["lead"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: lead was not normalized.")
-    if not article["body"] or "<p>" in article["body"]:
+    if not signal_candidate["body"] or "<p>" in signal_candidate["body"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: body was not normalized.")
-    if not article["exact_hash"] or article["simhash64"] is None:
+    if not signal_candidate["exact_hash"] or signal_candidate["simhash64"] is None:
         raise RuntimeError("Normalize/dedup smoke verification failed: hash fields are missing.")
-    if article["canonical_doc_id"] != doc_id or article["family_id"] != doc_id:
-        raise RuntimeError("Normalize/dedup smoke verification failed: canonical/family ids were not resolved to the article itself.")
-    if article["is_exact_duplicate"] or article["is_near_duplicate"]:
-        raise RuntimeError("Normalize/dedup smoke verification failed: first article should not be marked duplicate.")
-    if not article["normalized_at"] or not article["deduped_at"]:
+    if signal_candidate["canonical_doc_id"] != doc_id or signal_candidate["family_id"] != doc_id:
+        raise RuntimeError("Normalize/dedup smoke verification failed: canonical/family ids were not resolved to the signal candidate itself.")
+    if signal_candidate["is_exact_duplicate"] or signal_candidate["is_near_duplicate"]:
+        raise RuntimeError("Normalize/dedup smoke verification failed: first signal_candidate should not be marked duplicate.")
+    if not signal_candidate["normalized_at"] or not signal_candidate["deduped_at"]:
         raise RuntimeError("Normalize/dedup smoke verification failed: lifecycle timestamps are missing.")
 
     event_statuses = {row["event_type"]: row["status"] for row in outbox_events}
-    if event_statuses.get("article.ingest.requested") != "published":
+    if event_statuses.get("signal_candidate.ingest.requested") != "published":
         raise RuntimeError(
-            "Normalize/dedup smoke verification failed: article.ingest.requested was not published."
+            "Normalize/dedup smoke verification failed: signal_candidate.ingest.requested was not published."
         )
-    if event_statuses.get("article.normalized") not in {"pending", "published"}:
+    if event_statuses.get("signal_candidate.normalized") not in {"pending", "published"}:
         raise RuntimeError(
-            "Normalize/dedup smoke verification failed: article.normalized is missing or has an unexpected status."
+            "Normalize/dedup smoke verification failed: signal_candidate.normalized is missing or has an unexpected status."
         )
 
     actual_inbox_rows = [(row["consumer_name"], row["event_id"]) for row in inbox_rows]
@@ -1934,16 +1934,16 @@ async def verify_embed(doc_id: str) -> None:
             await cursor.execute(
                 """
                 select processing_state, embedded_at
-                from articles
+                from signal_candidates
                 where doc_id = %s
                 """,
                 (doc_id,),
             )
-            article = await cursor.fetchone()
+            signal_candidate = await cursor.fetchone()
             await cursor.execute(
                 """
                 select count(*)::int as active_count
-                from article_vector_registry
+                from signal_candidate_vector_registry
                 where doc_id = %s
                   and is_active = true
                 """,
@@ -1953,7 +1953,7 @@ async def verify_embed(doc_id: str) -> None:
             await cursor.execute(
                 """
                 select count(*)::int as feature_count
-                from article_features
+                from signal_candidate_features
                 where doc_id = %s
                 """,
                 (doc_id,),
@@ -1963,7 +1963,7 @@ async def verify_embed(doc_id: str) -> None:
                 """
                 select count(*)::int as event_vector_count
                 from event_vector_registry
-                where entity_type = 'article'
+                where entity_type = 'signal_candidate'
                   and entity_id = %s
                   and vector_type = 'e_event'
                   and is_active = true
@@ -1972,12 +1972,12 @@ async def verify_embed(doc_id: str) -> None:
             )
             event_vector_count = await cursor.fetchone()
 
-    if not article or not article["embedded_at"] or article["processing_state"] not in {"embedded", "clustered", "matched", "notified"}:
-        raise RuntimeError("Embed smoke verification failed: article is not embedded.")
+    if not signal_candidate or not signal_candidate["embedded_at"] or signal_candidate["processing_state"] not in {"embedded", "clustered", "matched", "notified"}:
+        raise RuntimeError("Embed smoke verification failed: signal candidate is not embedded.")
     if int(vector_count["active_count"]) != 4:
-        raise RuntimeError("Embed smoke verification failed: expected 4 active article vectors.")
+        raise RuntimeError("Embed smoke verification failed: expected 4 active signal_candidate vectors.")
     if int(feature_count["feature_count"]) != 1:
-        raise RuntimeError("Embed smoke verification failed: article_features row is missing.")
+        raise RuntimeError("Embed smoke verification failed: signal_candidate_features row is missing.")
     if int(event_vector_count["event_vector_count"]) != 1:
         raise RuntimeError("Embed smoke verification failed: e_event registry row is missing.")
 
@@ -2077,12 +2077,12 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
             await cursor.execute(
                 """
                 select processing_state, event_cluster_id::text as event_cluster_id
-                from articles
+                from signal_candidates
                 where doc_id = %s
                 """,
                 (doc_id,),
             )
-            article = await cursor.fetchone()
+            signal_candidate = await cursor.fetchone()
             await cursor.execute(
                 """
                 select count(*)::int as cluster_count
@@ -2232,8 +2232,8 @@ async def verify_cluster_match_notify(doc_id: str) -> None:
 
     system_feed = await fetch_system_feed_result(doc_id)
     final_selection = await fetch_final_selection_result(doc_id)
-    if not article or article["processing_state"] not in {"matched", "notified"}:
-        raise RuntimeError("Phase 4 smoke verification failed: article did not advance to matched/notified.")
+    if not signal_candidate or signal_candidate["processing_state"] not in {"matched", "notified"}:
+        raise RuntimeError("Phase 4 smoke verification failed: signal_candidate did not advance to matched/notified.")
     if int(cluster_count["cluster_count"]) < 1:
         raise RuntimeError("Phase 4 smoke verification failed: event cluster membership is missing.")
     if int(story_cluster_count["story_cluster_count"]) < 1:
@@ -2319,12 +2319,12 @@ async def verify_reindex_backfill(
                   enrichment_state,
                   full_content_html,
                   has_media
-                from articles
+                from signal_candidates
                 where doc_id = %s
                 """,
                 (doc_id,),
             )
-            article = await cursor.fetchone()
+            signal_candidate = await cursor.fetchone()
             await cursor.execute(
                 """
                 select count(*)::int as criterion_count
@@ -2443,17 +2443,17 @@ async def verify_reindex_backfill(
         raise RuntimeError("Reindex backfill smoke verification failed: reindex job did not complete.")
     if int(target_count["target_count"]) != 1:
         raise RuntimeError("Reindex backfill smoke verification failed: target snapshot row count drifted.")
-    if int(progress.get("processedArticles") or -1) != 1 or int(progress.get("totalArticles") or -1) != 1:
+    if int(progress.get("processedSignalCandidates") or -1) != 1 or int(progress.get("totalSignalCandidates") or -1) != 1:
         raise RuntimeError("Reindex backfill smoke verification failed: stable progress totals were not recorded.")
     if expected_enrichment_state is not None:
-        if not article or str(article.get("enrichment_state") or "") != expected_enrichment_state:
+        if not signal_candidate or str(signal_candidate.get("enrichment_state") or "") != expected_enrichment_state:
             raise RuntimeError("Reindex backfill smoke verification failed: enrichment state did not update.")
         if str(expected_enrichment_state) == "skipped":
-            if not str(article.get("full_content_html") or "").strip():
+            if not str(signal_candidate.get("full_content_html") or "").strip():
                 raise RuntimeError(
                     "Reindex backfill smoke verification failed: skipped enrichment did not persist full content HTML."
                 )
-            if not bool(article.get("has_media")):
+            if not bool(signal_candidate.get("has_media")):
                 raise RuntimeError(
                     "Reindex backfill smoke verification failed: skipped enrichment did not persist feed media."
                 )
@@ -2532,8 +2532,8 @@ async def run_embed_smoke() -> dict[str, Any]:
     event_id = str(uuid.uuid4())
     await ensure_outbox_event(
         event_id=event_id,
-        event_type="article.normalized",
-        aggregate_type="article",
+        event_type="signal_candidate.normalized",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2550,8 +2550,8 @@ async def run_normalize_dedup_smoke() -> dict[str, Any]:
     ingest_event_id = str(uuid.uuid4())
     await ensure_outbox_event(
         event_id=ingest_event_id,
-        event_type="article.ingest.requested",
-        aggregate_type="article",
+        event_type="signal_candidate.ingest.requested",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2569,8 +2569,8 @@ async def run_normalize_dedup_smoke() -> dict[str, Any]:
     normalized_event_id = str(uuid.uuid4())
     await ensure_outbox_event(
         event_id=normalized_event_id,
-        event_type="article.normalized",
-        aggregate_type="article",
+        event_type="signal_candidate.normalized",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2673,8 +2673,8 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
     criterion_scope = await isolate_phase4_criterion_scope(criterion_id)
     await ensure_outbox_event(
         event_id=normalized_event_id,
-        event_type="article.normalized",
-        aggregate_type="article",
+        event_type="signal_candidate.normalized",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2686,8 +2686,8 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
     await align_phase4_interest_prototype(doc_id, interest_id)
     await ensure_outbox_event(
         event_id=embedded_event_id,
-        event_type="article.embedded",
-        aggregate_type="article",
+        event_type="signal_candidate.embedded",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2698,26 +2698,26 @@ async def run_cluster_match_notify_smoke() -> dict[str, Any]:
         )
     finally:
         await restore_phase4_criterion_scope(criterion_scope)
-    criteria_matched_event_id = await fetch_latest_article_event_id(
+    criteria_matched_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.criteria.matched",
+        "signal_candidate.criteria.matched",
     )
     cluster_result = await process_cluster(
         FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
         "",
     )
-    clustered_event_id = await fetch_latest_article_event_id(
+    clustered_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.clustered",
+        "signal_candidate.clustered",
     )
     interest_result = await process_match_interests(
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     await force_phase4_user_interest_match(doc_id, interest_id)
-    matched_interest_event_id = await fetch_latest_article_event_id(
+    matched_interest_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.interests.matched",
+        "signal_candidate.interests.matched",
     )
     with patched_smoke_delivery():
         notify_result = await process_notify(
@@ -2781,8 +2781,8 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
     criterion_scope = await isolate_phase4_criterion_scope(criterion_id)
     await ensure_outbox_event(
         event_id=normalized_event_id,
-        event_type="article.normalized",
-        aggregate_type="article",
+        event_type="signal_candidate.normalized",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2794,8 +2794,8 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
     await align_phase4_interest_prototype(doc_id, interest_id)
     await ensure_outbox_event(
         event_id=embedded_event_id,
-        event_type="article.embedded",
-        aggregate_type="article",
+        event_type="signal_candidate.embedded",
+        aggregate_type="signal_candidate",
         aggregate_id=doc_id,
         payload={"docId": doc_id, "version": 1},
     )
@@ -2806,26 +2806,26 @@ async def run_reindex_backfill_smoke() -> dict[str, Any]:
         )
     finally:
         await restore_phase4_criterion_scope(criterion_scope)
-    criteria_matched_event_id = await fetch_latest_article_event_id(
+    criteria_matched_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.criteria.matched",
+        "signal_candidate.criteria.matched",
     )
     await process_cluster(
         FakeJob({"eventId": criteria_matched_event_id, "docId": doc_id, "version": 1}),
         "",
     )
-    clustered_event_id = await fetch_latest_article_event_id(
+    clustered_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.clustered",
+        "signal_candidate.clustered",
     )
     await process_match_interests(
         FakeJob({"eventId": clustered_event_id, "docId": doc_id, "version": 1}),
         "",
     )
     await force_phase4_user_interest_match(doc_id, interest_id)
-    matched_interest_event_id = await fetch_latest_article_event_id(
+    matched_interest_event_id = await fetch_latest_signal_candidate_event_id(
         doc_id,
-        "article.interests.matched",
+        "signal_candidate.interests.matched",
     )
     with patched_smoke_delivery():
         await process_notify(

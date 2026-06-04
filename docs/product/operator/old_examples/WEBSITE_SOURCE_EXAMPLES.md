@@ -12,7 +12,7 @@
 >
 > **Prerequisites:** локальный SignalOps stack, доступ в admin, working `website` channel flow и готовность принимать, что live public sites могут измениться после даты подбора.
 >
-> **Как понять, что пример сработал:** channel создался, `web_resources` появились с ожидаемыми `resource_kind`/projection, и вы можете интерпретировать успех или честный gap без подмены resource-only truth article-only ожиданиями.
+> **Как понять, что пример сработал:** channel создался, `web_resources` появились с ожидаемыми `resource_kind`/projection, и вы можете интерпретировать успех или честный gap без подмены resource-only truth signal_candidate-only ожиданиями.
 
 Перед началом полезно держать рядом:
 
@@ -81,18 +81,18 @@ Current primary matrix on 16 April 2026:
 
 У website provider truth выглядит так:
 
-`website channel -> persisted web_resources -> optional projection into articles`
+`website channel -> persisted web_resources -> optional projection into signal_candidates`
 
 Это значит:
 
-- `editorial` rows **могут** проектироваться в `articles`;
+- `editorial` rows **могут** проектироваться в `signal_candidates`;
 - `document`, `listing`, `entity`, `data_file` и другие rows **могут честно оставаться resource-only**;
-- отсутствие article projection **не всегда ошибка**.
+- отсутствие signal_candidate projection **не всегда ошибка**.
 
 ### Какой пример брать первым
 
 - Если вы хотите проверить “классический newsroom path”, начните с **Примера A**.
-- Если вы хотите проверить, что non-editorial rows не исчезают behind article-only workflow, начните с **Примера B**.
+- Если вы хотите проверить, что non-editorial rows не исчезают behind signal_candidate-only workflow, начните с **Примера B**.
 - Если вы хотите проверить bounded browser-assisted path на реальном публичном сайте, начните с **Примера C**.
 
 ### Перед стартом любого примера
@@ -156,7 +156,7 @@ pnpm test:website:admin:compose
 
 ## 3. Пример A — Редакционный newsroom / public press releases
 
-**Сценарий:** официальный newsroom, press corner или public releases site, где ожидается много `editorial` rows и хотя бы часть из них должна truthfully проектироваться в `articles`.
+**Сценарий:** официальный newsroom, press corner или public releases site, где ожидается много `editorial` rows и хотя бы часть из них должна truthfully проектироваться в `signal_candidates`.
 
 ### A.1. Что проверяет этот кейс
 
@@ -164,8 +164,8 @@ pnpm test:website:admin:compose
 
 - cheap/static discovery на публичном newsroom;
 - появление `editorial` rows;
-- article projection для части website resources;
-- связку `/admin/resources -> /admin/articles/[docId]`.
+- signal_candidate projection для части website resources;
+- связку `/admin/resources -> /admin/signal-candidates/[docId]`.
 
 ### A.2. Конкретные URL для старта
 
@@ -217,7 +217,7 @@ https://www.eea.europa.eu/en/newsroom
 
 - newsroom со стабильной публичной структурой;
 - сочетание list page и detail pages;
-- хороший тест на article projection без browser fallback.
+- хороший тест на signal_candidate projection без browser fallback.
 
 ### A.3. Рекомендуемая конфигурация channel
 
@@ -262,7 +262,7 @@ Authorization header: <leave empty>
 Ожидаемая картина:
 
 - `editorial` rows должны быть основной частью результата;
-- часть `editorial` rows должна иметь `projected_article_id`;
+- часть `editorial` rows должна иметь `projected_signal_candidate_id`;
 - `projection=projected` не должен быть пустым для хорошего newsroom target;
 - `document` rows допустимы, но не должны доминировать.
 
@@ -271,7 +271,7 @@ Authorization header: <leave empty>
 1. есть `editorial` rows;
 2. хотя бы часть из них projected;
 3. resource detail открывается;
-4. projected resource ведет на `/admin/articles/[docId]`.
+4. projected resource ведет на `/admin/signal-candidates/[docId]`.
 
 Что не считать ошибкой:
 
@@ -282,7 +282,7 @@ Authorization header: <leave empty>
 
 ## 4. Пример B — Документы, notices и tenders portal
 
-**Сценарий:** public portal, где основной truth слой состоит из notices, procurement listings, documents и detail pages, а не из editorial articles.
+**Сценарий:** public portal, где основной truth слой состоит из notices, procurement listings, documents и detail pages, а не из editorial signal_candidates.
 
 ### B.1. Что проверяет этот кейс
 
@@ -308,7 +308,7 @@ https://ted.europa.eu/en/advanced-search
 
 - ярко выраженный listing/notices portal;
 - хороший тест на `listing`, `document`, `resource-only`;
-- не стоит ожидать классический newsroom-style article projection как главный результат.
+- не стоит ожидать классический newsroom-style signal_candidate projection как главный результат.
 
 #### Вариант B2 — EBRD Procurement Notices
 
@@ -383,24 +383,24 @@ Authorization header: <leave empty>
 - доминируют `document`, `listing`, иногда `entity`;
 - начинайте проверку с `projection=all`, потом сравнивайте `projection=resource_only` и `projection=projected`;
 - `projection=resource_only` часто полезен для чистой resource truth, но он не обязан быть единственным успешным outcome;
-- `projection=projected` может быть пустым, а может содержать `listing`/`document`/`entity` rows, спроецированные в common article pipeline;
-- главная ценность здесь не в `articles`, а в persisted resource truth.
+- `projection=projected` может быть пустым, а может содержать `listing`/`document`/`entity` rows, спроецированные в common signal_candidate pipeline;
+- главная ценность здесь не в `signal_candidates`, а в persisted resource truth.
 
 Что считать успехом:
 
 1. `web_resources` materialize-ятся;
 2. `document` / `listing` rows видны в `/admin/resources`;
 3. `/admin/resources` не скрывает non-editorial truth;
-4. если row projected, связанный article открывается и downstream selection diagnostics объясняют outcome;
-5. resource detail usable даже без article projection.
+4. если row projected, связанный signal_candidate открывается и downstream selection diagnostics объясняют outcome;
+5. resource detail usable даже без signal_candidate projection.
 
 Что не считать ошибкой:
 
 - `Projected = 0`;
 - `Projected > 0`, если projected rows дальше получили `final_decision=rejected`;
 - отсутствие `editorial` rows;
-- отсутствие selected articles, если downstream interests/filters не считают procurement rows релевантными;
-- пустой `/admin/articles` для этого target.
+- отсутствие selected signal_candidates, если downstream interests/filters не считают procurement rows релевантными;
+- пустой `/admin/signal-candidates` для этого target.
 
 ---
 
@@ -548,7 +548,7 @@ Browser fallback enabled: true
 | Тип сайта | newsroom / press releases | tenders / notices / documents | public JS-heavy product/news |
 | Browser fallback | `false` | `false` | сначала `false`, потом `true` |
 | Основной успех | есть `editorial` + projection | есть `document` / `listing` без скрытия | after-fallback rows более полезны |
-| Что чаще всего путают с багом | не все rows projected | нет articles | cheap mode почти пустой |
+| Что чаще всего путают с багом | не все rows projected | нет signal_candidates | cheap mode почти пустой |
 | Что на самом деле норма | часть rows остается resource-only | `Projected = 0` может быть нормой | fallback нужен только после честного gap |
 
 ---
@@ -586,7 +586,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
 
 7. Откройте 2-3 detail rows.
 
-8. Если есть projected row, откройте связанный `/admin/articles/[docId]`.
+8. Если есть projected row, откройте связанный `/admin/signal-candidates/[docId]`.
 
 ---
 
@@ -604,7 +604,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
 
 Нет. На первом прогоне лучше брать **один URL = одна channel**.
 
-### Какой кейс лучше всего показывает, что `web_resources` не скрываются behind articles?
+### Какой кейс лучше всего показывает, что `web_resources` не скрываются behind signal_candidates?
 
 Пример B.
 

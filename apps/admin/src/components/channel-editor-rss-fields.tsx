@@ -131,9 +131,9 @@ export function ChannelEditorRssFields({
         </FormField>
 
         <FormField
-          label="Article enrichment"
+          label="SignalCandidate enrichment"
           name="channel-enrichment-enabled"
-          helpText="Enable pre-normalize article extraction for short RSS bodies from this channel."
+          helpText="Enable pre-normalize signal_candidate extraction for short RSS bodies from this channel."
           helpWide
         >
           <select
@@ -152,7 +152,7 @@ export function ChannelEditorRssFields({
         <FormField
           label="Enrichment min body length"
           name="channel-enrichment-min-body-length"
-          helpText="If the current article body is already at least this many characters, enrichment skips unless manually retried."
+          helpText="If the current signal_candidate body is already at least this many characters, enrichment skips unless manually retried."
           helpWide
         >
           <Input

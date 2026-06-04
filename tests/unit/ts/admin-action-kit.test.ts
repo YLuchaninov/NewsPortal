@@ -230,17 +230,17 @@ test("prepareAdminAction resolves payload redirect after admin auth", async () =
       },
     }),
     {
-      fallbackRedirectPath: "/articles",
+      fallbackRedirectPath: "/signal-candidates",
       resolveSession: async () => adminSession,
       payloadReader: async () => ({
-        redirectTo: "https://evil.example/admin/articles?page=3",
+        redirectTo: "https://evil.example/admin/signal-candidates?page=3",
       }),
     },
   );
 
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.context.redirectTo, "/admin/articles?page=3");
+    assert.equal(result.context.redirectTo, "/admin/signal-candidates?page=3");
     assert.equal(result.context.session.userId, "admin-user-1");
   }
 });
@@ -473,7 +473,7 @@ test("submitAdminForm honors cancelled submit fallback", () => {
 test("mutating admin BFF POST routes declare signed action-token scopes", () => {
   const routeRoot = join(repoRoot, "apps/admin/src/pages/bff/admin");
   const expectedScopesByRoute = new Map<string, string>([
-    ["articles/enrichment-retry.ts", "articles.enrichment-retry"],
+    ["signal-candidates/enrichment-retry.ts", "signal_candidates.enrichment-retry"],
     ["automation.ts", "automation"],
     ["channels.ts", "channels"],
     ["channels/bulk.ts", "channels.bulk"],

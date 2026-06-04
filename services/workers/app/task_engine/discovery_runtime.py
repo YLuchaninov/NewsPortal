@@ -29,7 +29,7 @@ class ContentSamplerAdapter(Protocol):
         self,
         *,
         source_urls: list[str],
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> Any: ...
 
@@ -70,8 +70,8 @@ class DbStoreAdapter(Protocol):
     ) -> Any: ...
 
 
-class ArticleLoaderAdapter(Protocol):
-    def load_articles(
+class SignalCandidateLoaderAdapter(Protocol):
+    def load_signal_candidates(
         self,
         *,
         filters: dict[str, Any],
@@ -80,11 +80,11 @@ class ArticleLoaderAdapter(Protocol):
     ) -> Any: ...
 
 
-class ArticleEnricherAdapter(Protocol):
-    def enrich_articles(
+class SignalCandidateEnricherAdapter(Protocol):
+    def enrich_signal_candidates(
         self,
         *,
-        articles: list[dict[str, Any]],
+        signal_candidates: list[dict[str, Any]],
         enrichment: Any,
         mode: str,
         target_field: str | None,
@@ -144,7 +144,7 @@ class UnavailableContentSamplerAdapter(_UnavailableAdapter):
         self,
         *,
         source_urls: list[str],
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> Any:
         return self._raise()
@@ -195,10 +195,10 @@ class UnavailableDbStoreAdapter(_UnavailableAdapter):
         return self._raise()
 
 
-class UnavailableArticleLoaderAdapter(_UnavailableAdapter):
-    capability = "article loader adapter"
+class UnavailableSignalCandidateLoaderAdapter(_UnavailableAdapter):
+    capability = "signal_candidate loader adapter"
 
-    def load_articles(
+    def load_signal_candidates(
         self,
         *,
         filters: dict[str, Any],
@@ -208,13 +208,13 @@ class UnavailableArticleLoaderAdapter(_UnavailableAdapter):
         return self._raise()
 
 
-class UnavailableArticleEnricherAdapter(_UnavailableAdapter):
-    capability = "article enricher adapter"
+class UnavailableSignalCandidateEnricherAdapter(_UnavailableAdapter):
+    capability = "signal_candidate enricher adapter"
 
-    def enrich_articles(
+    def enrich_signal_candidates(
         self,
         *,
-        articles: list[dict[str, Any]],
+        signal_candidates: list[dict[str, Any]],
         enrichment: Any,
         mode: str,
         target_field: str | None,
@@ -242,9 +242,9 @@ class DiscoveryRuntime:
         default_factory=UnavailableSourceRegistrarAdapter
     )
     db_store: DbStoreAdapter = field(default_factory=UnavailableDbStoreAdapter)
-    article_loader: ArticleLoaderAdapter = field(default_factory=UnavailableArticleLoaderAdapter)
-    article_enricher: ArticleEnricherAdapter = field(
-        default_factory=UnavailableArticleEnricherAdapter
+    signal_candidate_loader: SignalCandidateLoaderAdapter = field(default_factory=UnavailableSignalCandidateLoaderAdapter)
+    signal_candidate_enricher: SignalCandidateEnricherAdapter = field(
+        default_factory=UnavailableSignalCandidateEnricherAdapter
     )
     website_probe: WebsiteProbeAdapter = field(default_factory=UnavailableWebsiteProbeAdapter)
 
@@ -273,8 +273,8 @@ async def resolve_runtime_call(value: Any) -> Any:
 
 
 __all__ = [
-    "ArticleEnricherAdapter",
-    "ArticleLoaderAdapter",
+    "SignalCandidateEnricherAdapter",
+    "SignalCandidateLoaderAdapter",
     "configure_discovery_runtime",
     "ContentSamplerAdapter",
     "DbStoreAdapter",

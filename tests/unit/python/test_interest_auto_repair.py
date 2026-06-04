@@ -87,20 +87,20 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             "irrelevant",
         )
 
-    async def test_fetch_article_for_update_locks_only_article_row(self) -> None:
+    async def test_fetch_signal_candidate_for_update_locks_only_signal_candidate_row(self) -> None:
         cursor = _RecordingCursor(
             [
                 {
-                    "doc_id": "article-1",
+                    "doc_id": "signal_candidate-1",
                     "channel_id": "channel-1",
                     "channel_language": "en",
                 }
             ]
         )
 
-        article = await worker_main.fetch_article_for_update(cursor, "article-1")
+        signal_candidate = await worker_main.fetch_signal_candidate_for_update(cursor, "signal_candidate-1")
 
-        self.assertEqual(article["doc_id"], "article-1")
+        self.assertEqual(signal_candidate["doc_id"], "signal_candidate-1")
         self.assertIn("for update of a", cursor.executed[0][0].lower())
         self.assertNotIn("for update\n", cursor.executed[0][0].lower())
 
@@ -136,8 +136,8 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(
                 worker_main,
-                "replay_historical_articles",
-                AsyncMock(return_value={"processedArticles": 2}),
+                "replay_historical_signal_candidates",
+                AsyncMock(return_value={"processedSignalCandidates": 2}),
             ),
             patch.object(worker_main, "record_processed_event", AsyncMock()),
         ):
@@ -147,7 +147,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         payload = result["result"]
         self.assertEqual(payload["jobKind"], "repair")
         self.assertEqual(payload["rebuild"]["reason"], "repair_job_skips_rebuild")
-        self.assertEqual(payload["backfill"]["processedArticles"], 2)
+        self.assertEqual(payload["backfill"]["processedSignalCandidates"], 2)
         self.assertEqual(
             payload["backfill"]["selectionProfileSnapshot"]["activeProfiles"], 3
         )
@@ -171,7 +171,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=("backfill", {}, "cancel_requested")),
             ),
             patch.object(worker_main, "record_processed_event", AsyncMock()) as record_event,
-            patch.object(worker_main, "replay_historical_articles", AsyncMock()) as replay,
+            patch.object(worker_main, "replay_historical_signal_candidates", AsyncMock()) as replay,
         ):
             result = await worker_main.process_reindex(job, "")
 
@@ -395,7 +395,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "embedded",
             "title": "AI policy",
@@ -407,9 +407,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -442,7 +442,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -452,7 +452,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         call_args = insert_outbox_event.await_args.args
         self.assertEqual(call_args[1], worker_main.LLM_REVIEW_REQUESTED_EVENT)
         self.assertEqual(call_args[2], "criterion")
-        self.assertEqual(call_args[4]["docId"], article_row["doc_id"])
+        self.assertEqual(call_args[4]["docId"], signal_candidate_row["doc_id"])
         self.assertEqual(call_args[4]["scope"], "criterion")
         self.assertEqual(call_args[4]["targetId"], criterion_row["criterion_id"])
         self.assertIsNone(call_args[4]["promptTemplateId"])
@@ -471,7 +471,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "embedded",
             "title": "Looking for an ERP implementation partner",
@@ -485,9 +485,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -533,7 +533,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-candidate-uplift-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -573,7 +573,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "33333333-3333-3333-3333-333333333333",
             "processing_state": "embedded",
             "title": "ERP implementation roadmap",
@@ -587,9 +587,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -635,7 +635,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-candidate-uplift-cluster-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -676,7 +676,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "66666666-6666-6666-6666-666666666666",
             "processing_state": "embedded",
             "title": "ERP implementation partner sees rising demand",
@@ -690,9 +690,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -738,7 +738,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-candidate-uplift-canonical-medium-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -789,7 +789,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "77777777-7777-7777-7777-777777777777",
             "processing_state": "embedded",
             "title": "Trusted implementation partner for enterprise delivery",
@@ -803,9 +803,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -847,7 +847,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-selection-profile-candidate-signals-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -893,7 +893,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "embedded",
             "title": "AI policy",
@@ -907,9 +907,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -938,7 +938,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-profile-hold-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -992,7 +992,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "embedded",
             "title": "Agency cloud modernization update",
@@ -1006,9 +1006,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
-            patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})),
-            patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
+            patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})),
+            patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})),
             patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])),
             patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)),
             patch.object(worker_main, "passes_hard_filters", return_value=(True, [], True)),
@@ -1037,7 +1037,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-strict-signal-guard-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1078,7 +1078,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "embedded",
             "title": "AI policy",
@@ -1092,9 +1092,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with ExitStack() as stack:
             stack.enter_context(patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)))
             stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
-            stack.enter_context(patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)))
-            stack.enter_context(patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})))
-            stack.enter_context(patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})))
             stack.enter_context(patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])))
             stack.enter_context(patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)))
             stack.enter_context(patch.object(
@@ -1139,7 +1139,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-budget-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1182,7 +1182,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 "negative_embedding_ids": [],
             },
         }
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "44444444-4444-4444-4444-444444444444",
             "processing_state": "embedded",
             "title": "Looking for an ERP implementation partner",
@@ -1196,9 +1196,9 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with ExitStack() as stack:
             stack.enter_context(patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)))
             stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
-            stack.enter_context(patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)))
-            stack.enter_context(patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={})))
-            stack.enter_context(patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={})))
+            stack.enter_context(patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={})))
             stack.enter_context(patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row])))
             stack.enter_context(patch.object(worker_main, "find_prompt_template", AsyncMock(return_value=None)))
             stack.enter_context(patch.object(
@@ -1256,7 +1256,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criteria-budget-recovered-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1310,7 +1310,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 },
             ]
         )
-        article_row = {"doc_id": "55555555-5555-5555-5555-555555555555"}
+        signal_candidate_row = {"doc_id": "55555555-5555-5555-5555-555555555555"}
 
         with patch.object(
             worker_main,
@@ -1325,7 +1325,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 }
             ),
         ):
-            result = await worker_main.upsert_final_selection_result(cursor, article=article_row)
+            result = await worker_main.upsert_final_selection_result(cursor, signal_candidate=signal_candidate_row)
 
         counts_query_sql = cursor.executed[1][0]
         self.assertIn("runtimeReviewState", counts_query_sql)
@@ -1354,10 +1354,10 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                     "canonical_review_reused_count": 1,
                     "technical_filtered_out_count": 0,
                 },
-                {"duplicate_article_count": 4},
+                {"duplicate_signal_candidate_count": 4},
             ]
         )
-        article_row = {"doc_id": "77777777-7777-7777-7777-777777777777"}
+        signal_candidate_row = {"doc_id": "77777777-7777-7777-7777-777777777777"}
 
         with patch.object(
             worker_main,
@@ -1372,11 +1372,11 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 }
             ),
         ):
-            result = await worker_main.upsert_final_selection_result(cursor, article=article_row)
+            result = await worker_main.upsert_final_selection_result(cursor, signal_candidate=signal_candidate_row)
 
         self.assertTrue(result["canonicalReviewReused"])
         self.assertEqual(result["canonicalReviewReusedCount"], 1)
-        self.assertEqual(result["duplicateArticleCountForCanonical"], 4)
+        self.assertEqual(result["duplicateSignalCandidateCountForCanonical"], 4)
         self.assertTrue(result["canonicalSelectionReused"])
 
     async def test_fetch_selection_gate_result_row_reuses_canonical_final_selection_when_exact_row_missing(self) -> None:
@@ -1409,7 +1409,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["is_selected"])
 
     async def test_process_match_criteria_reuses_canonical_review_without_queueing(self) -> None:
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "12121212-1212-1212-1212-121212121212",
             "processing_state": "embedded",
             "title": "Need help replacing a legacy finance stack",
@@ -1428,13 +1428,13 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
             )
             stack.enter_context(patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)))
             stack.enter_context(
-                patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row))
+                patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row))
             )
             stack.enter_context(
-                patch.object(worker_main, "fetch_article_features_row", AsyncMock(return_value={}))
+                patch.object(worker_main, "fetch_signal_candidate_features_row", AsyncMock(return_value={}))
             )
             stack.enter_context(
-                patch.object(worker_main, "fetch_article_vectors", AsyncMock(return_value={}))
+                patch.object(worker_main, "fetch_signal_candidate_vectors", AsyncMock(return_value={}))
             )
             stack.enter_context(
                 patch.object(worker_main, "list_compiled_criteria", AsyncMock(return_value=[criterion_row]))
@@ -1525,7 +1525,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-criterion-reuse-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1538,7 +1538,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["criteriaCount"], 1)
 
     async def test_process_llm_review_skips_provider_when_runtime_policy_blocks(self) -> None:
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "22222222-2222-2222-2222-222222222222",
             "processing_state": "matched",
             "title": "AI policy",
@@ -1552,7 +1552,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=connection)),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
             patch.object(
                 worker_main,
                 "get_llm_review_monthly_quota_snapshot",
@@ -1587,7 +1587,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-llm-budget-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                         "scope": "criterion",
                         "targetId": "11111111-1111-1111-1111-111111111111",
                     }
@@ -1613,8 +1613,8 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["decision"], "reject")
 
 
-    async def test_process_cluster_skips_articles_outside_system_feed(self) -> None:
-        article_row = {
+    async def test_process_cluster_skips_signal_candidates_outside_system_feed(self) -> None:
+        signal_candidate_row = {
             "doc_id": "33333333-3333-3333-3333-333333333333",
             "processing_state": "embedded",
         }
@@ -1622,7 +1622,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
             patch.object(
                 worker_main,
                 "sync_story_cluster_and_verification",
@@ -1645,7 +1645,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-cluster-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                         "version": 1,
                     }
                 ),
@@ -1654,15 +1654,15 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
 
         record_processed_event.assert_awaited_once()
         self.assertEqual(result["status"], "skipped-selection-gate")
-        self.assertEqual(result["docId"], article_row["doc_id"])
+        self.assertEqual(result["docId"], signal_candidate_row["doc_id"])
         self.assertEqual(result["selectionDecision"], "")
         self.assertFalse(result["selectionSelected"])
         self.assertIsNone(result["storyClusterId"])
         self.assertIsNone(result["storyVerificationState"])
         self.assertIsNone(result["canonicalVerificationState"])
 
-    async def test_process_match_interests_skips_articles_outside_system_feed(self) -> None:
-        article_row = {
+    async def test_process_match_interests_skips_signal_candidates_outside_system_feed(self) -> None:
+        signal_candidate_row = {
             "doc_id": "44444444-4444-4444-4444-444444444444",
             "processing_state": "embedded",
         }
@@ -1670,7 +1670,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
             patch.object(
                 worker_main,
                 "fetch_system_feed_result_row",
@@ -1682,7 +1682,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-interests-1",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1690,13 +1690,13 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
 
         record_processed_event.assert_awaited_once()
         self.assertEqual(result["status"], "skipped-selection-gate")
-        self.assertEqual(result["docId"], article_row["doc_id"])
+        self.assertEqual(result["docId"], signal_candidate_row["doc_id"])
         self.assertEqual(result["interestCount"], 0)
         self.assertEqual(result["selectionSource"], "system_feed_results")
         self.assertFalse(result["selectionSelected"])
 
     async def test_process_match_interests_prefers_final_selection_gate_when_available(self) -> None:
-        article_row = {
+        signal_candidate_row = {
             "doc_id": "55555555-5555-5555-5555-555555555555",
             "processing_state": "embedded",
         }
@@ -1704,7 +1704,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
             patch.object(worker_main, "is_event_processed", AsyncMock(return_value=False)),
-            patch.object(worker_main, "fetch_article_for_update", AsyncMock(return_value=article_row)),
+            patch.object(worker_main, "fetch_signal_candidate_for_update", AsyncMock(return_value=signal_candidate_row)),
             patch.object(
                 worker_main,
                 "fetch_final_selection_result_row",
@@ -1721,7 +1721,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 SimpleNamespace(
                     data={
                         "eventId": "evt-interests-2",
-                        "docId": article_row["doc_id"],
+                        "docId": signal_candidate_row["doc_id"],
                     }
                 ),
                 "",
@@ -1734,7 +1734,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["selectionDecision"], "rejected")
         self.assertFalse(result["selectionSelected"])
 
-    async def test_is_article_eligible_for_personalization_prefers_final_selection_result(self) -> None:
+    async def test_is_signal_candidate_eligible_for_personalization_prefers_final_selection_result(self) -> None:
         with (
             patch.object(worker_main, "open_connection", AsyncMock(return_value=_FakeConnection())),
             patch.object(
@@ -1748,7 +1748,7 @@ class InterestAutoRepairTests(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(),
             ) as fetch_system_feed_result_row,
         ):
-            eligible = await worker_main.is_article_eligible_for_personalization(
+            eligible = await worker_main.is_signal_candidate_eligible_for_personalization(
                 doc_id="66666666-6666-6666-6666-666666666666"
             )
 

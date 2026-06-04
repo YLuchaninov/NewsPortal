@@ -12,18 +12,18 @@ import {
   type McpToolDefinition
 } from "./shared";
 import {
-  buildArticleHoldQualitySummary,
-  explainArticleHoldQuality,
-  listArticleHoldQuality,
+  buildSignalCandidateHoldQualitySummary,
+  explainSignalCandidateHoldQuality,
+  listSignalCandidateHoldQuality,
 } from "../operating-intelligence";
 
 type QueryablePool = Parameters<McpToolDefinition["handler"]>[0]["pool"];
 
-const articleDetailSchema = {
+const signalCandidateDetailSchema = {
   type: "object",
   properties: {
     docId: { type: "string" },
-    articleId: { type: "string" },
+    signalCandidateId: { type: "string" },
     canonicalId: { type: "string" },
     id: { type: "string" },
     entityId: { type: "string" },
@@ -40,7 +40,7 @@ const contentItemReadSchema = {
   properties: {
     contentItemId: { type: "string" },
     docId: { type: "string" },
-    articleId: { type: "string" },
+    signalCandidateId: { type: "string" },
     canonicalId: { type: "string" },
     resourceId: { type: "string" },
     id: { type: "string" },
@@ -63,7 +63,7 @@ const webResourceDetailSchema = {
   additionalProperties: false,
 } as const;
 
-const articleHoldsListSchema = {
+const signalCandidateHoldsListSchema = {
   type: "object",
   properties: {
     page: { type: "number" },
@@ -77,7 +77,7 @@ const articleHoldsListSchema = {
   additionalProperties: false,
 } as const;
 
-const articleListSchema = {
+const signalCandidateListSchema = {
   type: "object",
   properties: {
     page: { type: "number" },
@@ -88,7 +88,7 @@ const articleListSchema = {
   additionalProperties: false,
 } as const;
 
-const articleHoldExplainSchema = {
+const signalCandidateHoldExplainSchema = {
   type: "object",
   required: ["docId"],
   properties: {
@@ -98,18 +98,18 @@ const articleHoldExplainSchema = {
   additionalProperties: false,
 } as const;
 
-async function resolveArticleDocIdArgument(
+async function resolveSignalCandidateDocIdArgument(
   pool: QueryablePool,
   args: Record<string, unknown>
 ): Promise<string> {
   const docId = await resolveUniqueUuidPrefix(
     pool,
-    readAliasedRequiredString(args, "docId", ["articleId", "canonicalId", "id", "entityId"]),
+    readAliasedRequiredString(args, "docId", ["signalCandidateId", "canonicalId", "id", "entityId"]),
     {
       path: "docId",
-      tableName: "articles",
+      tableName: "signal_candidates",
       columnName: "doc_id",
-      label: "Article",
+      label: "SignalCandidate",
     }
   );
   if (!docId) {
@@ -158,15 +158,15 @@ async function resolveContentItemIdArgument(
   if (args.resourceId != null) {
     return `resource:${await resolveWebResourceIdArgument(pool, args)}`;
   }
-  if (args.docId != null || args.articleId != null || args.canonicalId != null) {
-    return `editorial:${await resolveArticleDocIdArgument(pool, args)}`;
+  if (args.docId != null || args.signalCandidateId != null || args.canonicalId != null) {
+    return `signal_candidate:${await resolveSignalCandidateDocIdArgument(pool, args)}`;
   }
   if (direct) {
-    return `editorial:${await resolveArticleDocIdArgument(pool, { docId: direct })}`;
+    return `signal_candidate:${await resolveSignalCandidateDocIdArgument(pool, { docId: direct })}`;
   }
   throw new JsonRpcError(
     -32602,
-    "contentItemId is required. Accepted aliases: docId, articleId, canonicalId, resourceId, id, entityId.",
+    "contentItemId is required. Accepted aliases: docId, signalCandidateId, canonicalId, resourceId, id, entityId.",
     {
       statusCode: 400,
       data: {
@@ -174,7 +174,7 @@ async function resolveContentItemIdArgument(
         acceptedAliases: [
           "contentItemId",
           "docId",
-          "articleId",
+          "signalCandidateId",
           "canonicalId",
           "resourceId",
           "id",
@@ -187,12 +187,12 @@ async function resolveContentItemIdArgument(
 
 export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
-    "articles.list",
-    "List editorial article observations from the maintenance API.",
-    articleListSchema,
+    "signal_candidates.list",
+    "List editorial signal_candidate observations from the maintenance API.",
+    signalCandidateListSchema,
     async ({ sdk }, args) =>
       shapePaginatedContentItems(
-        await sdk.listArticlesPage<Record<string, unknown>>({
+        await sdk.listSignalCandidatesPage<Record<string, unknown>>({
           ...readPageArgs(args),
           channelId: readOptionalString(args.channelId) ?? undefined,
           q: readOptionalString(args.q) ?? undefined,
@@ -201,27 +201,27 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
       )
   ),
   createReadTool(
-    "articles.read",
-    "Read one editorial article observation with compact defaults. Prefer docId; articleId/canonicalId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
-    articleDetailSchema,
+    "signal_candidates.read",
+    "Read one editorial signal_candidate observation with compact defaults. Prefer docId; signalCandidateId/canonicalId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    signalCandidateDetailSchema,
     async ({ sdk, pool }, args) =>
       shapeContentLikeRecord(
-        await sdk.getArticle<Record<string, unknown>>(
-          await resolveArticleDocIdArgument(pool, args)
+        await sdk.getSignalCandidate<Record<string, unknown>>(
+          await resolveSignalCandidateDocIdArgument(pool, args)
         ),
         args
       )
   ),
   createReadTool(
-    "articles.explain",
-    "Read article-level selection diagnostics, filter evidence, and verification context. Prefer docId; articleId/canonicalId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
-    articleDetailSchema,
+    "signal_candidates.explain",
+    "Read signal_candidate-level selection diagnostics, filter evidence, and verification context. Prefer docId; signalCandidateId/canonicalId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    signalCandidateDetailSchema,
     async ({ sdk, pool }, args) =>
       shapeExplainPayload(
-        await sdk.getArticleExplain<Record<string, unknown>>(
-          await resolveArticleDocIdArgument(pool, args)
+        await sdk.getSignalCandidateExplain<Record<string, unknown>>(
+          await resolveSignalCandidateDocIdArgument(pool, args)
         ),
-        "article",
+        "signal_candidate",
         args
       )
   ),
@@ -252,7 +252,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "content_items.read",
-    "Read one content item with compact defaults. Prefer contentItemId; docId/articleId/canonicalId/resourceId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    "Read one content item with compact defaults. Prefer contentItemId; docId/signalCandidateId/canonicalId/resourceId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
     contentItemReadSchema,
     async ({ sdk, pool }, args) =>
       shapeContentLikeRecord(
@@ -264,7 +264,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "content_items.explain",
-    "Read content-item explainability including selection diagnostics and guidance. Prefer contentItemId; docId/articleId/canonicalId/resourceId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
+    "Read content-item explainability including selection diagnostics and guidance. Prefer contentItemId; docId/signalCandidateId/canonicalId/resourceId/id/entityId and unique UUID prefixes from reports are accepted for read-back.",
     contentItemReadSchema,
     async ({ sdk, pool }, args) =>
       shapeExplainPayload(
@@ -276,8 +276,8 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
       )
   ),
   createReadTool(
-    "articles.residuals.list",
-    "List article residual buckets for tuning and operator diagnosis.",
+    "signal_candidates.residuals.list",
+    "List signal_candidate residual buckets for tuning and operator diagnosis.",
     {
       type: "object",
       properties: {
@@ -297,7 +297,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
     },
     async ({ sdk }, args) =>
       shapePaginatedContentItems(
-        await sdk.listArticleResidualsPage<Record<string, unknown>>({
+        await sdk.listSignalCandidateResidualsPage<Record<string, unknown>>({
           ...readPageArgs(args),
           downstreamLossBucket: readOptionalString(args.downstreamLossBucket) ?? undefined,
           selectionBlockerStage: readOptionalString(args.selectionBlockerStage) ?? undefined,
@@ -313,7 +313,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
       )
   ),
   createReadTool(
-    "articles.residuals.summary",
+    "signal_candidates.residuals.summary",
     "Read aggregate residual diagnostics and blocker-bucket counts.",
     {
       type: "object",
@@ -331,7 +331,7 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
       additionalProperties: false,
     },
     async ({ sdk }, args) =>
-      sdk.getArticleResidualSummary<Record<string, unknown>>({
+      sdk.getSignalCandidateResidualSummary<Record<string, unknown>>({
         downstreamLossBucket: readOptionalString(args.downstreamLossBucket) ?? undefined,
         selectionBlockerStage: readOptionalString(args.selectionBlockerStage) ?? undefined,
         selectionBlockerReason: readOptionalString(args.selectionBlockerReason) ?? undefined,
@@ -344,22 +344,22 @@ export const CONTENT_MCP_TOOLS: readonly McpToolDefinition[] = [
       })
   ),
   createReadTool(
-    "articles.holds.summary",
+    "signal_candidates.holds.summary",
     "Read DB-backed hold-quality counts split by candidate-signal tier, downstream bucket, verification state, and LLM-review pressure.",
-    articleHoldsListSchema,
-    async (context, args) => buildArticleHoldQualitySummary(context, args)
+    signalCandidateHoldsListSchema,
+    async (context, args) => buildSignalCandidateHoldQualitySummary(context, args)
   ),
   createReadTool(
-    "articles.holds.list",
-    "List held article candidates with candidate-signal tier/evidence so replay chunks can target buyer_intent/project_intent instead of context-only noise.",
-    articleHoldsListSchema,
-    async (context, args) => listArticleHoldQuality(context, args)
+    "signal_candidates.holds.list",
+    "List held signal_candidate candidates with candidate-signal tier/evidence so replay chunks can target buyer_intent/project_intent instead of context-only noise.",
+    signalCandidateHoldsListSchema,
+    async (context, args) => listSignalCandidateHoldQuality(context, args)
   ),
   createReadTool(
-    "articles.holds.explain",
-    "Explain one held article candidate using final_selection_results and interest_filter_results candidateSignals evidence.",
-    articleHoldExplainSchema,
-    async (context, args) => explainArticleHoldQuality(context, args)
+    "signal_candidates.holds.explain",
+    "Explain one held signal_candidate candidate using final_selection_results and interest_filter_results candidateSignals evidence.",
+    signalCandidateHoldExplainSchema,
+    async (context, args) => explainSignalCandidateHoldQuality(context, args)
   ),
   createReadTool(
     "web_resources.list",

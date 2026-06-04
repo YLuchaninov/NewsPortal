@@ -197,7 +197,7 @@ export function ChannelEditorEmailImapAdvancedFields({
       </FormField>
 
       <FormField
-        label="Article enrichment"
+        label="SignalCandidate enrichment"
         name="channel-enrichment-enabled"
         helpText="Enable enrichment when message bodies arrive too short or too sparse for downstream use."
         helpWide

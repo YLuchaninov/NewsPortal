@@ -7,7 +7,7 @@ from services.workers.app.final_selection import (
 
 
 class FinalSelectionLogicTests(unittest.TestCase):
-    def test_rejects_articles_when_no_system_filters_exist(self) -> None:
+    def test_rejects_signal_candidates_when_no_system_filters_exist(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=0,
             matched_filter_count=0,
@@ -209,7 +209,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
         self.assertFalse(summary["isSelected"])
         self.assertEqual(summary["compatSystemFeedDecision"], "filtered_out")
 
-    def test_marks_unmatched_articles_as_rejected(self) -> None:
+    def test_marks_unmatched_signal_candidates_as_rejected(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=3,
             matched_filter_count=0,
@@ -585,8 +585,8 @@ class FinalSelectionLogicTests(unittest.TestCase):
     def test_context_only_candidate_signal_does_not_uplift_to_gray_zone(self) -> None:
         decision, explain = apply_document_candidate_signal_uplift(
             title="Small business growth budget update",
-            lead="A nearby context article with no buyer ask or project scope.",
-            body="The article mentions business growth and local apps in general.",
+            lead="A nearby context signal_candidate with no buyer ask or project scope.",
+            body="The signal_candidate mentions business growth and local apps in general.",
             score_final=0.445,
             positive_score=0.28,
             lexical_score=0.21,
@@ -682,7 +682,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
         decision, explain = apply_document_candidate_signal_uplift(
             title="Top 10 implementation partners in 2026",
             lead="Our picks and options worth your time.",
-            body="Comparison article for market awareness.",
+            body="Comparison signal_candidate for market awareness.",
             score_final=0.44,
             positive_score=0.28,
             lexical_score=0.21,

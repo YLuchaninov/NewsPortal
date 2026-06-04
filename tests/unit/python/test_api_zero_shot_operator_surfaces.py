@@ -10,12 +10,12 @@ from services.api.app import main as api_main
 
 
 class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
-    def test_list_articles_query_exposes_observation_and_selection_fields(self) -> None:
+    def test_list_signal_candidates_query_exposes_observation_and_selection_fields(self) -> None:
         with (
             patch.object(api_main, "query_count", return_value=1) as query_count,
             patch.object(api_main, "query_all", return_value=[{"doc_id": "doc-1"}]) as query_all,
         ):
-            result = api_main.list_articles(page=1, page_size=20)
+            result = api_main.list_signal_candidates(page=1, page_size=20)
 
         self.assertEqual(result["total"], 1)
         self.assertEqual(result["items"][0]["doc_id"], "doc-1")
@@ -34,15 +34,15 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("as final_selection_llm_review_pending_count", items_sql)
         self.assertIn("as final_selection_hold_count", items_sql)
         self.assertIn("as final_selection_canonical_review_reused", items_sql)
-        self.assertIn("as final_selection_duplicate_article_count_for_canonical", items_sql)
+        self.assertIn("as final_selection_duplicate_signal_candidate_count_for_canonical", items_sql)
         self.assertIn("as final_selection_reuse_source", items_sql)
 
-    def test_list_articles_supports_channel_and_query_filters(self) -> None:
+    def test_list_signal_candidates_supports_channel_and_query_filters(self) -> None:
         with (
             patch.object(api_main, "query_count", return_value=0) as query_count,
             patch.object(api_main, "query_all", return_value=[]) as query_all,
         ):
-            api_main.list_articles(
+            api_main.list_signal_candidates(
                 page=1,
                 page_size=20,
                 channel_id="00000000-0000-4000-8000-000000000001",
@@ -63,7 +63,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             ("00000000-0000-4000-8000-000000000001", "%security advisory%", 20, 0),
         )
 
-    def test_article_selection_summary_separates_raw_observations_from_signals(self) -> None:
+    def test_signal_candidate_selection_summary_separates_raw_observations_from_signals(self) -> None:
         count_values = iter([185, 1, 0])
         decision_rows = [
             {
@@ -78,25 +78,25 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             patch.object(api_main, "query_count", side_effect=lambda *_args: next(count_values)) as query_count,
             patch.object(api_main, "query_all", return_value=decision_rows) as query_all,
         ):
-            summary = api_main.summarize_article_selection_counts()
+            summary = api_main.summarize_signal_candidate_selection_counts()
 
-        self.assertEqual(summary["counts"]["rawArticleObservations"], 185)
-        self.assertEqual(summary["counts"]["blockedArticleObservations"], 1)
+        self.assertEqual(summary["counts"]["rawSignalCandidateObservations"], 185)
+        self.assertEqual(summary["counts"]["blockedSignalCandidateObservations"], 1)
         self.assertEqual(summary["counts"]["pendingSelectionRows"], 0)
-        self.assertEqual(summary["counts"]["selectedArticleSignals"], 0)
+        self.assertEqual(summary["counts"]["selectedSignalCandidateSignals"], 0)
         self.assertEqual(summary["counts"]["rejectedRows"], 185)
-        self.assertIn("Raw article observations", summary["interpretation"])
+        self.assertIn("Raw signal_candidate observations", summary["interpretation"])
         query_count.assert_called()
         self.assertIn("from final_selection_results", query_all.call_args.args[0])
 
-    def test_get_article_query_exposes_canonical_and_story_cluster_context(self) -> None:
+    def test_get_signal_candidate_query_exposes_canonical_and_story_cluster_context(self) -> None:
         with (
             patch.object(api_main, "query_one", return_value={"doc_id": "doc-1"}) as query_one,
             patch.object(api_main, "query_all", return_value=[]),
         ):
-            article = api_main.get_article("doc-1")
+            signal_candidate = api_main.get_signal_candidate("doc-1")
 
-        self.assertEqual(article["doc_id"], "doc-1")
+        self.assertEqual(signal_candidate["doc_id"], "doc-1")
         sql = query_one.call_args.args[0]
         self.assertIn("left join document_observations obs", sql)
         self.assertIn("left join canonical_documents cd", sql)
@@ -111,18 +111,18 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("final_selection_llm_review_pending_count", sql)
         self.assertIn("final_selection_hold_count", sql)
         self.assertIn("final_selection_canonical_review_reused", sql)
-        self.assertIn("final_selection_duplicate_article_count_for_canonical", sql)
+        self.assertIn("final_selection_duplicate_signal_candidate_count_for_canonical", sql)
         self.assertIn("final_selection_reuse_source", sql)
 
-    def test_get_article_preserves_404_when_article_missing(self) -> None:
+    def test_get_signal_candidate_preserves_404_when_signal_candidate_missing(self) -> None:
         with patch.object(api_main, "query_one", return_value=None):
             with self.assertRaises(api_main.HTTPException) as raised:
-                api_main.get_article("missing-doc")
+                api_main.get_signal_candidate("missing-doc")
 
         self.assertEqual(raised.exception.status_code, 404)
-        self.assertEqual(raised.exception.detail, "Article not found.")
+        self.assertEqual(raised.exception.detail, "SignalCandidate not found.")
 
-    def test_get_article_includes_selection_diagnostics_from_article_read_model(self) -> None:
+    def test_get_signal_candidate_includes_selection_diagnostics_from_signal_candidate_read_model(self) -> None:
         with (
             patch.object(
                 api_main,
@@ -140,16 +140,16 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             ),
             patch.object(api_main, "query_all", side_effect=[[], [], [], []]),
         ):
-            article = api_main.get_article("doc-1")
+            signal_candidate = api_main.get_signal_candidate("doc-1")
 
-        diagnostics = article["selection_diagnostics"]
-        self.assertEqual(article["selection_mode"], "hold")
-        self.assertEqual(article["selection_source"], "final_selection_results")
+        diagnostics = signal_candidate["selection_diagnostics"]
+        self.assertEqual(signal_candidate["selection_mode"], "hold")
+        self.assertEqual(signal_candidate["selection_source"], "final_selection_results")
         self.assertEqual(diagnostics["selectionMode"], "hold")
         self.assertEqual(diagnostics["selectionSummary"], "Gray zone held by profile policy")
         self.assertEqual(
             diagnostics["downstreamLossBucket"],
-            "articles_missing_interest_filter_results",
+            "signal_candidates_missing_interest_filter_results",
         )
         self.assertEqual(
             diagnostics["selectionBlockerStage"], "interest_filtering"
@@ -160,9 +160,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(diagnostics["holdReason"], None)
         self.assertEqual(diagnostics["holdCount"], 1)
         self.assertEqual(diagnostics["notificationRows"], 0)
-        self.assertEqual(article["selection_guidance"]["tone"], "warning")
+        self.assertEqual(signal_candidate["selection_guidance"]["tone"], "warning")
 
-    def test_get_article_marks_compatibility_only_selection_payload_when_final_row_missing(self) -> None:
+    def test_get_signal_candidate_marks_compatibility_only_selection_payload_when_final_row_missing(self) -> None:
         with (
             patch.object(
                 api_main,
@@ -175,16 +175,16 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             ),
             patch.object(api_main, "query_all", side_effect=[[], [], [], []]),
         ):
-            article = api_main.get_article("doc-compat")
+            signal_candidate = api_main.get_signal_candidate("doc-compat")
 
-        self.assertEqual(article["selection_source"], "system_feed_results")
-        self.assertEqual(article["selection_decision"], "eligible")
-        self.assertEqual(article["selection_mode"], "compatibility_only")
-        self.assertEqual(article["selection_summary"], "Compatibility projection: eligible")
-        self.assertEqual(article["selection_guidance"]["tone"], "neutral")
+        self.assertEqual(signal_candidate["selection_source"], "system_feed_results")
+        self.assertEqual(signal_candidate["selection_decision"], "eligible")
+        self.assertEqual(signal_candidate["selection_mode"], "compatibility_only")
+        self.assertEqual(signal_candidate["selection_summary"], "Compatibility projection: eligible")
+        self.assertEqual(signal_candidate["selection_guidance"]["tone"], "neutral")
 
-    def test_get_article_explain_returns_stage6_selection_summary(self) -> None:
-        article = {
+    def test_get_signal_candidate_explain_returns_stage6_selection_summary(self) -> None:
+        signal_candidate = {
             "doc_id": "doc-1",
             "final_selection_decision": "selected",
             "final_selection_selected": True,
@@ -205,7 +205,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with (
-            patch.object(api_main, "get_article", return_value=article),
+            patch.object(api_main, "get_signal_candidate", return_value=signal_candidate),
             patch.object(
                 api_main,
                 "query_all",
@@ -230,7 +230,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 ],
             ),
         ):
-            result = api_main.get_article_explain("doc-1")
+            result = api_main.get_signal_candidate_explain("doc-1")
 
         self.assertEqual(result["selection_explain"]["source"], "final_selection_results")
         self.assertEqual(result["selection_explain"]["canonicalDocumentId"], "canonical-1")
@@ -241,7 +241,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(result["selection_diagnostics"]["selectionMode"], "selected")
         self.assertEqual(
             result["selection_diagnostics"]["downstreamLossBucket"],
-            "articles_missing_interest_filter_results",
+            "signal_candidates_missing_interest_filter_results",
         )
         self.assertEqual(
             result["selection_diagnostics"]["selectionBlockerStage"],
@@ -251,8 +251,8 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(result["selection_guidance"]["tone"], "positive")
         self.assertEqual(len(result["verification_results"]), 2)
 
-    def test_get_article_explain_surfaces_canonical_reuse_metadata(self) -> None:
-        article = {
+    def test_get_signal_candidate_explain_surfaces_canonical_reuse_metadata(self) -> None:
+        signal_candidate = {
             "doc_id": "doc-reused",
             "final_selection_decision": "selected",
             "final_selection_selected": True,
@@ -263,7 +263,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with (
-            patch.object(api_main, "get_article", return_value=article),
+            patch.object(api_main, "get_signal_candidate", return_value=signal_candidate),
             patch.object(api_main, "query_all", return_value=[]),
             patch.object(
                 api_main,
@@ -277,7 +277,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                             "canonicalReviewReused": True,
                             "canonicalReviewReusedCount": 3,
                             "canonicalSelectionReused": True,
-                            "duplicateArticleCountForCanonical": 6,
+                            "duplicateSignalCandidateCountForCanonical": 6,
                             "selectionReuseSource": "canonical_reused",
                         },
                     },
@@ -287,7 +287,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 ],
             ),
         ):
-            result = api_main.get_article_explain("doc-reused")
+            result = api_main.get_signal_candidate_explain("doc-reused")
 
         explain = result["selection_explain"]
         self.assertEqual(explain["selectionReuseSource"], "canonical_reused")
@@ -295,9 +295,9 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["canonicalReviewReused"], True)
         self.assertEqual(explain["canonicalReviewReusedCount"], 3)
         self.assertEqual(explain["canonicalSelectionReused"], True)
-        self.assertEqual(explain["duplicateArticleCountForCanonical"], 6)
+        self.assertEqual(explain["duplicateSignalCandidateCountForCanonical"], 6)
 
-    def test_list_article_residuals_filters_and_shapes_selection_buckets(self) -> None:
+    def test_list_signal_candidate_residuals_filters_and_shapes_selection_buckets(self) -> None:
         row = {
             "doc_id": "doc-semantic",
             "url": "https://example.com/semantic",
@@ -324,7 +324,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with patch.object(api_main, "query_all", return_value=[row]) as query_all:
-            result = api_main.list_article_residuals(
+            result = api_main.list_signal_candidate_residuals(
                 downstream_loss_bucket="semantic_rejected",
                 selection_blocker_stage="semantic_filter",
                 selection_blocker_reason="semantic_no_match",
@@ -362,7 +362,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertIn("coalesce(a.title, '') ilike %s", sql)
         self.assertIn("%semantic%", params)
 
-    def test_list_article_residuals_can_filter_hold_bucket_without_new_taxonomy(self) -> None:
+    def test_list_signal_candidate_residuals_can_filter_hold_bucket_without_new_taxonomy(self) -> None:
         hold_row = {
             "doc_id": "doc-hold",
             "title": "Held row",
@@ -386,7 +386,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with patch.object(api_main, "query_all", return_value=[hold_row, selected_row]):
-            result = api_main.list_article_residuals(
+            result = api_main.list_signal_candidate_residuals(
                 downstream_loss_bucket="gray_zone_hold",
                 selection_mode="hold",
                 page=1,
@@ -400,7 +400,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             "hold_policy",
         )
 
-    def test_article_residual_summary_returns_bucket_counts(self) -> None:
+    def test_signal_candidate_residual_summary_returns_bucket_counts(self) -> None:
         rows = [
             {
                 "doc_id": "doc-selected",
@@ -443,7 +443,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         ]
 
         with patch.object(api_main, "query_all", return_value=rows):
-            result = api_main.summarize_article_residuals()
+            result = api_main.summarize_signal_candidate_residuals()
 
         self.assertEqual(result["total"], 3)
         self.assertEqual(result["totals"]["selected"], 1)
@@ -462,7 +462,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 api_main,
                 "get_content_item",
                 return_value={
-                    "origin_type": "editorial",
+                    "origin_type": "signal_candidate",
                     "system_selection_decision": "selected",
                     "system_selected": True,
                     "observation_state": "canonicalized",
@@ -488,7 +488,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             ),
         ):
             result = api_main.get_content_item_explain(
-                "editorial:00000000-0000-4000-8000-000000000001"
+                "signal_candidate:00000000-0000-4000-8000-000000000001"
             )
 
         explain = result["selection_explain"]
@@ -508,7 +508,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 api_main,
                 "get_content_item",
                 return_value={
-                    "origin_type": "editorial",
+                    "origin_type": "signal_candidate",
                     "system_feed_decision": "eligible",
                     "system_feed_eligible": True,
                 },
@@ -521,7 +521,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             ),
         ):
             result = api_main.get_content_item_explain(
-                "editorial:00000000-0000-4000-8000-000000000002"
+                "signal_candidate:00000000-0000-4000-8000-000000000002"
             )
 
         explain = result["selection_explain"]
@@ -531,11 +531,11 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(explain["selectionSummary"], "Compatibility projection: eligible")
         self.assertEqual(result["selection_guidance"]["tone"], "neutral")
 
-    def test_get_content_item_falls_back_to_editorial_article_when_family_preview_hides_exact_duplicate(self) -> None:
-        article = {
+    def test_get_content_item_falls_back_to_editorial_signal_candidate_when_family_preview_hides_exact_duplicate(self) -> None:
+        signal_candidate = {
             "doc_id": "00000000-0000-4000-8000-000000000003",
             "url": "https://example.test/dup",
-            "title": "Duplicate article",
+            "title": "Duplicate signal_candidate",
             "lead": "Lead",
             "lang": "en",
             "published_at": "2026-04-14T09:00:00Z",
@@ -563,7 +563,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with (
-            patch.object(api_main, "get_article", return_value=article) as get_article,
+            patch.object(api_main, "get_signal_candidate", return_value=signal_candidate) as get_signal_candidate,
             patch.object(
                 api_main,
                 "get_selected_content_item_preview",
@@ -574,26 +574,26 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
             patch.object(api_main, "load_content_analysis_summary", return_value={}),
         ):
             result = api_main.get_content_item(
-                "editorial:00000000-0000-4000-8000-000000000003"
+                "signal_candidate:00000000-0000-4000-8000-000000000003"
             )
 
-        get_article.assert_called_once_with("00000000-0000-4000-8000-000000000003")
+        get_signal_candidate.assert_called_once_with("00000000-0000-4000-8000-000000000003")
         get_preview.assert_called_once_with(
-            "editorial:00000000-0000-4000-8000-000000000003"
+            "signal_candidate:00000000-0000-4000-8000-000000000003"
         )
         self.assertEqual(
             result["content_item_id"],
-            "editorial:00000000-0000-4000-8000-000000000003",
+            "signal_candidate:00000000-0000-4000-8000-000000000003",
         )
-        self.assertEqual(result["origin_type"], "editorial")
+        self.assertEqual(result["origin_type"], "signal_candidate")
         self.assertEqual(result["origin_id"], "00000000-0000-4000-8000-000000000003")
         self.assertEqual(result["system_selection_decision"], "selected")
         self.assertEqual(result["system_selected"], True)
         self.assertEqual(result["summary"], "Lead")
         self.assertEqual(result["body_html"], "<p>Body</p>")
 
-    def test_article_explain_marks_profile_hold_as_hold_in_selection_summary(self) -> None:
-        article = {
+    def test_signal_candidate_explain_marks_profile_hold_as_hold_in_selection_summary(self) -> None:
+        signal_candidate = {
             "doc_id": "doc-2",
             "final_selection_decision": "gray_zone",
             "final_selection_selected": False,
@@ -614,7 +614,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         }
 
         with (
-            patch.object(api_main, "get_article", return_value=article),
+            patch.object(api_main, "get_signal_candidate", return_value=signal_candidate),
             patch.object(
                 api_main,
                 "query_all",
@@ -645,7 +645,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
                 ],
             ),
         ):
-            result = api_main.get_article_explain("doc-2")
+            result = api_main.get_signal_candidate_explain("doc-2")
 
         explain = result["selection_explain"]
         self.assertEqual(explain["selectionMode"], "hold")
@@ -656,7 +656,7 @@ class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):
         self.assertEqual(diagnostics["selectionMode"], "hold")
         self.assertEqual(
             diagnostics["downstreamLossBucket"],
-            "articles_missing_interest_filter_results",
+            "signal_candidates_missing_interest_filter_results",
         )
         self.assertEqual(
             diagnostics["selectionBlockerStage"], "interest_filtering"

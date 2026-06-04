@@ -5,15 +5,15 @@ from typing import Any, Callable
 
 def get_dashboard_summary(
     *,
-    canonical_article_family_expr_func: Callable[[str], str],
+    canonical_signal_candidate_family_expr_func: Callable[[str], str],
     final_selection_join_clause_func: Callable[[str, str], str],
     system_feed_join_clause_func: Callable[[str, str], str],
-    feed_eligible_article_clause_func: Callable[[str, str, str], str],
-    processed_article_clause_func: Callable[[str], str],
+    feed_eligible_signal_candidate_clause_func: Callable[[str, str, str], str],
+    processed_signal_candidate_clause_func: Callable[[str], str],
     query_one_func: Callable[[str], dict[str, Any] | None],
     get_llm_budget_summary_func: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
-    family_expr = canonical_article_family_expr_func("a")
+    family_expr = canonical_signal_candidate_family_expr_func("a")
     counts = query_one_func(
         f"""
         select
@@ -21,17 +21,17 @@ def get_dashboard_summary(
             select count(*)::int
             from (
               select distinct {family_expr} as family_doc_id
-              from articles a
+              from signal_candidates a
               {final_selection_join_clause_func("a", "fsr")}
               {system_feed_join_clause_func("a", "sfr")}
-              where {feed_eligible_article_clause_func("a", "fsr", "sfr")}
+              where {feed_eligible_signal_candidate_clause_func("a", "fsr", "sfr")}
             ) deduped
-          ) as active_news,
-          (select count(*)::int from articles a where {processed_article_clause_func("a")}) as processed_total,
+          ) as active_signals,
+          (select count(*)::int from signal_candidates a where {processed_signal_candidate_clause_func("a")}) as processed_total,
           (
             select count(*)::int
-            from articles a
-            where {processed_article_clause_func("a")}
+            from signal_candidates a
+            where {processed_signal_candidate_clause_func("a")}
               and a.ingested_at >= now() - interval '24 hours'
           ) as processed_today,
           (select count(*)::int from users) as total_users,

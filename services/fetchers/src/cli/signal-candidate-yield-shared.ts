@@ -14,7 +14,7 @@ export const repoRoot = await findRepoRoot();
 
 type JsonRecord = Record<string, unknown>;
 
-export interface ArticleYieldSnapshot {
+export interface SignalCandidateYieldSnapshot {
   generatedAt: string;
   baseline: JsonRecord;
   views: Record<string, unknown>;
@@ -64,8 +64,8 @@ function timestampForPath(date = new Date()): string {
   return date.toISOString().replaceAll(":", "").replaceAll(".", "").replace("Z", "Z");
 }
 
-export async function createArticleYieldPackRoot(): Promise<string> {
-  const rootDir = path.join("/tmp", `signalops-article-yield-${timestampForPath()}`);
+export async function createSignalCandidateYieldPackRoot(): Promise<string> {
+  const rootDir = path.join("/tmp", `signalops-signal-candidate-yield-${timestampForPath()}`);
   await mkdir(rootDir, { recursive: true });
   return rootDir;
 }
@@ -108,7 +108,7 @@ function renderBulletList(rows: Array<{ label: string; detail: string }>): strin
     .join("\n");
 }
 
-function renderAnalysisMarkdown(snapshot: ArticleYieldSnapshot): string {
+function renderAnalysisMarkdown(snapshot: SignalCandidateYieldSnapshot): string {
   const baseline = snapshot.baseline;
   const lossBuckets = Array.isArray(snapshot.analysis.lossBuckets)
     ? (snapshot.analysis.lossBuckets as JsonRecord[])
@@ -129,7 +129,7 @@ function renderAnalysisMarkdown(snapshot: ArticleYieldSnapshot): string {
     ? (snapshot.analysis.falsePositiveWinners as JsonRecord[])
     : [];
 
-  return `# Article Yield Diagnostics
+  return `# SignalCandidate Yield Diagnostics
 
 Generated at: ${snapshot.generatedAt}
 
@@ -137,12 +137,12 @@ Generated at: ${snapshot.generatedAt}
 
 - Active RSS channels: ${toMetricRow(baseline, "activeRssChannels")}
 - Fetch runs: ${toMetricRow(baseline, "fetchRuns")}
-- Article rows: ${toMetricRow(baseline, "articleRows")}
+- SignalCandidate rows: ${toMetricRow(baseline, "signalCandidateRows")}
 - Distinct URLs: ${toMetricRow(baseline, "distinctUrls")}
 - System feed rows: ${toMetricRow(baseline, "systemFeedRows")}
 - Eligible rows: ${toMetricRow(baseline, "eligibleRows")}
 - Filtered rows: ${toMetricRow(baseline, "filteredRows")}
-- Pending article.ingest.requested runs: ${toMetricRow(baseline, "pendingArticleIngestRuns")}
+- Pending signal_candidate.ingest.requested runs: ${toMetricRow(baseline, "pendingSignalCandidateIngestRuns")}
 - Transient fetch failures: ${toMetricRow(baseline, "transientFetchFailures")}
 
 ## Loss Buckets
@@ -206,7 +206,7 @@ ${renderBulletList(
 }
 
 export async function writeSnapshotPack(
-  snapshot: ArticleYieldSnapshot,
+  snapshot: SignalCandidateYieldSnapshot,
   targetDir: string
 ): Promise<void> {
   await mkdir(targetDir, { recursive: true });
@@ -220,7 +220,7 @@ export async function writeSnapshotPack(
     writeJson(path.join(targetDir, "channel-health.json"), snapshot.views.channelHealth),
     writeJson(path.join(targetDir, "fetch-outcome-breakdown.json"), snapshot.views.fetchOutcomeBreakdown),
     writeJson(path.join(targetDir, "pipeline-runs.json"), snapshot.views.pipelineRuns),
-    writeJson(path.join(targetDir, "article-state-distribution.json"), snapshot.views.articleStateDistribution),
+    writeJson(path.join(targetDir, "signal_candidate-state-distribution.json"), snapshot.views.signalCandidateStateDistribution),
     writeJson(path.join(targetDir, "url-ratio.json"), snapshot.views.urlRatio),
     writeJson(path.join(targetDir, "duplicate-url-groups.json"), snapshot.views.topDuplicateUrlGroups),
     writeJson(path.join(targetDir, "criterion-score-histogram.json"), snapshot.views.criterionScoreHistogram),
@@ -229,13 +229,13 @@ export async function writeSnapshotPack(
   ]);
 }
 
-export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYieldSnapshot> {
+export async function collectSignalCandidateYieldSnapshot(pool: Pool): Promise<SignalCandidateYieldSnapshot> {
   const [
     baseline,
     channelHealth,
     fetchOutcomeBreakdown,
     pipelineRuns,
-    articleStateDistribution,
+    signalCandidateStateDistribution,
     urlRatio,
     topDuplicateUrlGroups,
     criterionScoreHistogram,
@@ -245,7 +245,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
     sourceChannelRuntimeSample,
     channelFetchRunsSample,
     sequenceRunsSample,
-    articlesSample,
+    signalCandidatesSample,
     criterionMatchSample,
     systemFeedSample,
     llmReviewSample,
@@ -260,8 +260,8 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
         select
           (select count(*)::int from source_channels where provider_type = 'rss' and is_active = true) as "activeRssChannels",
           (select count(*)::int from channel_fetch_runs) as "fetchRuns",
-          (select count(*)::int from articles) as "articleRows",
-          (select count(distinct url)::int from articles) as "distinctUrls",
+          (select count(*)::int from signal_candidates) as "signalCandidateRows",
+          (select count(distinct url)::int from signal_candidates) as "distinctUrls",
           (select count(*)::int from system_feed_results) as "systemFeedRows",
           (select count(*)::int from system_feed_results where eligible_for_feed = true) as "eligibleRows",
           (select count(*)::int from system_feed_results where decision = 'filtered_out') as "filteredRows",
@@ -269,9 +269,9 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
             select count(*)::int
             from sequence_runs sr
             join sequences s on s.sequence_id = sr.sequence_id
-            where s.trigger_event = 'article.ingest.requested'
+            where s.trigger_event = 'signal_candidate.ingest.requested'
               and sr.status = 'pending'
-          ) as "pendingArticleIngestRuns",
+          ) as "pendingSignalCandidateIngestRuns",
           (
             select count(*)::int
             from channel_fetch_runs
@@ -307,7 +307,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           ${HOST_EXPR} as "host",
           cfr.outcome_kind as "outcomeKind",
           count(*)::int as "runCount",
-          sum(coalesce(cfr.new_article_count, 0))::int as "newArticleCount",
+          sum(coalesce(cfr.new_signal_candidate_count, 0))::int as "newSignalCandidateCount",
           sum(coalesce(cfr.duplicate_suppressed_count, 0))::int as "duplicateSuppressedCount",
           max(cfr.finished_at) as "latestFinishedAt"
         from channel_fetch_runs cfr
@@ -327,7 +327,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
         join sequences s on s.sequence_id = sr.sequence_id
         group by coalesce(s.trigger_event, 'manual'), sr.status
         order by
-          case when coalesce(s.trigger_event, 'manual') = 'article.ingest.requested' then 0 else 1 end,
+          case when coalesce(s.trigger_event, 'manual') = 'signal_candidate.ingest.requested' then 0 else 1 end,
           "triggerEvent" asc,
           sr.status asc
       `
@@ -339,14 +339,14 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           'processing' as "dimension",
           coalesce(processing_state, 'null') as "state",
           count(*)::int as "rowCount"
-        from articles
+        from signal_candidates
         group by 1, 2
         union all
         select
           'enrichment' as "dimension",
           coalesce(enrichment_state, 'null') as "state",
           count(*)::int as "rowCount"
-        from articles
+        from signal_candidates
         group by 1, 2
         order by "dimension" asc, "rowCount" desc, "state" asc
       `
@@ -356,23 +356,23 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
       `
         with url_totals as (
           select
-            count(*)::int as article_rows,
+            count(*)::int as signal_candidate_rows,
             count(distinct url)::int as distinct_urls
-          from articles
+          from signal_candidates
         ),
         duplicate_groups as (
           select count(*)::int as duplicate_groups
           from (
             select url
-            from articles
+            from signal_candidates
             group by url
             having count(*) > 1
           ) dedup
         )
         select
-          url_totals.article_rows as "articleRows",
+          url_totals.signal_candidate_rows as "signalCandidateRows",
           url_totals.distinct_urls as "distinctUrls",
-          (url_totals.article_rows - url_totals.distinct_urls)::int as "duplicateRows",
+          (url_totals.signal_candidate_rows - url_totals.distinct_urls)::int as "duplicateRows",
           duplicate_groups.duplicate_groups as "duplicateGroups"
         from url_totals
         cross join duplicate_groups
@@ -383,16 +383,16 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
       `
         select
           a.url,
-          count(*)::int as "articleCount",
+          count(*)::int as "signalCandidateCount",
           count(distinct a.channel_id)::int as "channelCount",
           (array_agg(distinct sc.name order by sc.name))[1:5] as "sampleChannels",
           (array_agg(distinct a.title order by a.title))[1:5] as "sampleTitles",
           max(a.created_at) as "latestCreatedAt"
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
         group by a.url
         having count(*) > 1
-        order by "articleCount" desc, "channelCount" desc, a.url asc
+        order by "signalCandidateCount" desc, "channelCount" desc, a.url asc
         limit 25
       `
     ),
@@ -433,7 +433,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           a.created_at as "createdAt"
         from criterion_match_results cmr
         join criteria c on c.criterion_id = cmr.criterion_id
-        join articles a on a.doc_id = cmr.doc_id
+        join signal_candidates a on a.doc_id = cmr.doc_id
         join source_channels sc on sc.channel_id = a.channel_id
         where cmr.decision <> 'relevant'
           and cmr.score_final >= 0.45
@@ -456,7 +456,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           a.created_at as "createdAt",
           sfr.updated_at as "updatedAt"
         from system_feed_results sfr
-        join articles a on a.doc_id = sfr.doc_id
+        join signal_candidates a on a.doc_id = sfr.doc_id
         join source_channels sc on sc.channel_id = a.channel_id
         where sfr.eligible_for_feed = true
         order by sfr.updated_at desc
@@ -509,7 +509,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           outcome_kind as "outcomeKind",
           http_status as "httpStatus",
           error_text as "errorText",
-          new_article_count as "newArticleCount",
+          new_signal_candidate_count as "newSignalCandidateCount",
           duplicate_suppressed_count as "duplicateSuppressedCount",
           finished_at as "finishedAt"
         from channel_fetch_runs
@@ -545,7 +545,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
           processing_state as "processingState",
           enrichment_state as "enrichmentState",
           created_at as "createdAt"
-        from articles
+        from signal_candidates
         order by created_at desc
         limit 5
       `
@@ -628,16 +628,16 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
         select
           ${HOST_EXPR} as "host",
           coalesce(nullif(sc.country, ''), 'global') as "country",
-          count(*)::int as "articleRows",
+          count(*)::int as "signalCandidateRows",
           count(distinct a.url)::int as "distinctUrls",
           (count(*) - count(distinct a.url))::int as "duplicateRows",
           count(distinct sc.channel_id)::int as "channelCount",
           (array_agg(distinct sc.name order by sc.name))[1:5] as "sampleChannels"
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
         group by ${HOST_EXPR}, coalesce(nullif(sc.country, ''), 'global')
         having count(*) > 1
-        order by "duplicateRows" desc, "articleRows" desc, "host" asc
+        order by "duplicateRows" desc, "signalCandidateRows" desc, "host" asc
         limit 20
       `
     ),
@@ -670,7 +670,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
             sc.name as "channelName",
             ${HOST_EXPR} as "host"
           from criterion_match_results cmr
-          join articles a on a.doc_id = cmr.doc_id
+          join signal_candidates a on a.doc_id = cmr.doc_id
           join source_channels sc on sc.channel_id = a.channel_id
           where cmr.decision <> 'relevant'
             and cmr.score_final >= 0.45
@@ -687,7 +687,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
             sc.name as "channelName",
             ${HOST_EXPR} as "host"
           from system_feed_results sfr
-          join articles a on a.doc_id = sfr.doc_id
+          join signal_candidates a on a.doc_id = sfr.doc_id
           join source_channels sc on sc.channel_id = a.channel_id
           left join criterion_match_results cmr on cmr.doc_id = sfr.doc_id
           where sfr.eligible_for_feed = true
@@ -713,7 +713,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
   const lossBuckets = [
     {
       bucket: "pending_pipeline",
-      count: toMetricRow(baseline, "pendingArticleIngestRuns"),
+      count: toMetricRow(baseline, "pendingSignalCandidateIngestRuns"),
       unit: "sequence_runs"
     },
     {
@@ -724,7 +724,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
     {
       bucket: "duplicate_noisy_source",
       count: duplicateRows,
-      unit: "duplicate_article_rows"
+      unit: "duplicate_signal_candidate_rows"
     },
     {
       bucket: "scored_but_filtered",
@@ -737,8 +737,8 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
     {
       rank: 1,
       bucket: "pending_pipeline",
-      count: toMetricRow(baseline, "pendingArticleIngestRuns"),
-      unit: "pending article.ingest.requested runs",
+      count: toMetricRow(baseline, "pendingSignalCandidateIngestRuns"),
+      unit: "pending signal_candidate.ingest.requested runs",
       reason: "Backlog is the largest current blocker and prevents fresh rows from reaching scoring."
     },
     {
@@ -746,13 +746,13 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
       bucket: "fetch_failure",
       count: toMetricRow(baseline, "transientFetchFailures"),
       unit: "transient fetch failures",
-      reason: "Current source cohorts are losing coverage before article rows are even created."
+      reason: "Current source cohorts are losing coverage before signal_candidate rows are even created."
     },
     {
       rank: 3,
       bucket: "duplicate_noisy_source",
       count: duplicateRows,
-      unit: "duplicate article rows",
+      unit: "duplicate signal_candidate rows",
       reason: "The live corpus repeats the same canonical URLs across country-scoped source variants."
     },
     {
@@ -771,7 +771,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
       channelHealth,
       fetchOutcomeBreakdown,
       pipelineRuns,
-      articleStateDistribution,
+      signalCandidateStateDistribution,
       urlRatio,
       topDuplicateUrlGroups,
       criterionScoreHistogram,
@@ -783,7 +783,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
       sourceChannelRuntimeState: sourceChannelRuntimeSample,
       channelFetchRuns: channelFetchRunsSample,
       sequenceRuns: sequenceRunsSample,
-      articles: articlesSample,
+      signal_candidates: signalCandidatesSample,
       criterionMatchResults: criterionMatchSample,
       systemFeedResults: systemFeedSample,
       llmReviewLog: llmReviewSample
@@ -799,7 +799,7 @@ export async function collectArticleYieldSnapshot(pool: Pool): Promise<ArticleYi
   };
 }
 
-export function buildComparison(before: ArticleYieldSnapshot, after: ArticleYieldSnapshot): JsonRecord {
+export function buildComparison(before: SignalCandidateYieldSnapshot, after: SignalCandidateYieldSnapshot): JsonRecord {
   const beforeEligible = new Set(
     (Array.isArray(before.views.currentEligibleRows) ? before.views.currentEligibleRows : [])
       .map((row) => asPlainObject(row).docId)
@@ -822,9 +822,9 @@ export function buildComparison(before: ArticleYieldSnapshot, after: ArticleYiel
     before: beforeBaseline,
     after: afterBaseline,
     deltas: {
-      pendingArticleIngestRuns:
-        toMetricRow(afterBaseline, "pendingArticleIngestRuns") -
-        toMetricRow(beforeBaseline, "pendingArticleIngestRuns"),
+      pendingSignalCandidateIngestRuns:
+        toMetricRow(afterBaseline, "pendingSignalCandidateIngestRuns") -
+        toMetricRow(beforeBaseline, "pendingSignalCandidateIngestRuns"),
       transientFetchFailures:
         toMetricRow(afterBaseline, "transientFetchFailures") -
         toMetricRow(beforeBaseline, "transientFetchFailures"),
@@ -853,7 +853,7 @@ export async function writeComparisonPack(
   const deltas = asPlainObject(comparison.deltas);
   const body = `# Before / After Comparison
 
-- Pending article.ingest.requested delta: ${deltas.pendingArticleIngestRuns ?? 0}
+- Pending signal_candidate.ingest.requested delta: ${deltas.pendingSignalCandidateIngestRuns ?? 0}
 - Transient fetch failure delta: ${deltas.transientFetchFailures ?? 0}
 - Duplicate row delta: ${deltas.duplicateRows ?? 0}
 - Eligible row delta: ${deltas.eligibleRows ?? 0}

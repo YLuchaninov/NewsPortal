@@ -8,7 +8,7 @@
 >
 > **Перед началом:** прочитайте [HOW_TO_USE.md](../HOW_TO_USE.md) для общего админ-потока, [README.md](../../../../README.md) для discovery/runtime env и [docs/product/operator/manual-mvp-runbook.md](../manual-mvp-runbook.md) для полного MVP walkthrough.
 >
-> **Как понять, что пример применен успешно:** каналы импортированы, rules созданы, `interest_centroids` переиндексирован, а в `Articles`, `Clusters` и `Observability` видно ожидаемое наполнение без необходимости гадать, какой doc теперь канонический.
+> **Как понять, что пример применен успешно:** каналы импортированы, rules созданы, `interest_centroids` переиндексирован, а в `Signal Candidates`, `Clusters` и `Observability` видно ожидаемое наполнение без необходимости гадать, какой doc теперь канонический.
 
 ---
 
@@ -68,7 +68,7 @@
 3. Создать шаблоны интересов (Rules → System Interests)
 4. Для каждого system interest выставить runtime policy ровно так, как она указана в текущем примере: `Strictness` может различаться по шаблонам, а `Unresolved outcome = hold` и `LLM review mode = always` остаются baseline, если ниже не указано иное
 5. Запустить переиндексацию (Reindex → interest_centroids)
-6. Подождать 10–15 минут и проверить результат (Articles, Clusters, Observability)
+6. Подождать 10–15 минут и проверить результат (Signal Candidates, Clusters, Observability)
 7. Если нужен полный MVP/manual verification pass, вернуться к `docs/product/operator/manual-mvp-runbook.md`, а не останавливаться на этом документе
 ```
 
@@ -122,7 +122,7 @@
 - `must_have_terms` стоит включать только для действительно обязательных идентификаторов, без которых interest теряет смысл;
 - не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе вы получите массовый early drop вместо полезного recall;
 - `must_not_have_terms` и negative candidate cues обычно безопаснее, чем `must_have_terms`, потому что они режут явный шум, а не весь поток;
-- duplicate article rows одного и того же canonical документа не должны считаться отдельными победителями: operator/user surfaces должны показывать один canonical-selected сигнал, а повторные article rows нужны для provenance, а не для надувания `selected` и `LLM review` метрик;
+- duplicate signal_candidate rows одного и того же canonical документа не должны считаться отдельными победителями: operator/user surfaces должны показывать один canonical-selected сигнал, а повторные signal_candidate rows нужны для provenance, а не для надувания `selected` и `LLM review` метрик;
 - если видите повторный review/selected по одной и той же canonical семье, сначала проверяйте canonical reuse и negative cues, а не расширяйте `must_have_terms`;
 - для recall-first baseline generic candidate cues должны оставаться структурными (`request`, `replacement`, `procurement`, `implementation pressure`); listicle/ranking wording вроде `top`, `best`, `our picks`, `worth your time` лучше подавлять через negative cues и prompt semantics конкретного application bundle, а не считать достаточным позитивным сигналом.
 - если нужен более точный контроль, держите broad тему в прототипах и candidate cues, а hard constraints добавляйте только после наблюдений по живому потоку.
@@ -350,11 +350,11 @@ You are a job-listing relevance reviewer for a job aggregator platform.
 
 The user is tracking this job category: "{interest_name}"
 
-An article or listing has landed in the gray zone — the system is not confident whether it matches.
+An signal_candidate or listing has landed in the gray zone — the system is not confident whether it matches.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Match context: {explain_json}
 
 Your task: decide whether this content represents a REAL job opportunity or career-relevant content for the specified category.
@@ -365,10 +365,10 @@ APPROVE if:
 - It is a company hiring page or "we are hiring" announcement directly relevant to the category
 
 REJECT if:
-- It is a general industry news article that mentions jobs only in passing
+- It is a general industry news signal_candidate that mentions jobs only in passing
 - It is a market analysis, salary survey, or labor statistics report without specific openings
 - It is a company earnings report, product launch, or press release unrelated to hiring
-- It is an opinion piece, career advice article, or "how to get hired" guide without a real opening
+- It is an opinion piece, career advice signal_candidate, or "how to get hired" guide without a real opening
 - It is about layoffs, downsizing, or restructuring (the opposite of a job opportunity)
 
 Respond ONLY with a JSON object:
@@ -390,11 +390,11 @@ You are a content classification reviewer for a job aggregator platform.
 
 The system criterion is: "{criterion_name}"
 
-An article has landed in the gray zone — the automated scoring was inconclusive.
+An signal_candidate has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Scoring details: {explain_json}
 
 Your task: decide whether this content meets the system criterion.
@@ -403,7 +403,7 @@ Key classification rules for a job board:
 - Job postings, vacancy announcements, and "we are hiring" content are the PRIMARY content type
 - Hiring roundups ("10 companies hiring this week") are RELEVANT if they contain specific companies and roles
 - Company funding news is RELEVANT only if it explicitly mentions upcoming hiring plans
-- General tech news, product launches, and opinion articles are NOT relevant unless they contain hiring signals
+- General tech news, product launches, and opinion signal_candidates are NOT relevant unless they contain hiring signals
 
 Respond ONLY with a JSON object:
 {"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
@@ -420,11 +420,11 @@ Respond ONLY with a JSON object:
 ```
 You are a content relevance reviewer for a job aggregator platform that collects IT job postings and career opportunities.
 
-An article has landed in the gray zone — the system is not confident in its relevance decision.
+An signal_candidate has landed in the gray zone — the system is not confident in its relevance decision.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Review context: {explain_json}
 
 Core question: Does this content contain or directly signal a specific job opportunity, hiring activity, or vacancy?
@@ -443,7 +443,7 @@ REJECT if the content:
 Respond ONLY with a JSON object:
 {"decision": "approve" or "reject" or "uncertain", "score": 0.0 to 1.0, "reason": "one sentence"}
 
-When in doubt, reject. It is better to miss a borderline article than to clutter the feed with non-job content.
+When in doubt, reject. It is better to miss a borderline signal_candidate than to clutter the feed with non-job content.
 ```
 
 ---
@@ -1062,7 +1062,7 @@ founding_role: co-founder | founding engineer | first hire | equity-heavy
   },
   {
     "providerType": "rss",
-    "name": "dev.to — Top Articles",
+    "name": "dev.to — Top Signal Candidates",
     "fetchUrl": "https://dev.to/feed",
     "language": "en",
     "pollIntervalSeconds": 900,
@@ -1210,26 +1210,26 @@ You are a tech news relevance reviewer for a developer-focused news portal.
 
 The developer is tracking this topic: "{interest_name}"
 
-An article has landed in the gray zone — the automated scoring was inconclusive.
+An signal_candidate has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Match context: {explain_json}
 
-Your task: decide whether this article is genuinely valuable for a developer interested in the stated topic.
+Your task: decide whether this signal candidate is genuinely valuable for a developer interested in the stated topic.
 
 APPROVE if:
-- The article covers a technical topic, tool, framework, or concept directly related to the tracked interest
+- The signal_candidate covers a technical topic, tool, framework, or concept directly related to the tracked interest
 - It announces a new release, vulnerability, breaking change, or deprecation relevant to the interest
 - It provides actionable technical insights, architecture decisions, or post-mortems related to the interest
 - It covers a significant funding round, acquisition, or launch of a product that developers in this area use
 
 REJECT if:
-- The article is a consumer product review or gadget roundup (e.g., "best phones of 2026")
+- The signal candidate is a consumer product review or gadget roundup (e.g., "best phones of 2026")
 - It is a corporate earnings report without technical substance
 - It is a generic marketing press release or product announcement not aimed at developers
-- It mentions the topic only superficially — the article is really about something else
+- It mentions the topic only superficially — the signal candidate is really about something else
 - It is a listicle, tutorial, or beginner how-to that does not contain any news
 
 Respond ONLY with a JSON object:
@@ -1251,17 +1251,17 @@ You are a content classification reviewer for a developer-focused news portal.
 
 The system criterion is: "{criterion_name}"
 
-An article has landed in the gray zone — the automated scoring was inconclusive.
+An signal_candidate has landed in the gray zone — the automated scoring was inconclusive.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Scoring details: {explain_json}
 
-Your task: decide whether this article meets the system criterion for inclusion in the developer news feed.
+Your task: decide whether this signal candidate meets the system criterion for inclusion in the developer news feed.
 
 Classification rules:
-- Technical depth matters: prefer articles with code, architecture details, benchmarks, or technical analysis
+- Technical depth matters: prefer signal_candidates with code, architecture details, benchmarks, or technical analysis
 - News over guides: we want current events and announcements, not evergreen tutorials
 - Developer impact: the content should affect how developers build, deploy, or reason about software
 - Reject pure business/finance coverage unless it directly impacts developer workflows or tools
@@ -1281,23 +1281,23 @@ Respond ONLY with a JSON object:
 ```
 You are a relevance reviewer for a developer-focused news portal covering startups, AI, open source, and technology.
 
-An article has landed in the gray zone — the system is not confident in its relevance decision.
+An signal_candidate has landed in the gray zone — the system is not confident in its relevance decision.
 
-Article title: {title}
-Article lead: {lead}
-Article body (truncated): {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body (truncated): {body}
 Review context: {explain_json}
 
-Core question: Would a professional software developer find this article valuable in their daily work or career?
+Core question: Would a professional software developer find this signal candidate valuable in their daily work or career?
 
-APPROVE if the article:
+APPROVE if the signal candidate:
 - Announces a significant technology release, vulnerability, or breaking change
 - Covers a startup launch, major funding, or acquisition that affects developer tools or platforms
 - Contains a technical deep dive, post-mortem, or architectural insight
 - Reports on AI/ML research breakthroughs with practical developer implications
 - Covers open-source project milestones, license changes, or community events
 
-REJECT if the article:
+REJECT if the signal candidate:
 - Is primarily a consumer product review, lifestyle piece, or gadget roundup
 - Is a generic corporate press release without technical substance
 - Is about entertainment, sports, or politics unrelated to technology
@@ -1342,7 +1342,7 @@ Default to reject if uncertain. Quality over quantity.
 ```text
 consumer_noise: smartphone review | gadget roundup | lifestyle piece | buying guide
 finance_noise: earnings report | quarterly revenue | valuation update | stock performance
-evergreen_noise: beginner guide | how to | tutorial | explainer article
+evergreen_noise: beginner guide | how to | tutorial | explainer signal_candidate
 marketing_noise: thought leadership | press release | sponsored content | vendor blog
 ```
 
@@ -1561,7 +1561,7 @@ How to choose between AWS, GCP, and Azure for your next project
 Cloud spending optimization tips for engineering managers
 Gartner publishes annual magic quadrant for cloud infrastructure services
 Company reduces cloud bill by 40 percent by switching to reserved instances
-What is serverless computing — beginner explainer article
+What is serverless computing — beginner explainer signal_candidate
 ```
 
 **Дополнительно заполните в админке:**
@@ -2042,14 +2042,14 @@ developer_impact: migration | third-party app developers | enterprise tooling
 
 **Prompt template:**
 ```text
-You review whether an article matches the stated outsourcing-related system interest.
+You review whether a signal candidate matches the stated outsourcing-related system interest.
 
 Interest name: {interest_name}
 Interest description: {interest_description}
 
-Article title: {title}
-Article lead: {lead}
-Article body: {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body: {body}
 Extra context: {explain_json}
 
 Respond with JSON:
@@ -2059,7 +2059,7 @@ Respond with JSON:
   "reason": "brief explanation"
 }
 
-Approve when the article clearly reflects buyer-side outsourcing demand, such as:
+Approve when the signal candidate clearly reflects buyer-side outsourcing demand, such as:
 - buyer-authored marketplace project cards for software build, integration, migration, rescue, support, or dedicated-team work
 - formal software procurement, vendor selection, bids, proposals, RFP/RFQ/tender, or implementation contracting
 - an organization explicitly looking for an external delivery team, agency, contractor, partner, or vendor to execute software work
@@ -2069,7 +2069,7 @@ Use "uncertain" when the item looks like a real buyer-side software request but 
 Reject when the page is mainly:
 - a procurement portal shell, index, news page, FAQ, help page, or generic opportunities page
 - a category page, browse page, marketplace search page, directory, or talent network
-- a freelancer profile, agency page, vendor landing page, seller listing, case study, ranking, or award article
+- a freelancer profile, agency page, vendor landing page, seller listing, case study, ranking, or award signal_candidate
 - an internal hiring post, recruiter listing, employment ad, or career page
 - generic commentary or news with no active sourcing need
 
@@ -2093,11 +2093,11 @@ You are a strict reviewer for one outsourcing-related system criterion.
 
 The criterion is authoritative: "{criterion_name}".
 
-Decide whether the article materially matches this criterion because it shows a real buyer-side need for outside software delivery, implementation, migration, takeover, procurement, or staff augmentation.
+Decide whether the signal candidate materially matches this criterion because it shows a real buyer-side need for outside software delivery, implementation, migration, takeover, procurement, or staff augmentation.
 
-Article title: {title}
-Article lead: {lead}
-Article body: {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body: {body}
 Extra context: {explain_json}
 
 Respond with JSON:
@@ -2107,15 +2107,15 @@ Respond with JSON:
   "reason": "brief explanation"
 }
 
-Approve when the article clearly shows one or more of these:
+Approve when the signal candidate clearly shows one or more of these:
 - a founder, manager, product owner, procurement team, or company is actively sourcing an external team, agency, vendor, implementation partner, contractor, rescue/takeover team, or staff-augmentation partner
 - a buyer-authored marketplace project card or tender notice describes a concrete software build, integration, migration, replacement, support takeover, or dedicated-team request
 - the text includes scoped delivery evidence such as budget, bids, proposals, quote request, deliverables, timeline, or statement of work
 - a real organization is running software procurement, vendor selection, RFQ/RFP/tender, or implementation contracting
 
-Use "uncertain" when the article looks buyer-side and delivery-scoped but the authorship or outsourcing intent is still truncated or implicit.
+Use "uncertain" when the signal candidate looks buyer-side and delivery-scoped but the authorship or outsourcing intent is still truncated or implicit.
 
-Reject when the article is mainly about:
+Reject when the signal candidate is mainly about:
 - portal shells, procurement indexes, opportunities homepages, help pages, FAQs, news pages, or advisory pages
 - category pages, search pages, browse pages, directories, talent networks, or generic marketplace indexes
 - agency, vendor, consultant, or freelancer self-promotion
@@ -2143,11 +2143,11 @@ Important:
 ```text
 You are the final global reviewer for outsourcing-related buyer-intent.
 
-Decide whether the article belongs in the system-selected collection because it represents a real buyer-side need for external software delivery, implementation, procurement, migration, support takeover, or dedicated-team capacity.
+Decide whether the signal candidate belongs in the system-selected collection because it represents a real buyer-side need for external software delivery, implementation, procurement, migration, support takeover, or dedicated-team capacity.
 
-Article title: {title}
-Article lead: {lead}
-Article body: {body}
+Signal candidate title: {title}
+Signal candidate lead: {lead}
+Signal candidate body: {body}
 Extra context: {explain_json}
 
 Respond with JSON:
@@ -2157,18 +2157,18 @@ Respond with JSON:
   "reason": "brief explanation"
 }
 
-Approve when the article clearly shows one or more of these:
+Approve when the signal candidate clearly shows one or more of these:
 - a founder, product owner, manager, procurement team, or organization is actively sourcing an outside software team or vendor
 - a buyer-authored marketplace project card requests software build, implementation, integration, migration, rescue, support, or contract engineering work
 - a formal procurement or vendor-selection flow exists for software delivery or managed application services
 - the text contains concrete outsourcing evidence such as proposals, bids, quotes, budget, timeline, deliverables, statement of work, or replacing a current vendor
 
-Use "uncertain" when buyer-side intent is plausible but the article is truncated or still missing explicit delivery context.
+Use "uncertain" when buyer-side intent is plausible but the signal candidate is truncated or still missing explicit delivery context.
 
-Reject when the article is mainly about:
+Reject when the signal candidate is mainly about:
 - a portal shell, index, browse page, search page, help page, FAQ, or procurement news wrapper
 - a category page, directory, talent network, or generic marketplace/jobs listing page
-- a seller-authored freelancer profile, agency page, service pitch, case study, ranking, or award article
+- a seller-authored freelancer profile, agency page, service pitch, case study, ranking, or award signal_candidate
 - internal hiring, recruiter content, employment vacancies, or career pages
 - general commentary, news, or analysis without an active sourcing event
 
@@ -2236,7 +2236,7 @@ Marketplace search page for finding freelancers or agencies.
 Ranking of top software development agencies.
 Case study about a past product build for another client.
 Job-board listing recruiting an in-house engineer or product developer.
-Generic startup article about MVPs or software trends with no active sourcing request.
+Generic startup signal_candidate about MVPs or software trends with no active sourcing request.
 ```
 
 **Must-have terms:** оставить пустым
@@ -2305,7 +2305,7 @@ Staff augmentation firm advertises available bench or dedicated team services.
 Marketplace category page of remote jobs or freelance jobs.
 Recruiter post for one employer contract vacancy.
 Vendor landing page promoting outsourcing packages.
-Blog article comparing staff augmentation versus outsourcing.
+Blog signal_candidate comparing staff augmentation versus outsourcing.
 Directory page for finding freelancers or contractors.
 ```
 
@@ -2368,7 +2368,7 @@ Buyer prepares implementation contract or statement of work for outside software
 **Negative prototypes:**
 ```text
 Procurement portal index or generic opportunities landing page.
-Procurement news, awards, or market-report article.
+Procurement news, awards, or market-report signal_candidate.
 Help center, FAQ, advisory page, or guide about how to write an RFP.
 Vendor marketing page for procurement automation software.
 Ranking of top systems integrators or award winners.
@@ -2438,7 +2438,7 @@ Organization wants external delivery help for system integration, modernization,
 **Negative prototypes:**
 ```text
 Vendor blog about cloud migration best practices.
-Thought-leadership article on digital transformation strategy.
+Thought-leadership signal_candidate on digital transformation strategy.
 Internal modernization roadmap with no partner search.
 Category page of migration jobs, implementation jobs, or contractor listings.
 Marketplace search page for consultants or freelancers.
@@ -2514,7 +2514,7 @@ Career-page opening for support engineer or maintenance developer.
 Community discussion about bad outsourcing experiences.
 Case study about rescuing a client codebase in the past.
 Category page of support jobs, maintenance jobs, or freelance services.
-General article about technical debt or modernization with no active vendor search.
+General signal_candidate about technical debt or modernization with no active vendor search.
 ```
 
 **Must-have terms:** оставить пустым
@@ -2523,7 +2523,7 @@ General article about technical debt or modernization with no active vendor sear
 ```text
 our support services
 vendor blog
-technical debt article
+technical debt signal_candidate
 community discussion
 postmortem
 career page
@@ -2549,7 +2549,7 @@ external_support: outside team | support partner | maintenance vendor | contract
 **Candidate uplift negative cues:**
 ```text
 seller_noise: our support services | agency advertises | consulting pitch | vendor blog | available for hire
-internal_noise: incident report | postmortem | hiring support engineer | career page | technical debt article
+internal_noise: incident report | postmortem | hiring support engineer | career page | technical debt signal_candidate
 category_noise: remote jobs | freelance jobs | browse jobs | services | contract opportunities
 community_noise: community discussion | forum thread | reddit | thought leadership | case study
 ```

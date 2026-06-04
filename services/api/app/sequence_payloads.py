@@ -92,7 +92,7 @@ class SequenceCancelPayload(BaseModel):
     reason: str | None = None
 
 
-class ArticleEnrichmentRetryPayload(BaseModel):
+class SignalCandidateEnrichmentRetryPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requested_by: str | None = Field(default=None, alias="requestedBy")

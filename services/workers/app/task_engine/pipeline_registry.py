@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .pipeline_article_plugins import (
-    ARTICLE_PIPELINE_PLUGIN_CLASSES,
+from .pipeline_signal_candidate_plugins import (
+    SIGNAL_CANDIDATE_PIPELINE_PLUGIN_CLASSES,
 )
 from .pipeline_enrichment_plugins import (
     ENRICHMENT_PIPELINE_PLUGIN_CLASSES,
@@ -15,7 +15,7 @@ from .pipeline_maintenance_plugins import (
 from .plugins import TASK_REGISTRY, TaskPluginRegistry
 
 CORE_PIPELINE_PLUGIN_CLASSES = (
-    ENRICHMENT_PIPELINE_PLUGIN_CLASSES + ARTICLE_PIPELINE_PLUGIN_CLASSES
+    ENRICHMENT_PIPELINE_PLUGIN_CLASSES + SIGNAL_CANDIDATE_PIPELINE_PLUGIN_CLASSES
 )
 
 MAINTENANCE_PLUGIN_CLASSES = (

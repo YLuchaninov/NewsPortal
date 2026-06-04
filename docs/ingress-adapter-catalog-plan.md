@@ -64,7 +64,7 @@ Ingress adapters — это часть acquisition/ingest слоя. Они не 
 ```text
 source_channels
   -> services/fetchers
-  -> articles / web_resources / document_observations
+  -> signal_candidates / web_resources / document_observations
   -> outbox_events
   -> relay
   -> q.sequence
@@ -77,7 +77,7 @@ Adapter возвращает только drafts:
 
 ```ts
 interface IngressAdapterRunResult {
-  articles?: ArticleDraft[];
+  signal_candidates?: SignalCandidateDraft[];
   resources?: WebResourceDraft[];
   diagnostics?: AdapterDiagnostic[];
   cursorUpdates?: CursorUpdate[];
@@ -88,7 +88,7 @@ interface IngressAdapterRunResult {
 Persistence остается в fetchers-owned repository layer:
 
 ```text
-adapter -> drafts -> fetcher validation -> persistArticle / persistWebsiteResource -> outbox
+adapter -> drafts -> fetcher validation -> persistSignalCandidate / persistWebsiteResource -> outbox
 ```
 
 ### 1.3. PostgreSQL остается source of truth
@@ -100,7 +100,7 @@ adapter -> drafts -> fetcher validation -> persistArticle / persistWebsiteResour
 Для `website` provider canonical path остается:
 
 ```text
-website channel -> web_resources -> optional projection into articles
+website channel -> web_resources -> optional projection into signal_candidates
 ```
 
 Hidden feeds могут быть discovery hint/optimization, но не должны silently менять `provider_type` на `rss`.
@@ -137,10 +137,10 @@ poll использует binding, пока его явно не изменил�
 
 | Сейчас | Target adapter_key | Runtime | Provider | Output | Что делает |
 |---|---|---|---|---|---|
-| `generic` | `rss.generic` | `builtin` | `rss` | `articles` | Обычный RSS/Atom/JSON Feed parse через extractus path. |
-| `reddit_search_rss` | `rss.reddit_search_rss` | `builtin` | `rss` | `articles` | Нормализация Reddit search feed. |
-| `hn_comments_feed` | `rss.hn_comments_feed` | `builtin` | `rss` | `articles` | HN discussion provenance, extraction target URL, suppression comment updates. |
-| `google_news_rss` | `rss.google_news_rss` | `builtin` | `rss` | `articles` | Google News wrapper URL resolution to publisher URL. |
+| `generic` | `rss.generic` | `builtin` | `rss` | `signal_candidates` | Обычный RSS/Atom/JSON Feed parse через extractus path. |
+| `reddit_search_rss` | `rss.reddit_search_rss` | `builtin` | `rss` | `signal_candidates` | Нормализация Reddit search feed. |
+| `hn_comments_feed` | `rss.hn_comments_feed` | `builtin` | `rss` | `signal_candidates` | HN discussion provenance, extraction target URL, suppression comment updates. |
+| `google_news_rss` | `rss.google_news_rss` | `builtin` | `rss` | `signal_candidates` | Google News wrapper URL resolution to publisher URL. |
 
 Compatibility behavior:
 
@@ -165,35 +165,35 @@ Target mapping:
 
 | Сейчас `adapterKey` | Target adapter_key | Runtime | Provider | Output | Notes |
 |---|---|---|---|---|---|
-| `hn_algolia_search` | `api.hn_algolia_search` | `builtin` | `api` | `articles` | Official/public JSON API style. |
-| `github_issues_search` | `api.github_issues_search` | `builtin` | `api` | `articles` | GitHub issues/search source. |
-| `stack_exchange_search` | `api.stack_exchange_search` | `builtin` | `api` | `articles` | Stack Exchange API/search. |
-| `ddgs_search` | `api.ddgs_search` | `builtin` | `api` | `articles` | Current DDGS bridge; should stay cautious. |
-| `searxng_search` | `api.searxng_search` | `builtin` | `api` | `articles` | Search adapter. |
-| `brave_search` | `api.brave_search` | `builtin` | `api` | `articles` | Search adapter, needs API key. |
-| `tavily_search` | `api.tavily_search` | `builtin` | `api` | `articles` | Search adapter, needs API key. |
-| `exa_search` | `api.exa_search` | `builtin` | `api` | `articles` | Search adapter, needs API key. |
-| `serpapi_google_news_research` | `api.serpapi_google_news_research` | `builtin` | `api` | `articles` | Research/search lane. |
-| `discourse_search` | `api.discourse_search` | `builtin` | `api` | `articles` | Forum/community search. |
-| `greenhouse_job_board` | `api.greenhouse_job_board` | `builtin` | `api` | `articles` | ATS job board. |
-| `lever_postings` | `api.lever_postings` | `builtin` | `api` | `articles` | ATS job board. |
-| `ashby_job_postings` | `api.ashby_job_postings` | `builtin` | `api` | `articles` | ATS job board. |
-| `remotive_jobs` | `api.remotive_jobs` | `builtin` | `api` | `articles` | Remote jobs. |
-| `remoteok_jobs` | `api.remoteok_jobs` | `builtin` | `api` | `articles` | Remote jobs. |
-| `weworkremotely_rss` | `rss.weworkremotely_jobs` or `api.weworkremotely_rss` | `builtin` | `rss` preferred | `articles` | Prefer RSS provider if the source is actually RSS; keep compatibility alias. |
-| `peopleperhour_public_projects_research` | `api.peopleperhour_public_projects_research` | `builtin` | `api` | `articles` | Research-only marketplace signal. |
-| `freelancer_public_projects_research` | `api.freelancer_public_projects_research` | `builtin` | `api` | `articles` | Research-only marketplace signal. |
-| `guru_public_projects_research` | `api.guru_public_projects_research` | `builtin` | `api` | `articles` | Research-only marketplace signal. |
-| `malt_public_projects_research` | `api.malt_public_projects_research` | `builtin` | `api` | `articles` | Research-only marketplace signal. |
-| `contra_public_search_research` | `api.contra_public_search_research` | `builtin` | `api` | `articles` | Research-only marketplace signal. |
-| `upwork_public_signal_research` | `api.upwork_public_signal_research` | `builtin` | `api` | `articles` | Research-only; no auto-select by default. |
-| `linkedin_public_signal_research` | `api.linkedin_public_signal_research` | `builtin` | `api` | `articles` | Research-only; no auto-select by default. |
+| `hn_algolia_search` | `api.hn_algolia_search` | `builtin` | `api` | `signal_candidates` | Official/public JSON API style. |
+| `github_issues_search` | `api.github_issues_search` | `builtin` | `api` | `signal_candidates` | GitHub issues/search source. |
+| `stack_exchange_search` | `api.stack_exchange_search` | `builtin` | `api` | `signal_candidates` | Stack Exchange API/search. |
+| `ddgs_search` | `api.ddgs_search` | `builtin` | `api` | `signal_candidates` | Current DDGS bridge; should stay cautious. |
+| `searxng_search` | `api.searxng_search` | `builtin` | `api` | `signal_candidates` | Search adapter. |
+| `brave_search` | `api.brave_search` | `builtin` | `api` | `signal_candidates` | Search adapter, needs API key. |
+| `tavily_search` | `api.tavily_search` | `builtin` | `api` | `signal_candidates` | Search adapter, needs API key. |
+| `exa_search` | `api.exa_search` | `builtin` | `api` | `signal_candidates` | Search adapter, needs API key. |
+| `serpapi_google_news_research` | `api.serpapi_google_news_research` | `builtin` | `api` | `signal_candidates` | Research/search lane. |
+| `discourse_search` | `api.discourse_search` | `builtin` | `api` | `signal_candidates` | Forum/community search. |
+| `greenhouse_job_board` | `api.greenhouse_job_board` | `builtin` | `api` | `signal_candidates` | ATS job board. |
+| `lever_postings` | `api.lever_postings` | `builtin` | `api` | `signal_candidates` | ATS job board. |
+| `ashby_job_postings` | `api.ashby_job_postings` | `builtin` | `api` | `signal_candidates` | ATS job board. |
+| `remotive_jobs` | `api.remotive_jobs` | `builtin` | `api` | `signal_candidates` | Remote jobs. |
+| `remoteok_jobs` | `api.remoteok_jobs` | `builtin` | `api` | `signal_candidates` | Remote jobs. |
+| `weworkremotely_rss` | `rss.weworkremotely_jobs` or `api.weworkremotely_rss` | `builtin` | `rss` preferred | `signal_candidates` | Prefer RSS provider if the source is actually RSS; keep compatibility alias. |
+| `peopleperhour_public_projects_research` | `api.peopleperhour_public_projects_research` | `builtin` | `api` | `signal_candidates` | Research-only marketplace signal. |
+| `freelancer_public_projects_research` | `api.freelancer_public_projects_research` | `builtin` | `api` | `signal_candidates` | Research-only marketplace signal. |
+| `guru_public_projects_research` | `api.guru_public_projects_research` | `builtin` | `api` | `signal_candidates` | Research-only marketplace signal. |
+| `malt_public_projects_research` | `api.malt_public_projects_research` | `builtin` | `api` | `signal_candidates` | Research-only marketplace signal. |
+| `contra_public_search_research` | `api.contra_public_search_research` | `builtin` | `api` | `signal_candidates` | Research-only marketplace signal. |
+| `upwork_public_signal_research` | `api.upwork_public_signal_research` | `builtin` | `api` | `signal_candidates` | Research-only; no auto-select by default. |
+| `linkedin_public_signal_research` | `api.linkedin_public_signal_research` | `builtin` | `api` | `signal_candidates` | Research-only; no auto-select by default. |
 
 Generic API JSON mapping becomes a declarative adapter:
 
 | Сейчас | Target adapter_key | Runtime | Provider | Output |
 |---|---|---|---|---|
-| API channel without adapterKey, with `itemsPath`, `titleField`, etc. | `api.generic_json_mapping` | `declarative` | `api` | `articles` |
+| API channel without adapterKey, with `itemsPath`, `titleField`, etc. | `api.generic_json_mapping` | `declarative` | `api` | `signal_candidates` |
 
 ### 2.3. Website provider
 
@@ -205,7 +205,7 @@ Target catalog rows:
 |---|---|---|---|---|---|
 | Website cheap/static discovery | `website.generic_discovery` | `builtin` | `website` | `web_resources` | Sitemap/feed/collection/inline_data/download discovery, rough classification, persistence. |
 | Browser-assisted fallback | not separate adapter in MVP | capability/config | `website` | `web_resources` | Controlled by `browserFallbackEnabled` and `maxBrowserFetchesPerPoll`. |
-| Editorial projection | `website.editorial_projection` optional later | builtin | `website` | `articles` | Keep as current internal behavior first; do not split until needed. |
+| Editorial projection | `website.editorial_projection` optional later | builtin | `website` | `signal_candidates` | Keep as current internal behavior first; do not split until needed. |
 
 MVP binding for every website channel:
 
@@ -219,7 +219,7 @@ Target catalog row:
 
 | Сейчас | Target adapter_key | Runtime | Provider | Output | Notes |
 |---|---|---|---|---|---|
-| Generic IMAP mailbox polling | `email_imap.generic_mailbox` | `builtin` | `email_imap` | `articles` | No special plugin layer yet; wrap current poller. |
+| Generic IMAP mailbox polling | `email_imap.generic_mailbox` | `builtin` | `email_imap` | `signal_candidates` | No special plugin layer yet; wrap current poller. |
 
 ### 2.5. Discovery adapter research catalog
 
@@ -278,7 +278,7 @@ create table if not exists ingress_adapter_catalog (
     check (provider_type in ('rss', 'website', 'api', 'email_imap', 'youtube')),
 
   constraint ingress_adapter_catalog_output_check
-    check (output_mode in ('articles', 'web_resources', 'mixed')),
+    check (output_mode in ('signal_candidates', 'web_resources', 'mixed')),
 
   constraint ingress_adapter_catalog_status_check
     check (status in ('active', 'draft', 'disabled', 'archived')),
@@ -392,7 +392,7 @@ export interface IngressAdapterDescriptor {
   description: string;
   runtime: 'declarative' | 'builtin';
   providerType: 'rss' | 'website' | 'api' | 'email_imap' | 'youtube';
-  outputMode: 'articles' | 'web_resources' | 'mixed';
+  outputMode: 'signal_candidates' | 'web_resources' | 'mixed';
   priority: number;
   status: 'active' | 'draft' | 'disabled' | 'archived';
   match: AdapterMatchRules;
@@ -419,10 +419,10 @@ export interface AdapterMatchRules {
 {
   "adapterKey": "api.greenhouse_job_board",
   "title": "Greenhouse Job Board API",
-  "description": "Reads public Greenhouse job board endpoints and emits job posting article drafts.",
+  "description": "Reads public Greenhouse job board endpoints and emits job posting signal_candidate drafts.",
   "runtime": "builtin",
   "providerType": "api",
-  "outputMode": "articles",
+  "outputMode": "signal_candidates",
   "priority": 200,
   "status": "active",
   "match": {
@@ -451,10 +451,10 @@ export interface AdapterMatchRules {
 {
   "adapterKey": "api.generic_json_mapping",
   "title": "Generic JSON API Mapping",
-  "description": "Fetches a JSON endpoint and maps items into article drafts using JSONPath-like field selectors.",
+  "description": "Fetches a JSON endpoint and maps items into signal_candidate drafts using JSONPath-like field selectors.",
   "runtime": "declarative",
   "providerType": "api",
-  "outputMode": "articles",
+  "outputMode": "signal_candidates",
   "priority": 20,
   "status": "active",
   "match": {
@@ -736,7 +736,7 @@ Output:
 }
 ```
 
-Dry-run must not write articles, resources, cursors or outbox rows.
+Dry-run must not write signal_candidates, resources, cursors or outbox rows.
 
 ### 6.7. Fetch run metrics
 
@@ -776,7 +776,7 @@ Recommended new exports:
 
 ```ts
 export const INGRESS_ADAPTER_RUNTIME_KINDS = ['declarative', 'builtin'] as const;
-export const INGRESS_ADAPTER_OUTPUT_MODES = ['articles', 'web_resources', 'mixed'] as const;
+export const INGRESS_ADAPTER_OUTPUT_MODES = ['signal_candidates', 'web_resources', 'mixed'] as const;
 export const INGRESS_ADAPTER_STATUSES = ['active', 'draft', 'disabled', 'archived'] as const;
 
 export type IngressAdapterRuntimeKind = (typeof INGRESS_ADAPTER_RUNTIME_KINDS)[number];
@@ -841,7 +841,7 @@ insert into ingress_adapter_catalog (
   'RSS adapter that resolves Google News wrapper URLs to publisher URLs.',
   'builtin',
   'rss',
-  'articles',
+  'signal_candidates',
   150,
   '{"urlHostContains":["news.google.com"],"urlPathContains":["/rss"],"allowAutoSelect":true}'::jsonb,
   '{}'::jsonb,
@@ -1233,7 +1233,7 @@ Map old adapterStrategy -> adapterKey.
 Show deprecation note in validation preview.
 ```
 
-### 10.7. Resource/article/fetch-run surfaces
+### 10.7. Resource/signal_candidate/fetch-run surfaces
 
 Show adapter badges in:
 
@@ -1242,7 +1242,7 @@ Show adapter badges in:
 /admin/channels/[channelId]/edit
 /admin/resources
 /admin/resources/[resourceId]
-/admin/articles/[docId]
+/admin/signal-candidates/[docId]
 /admin/observability or fetch runs page
 ```
 
@@ -1320,7 +1320,7 @@ Update MCP operating guidance:
 
 ```text
 For RSS/API channels, inspect adapter binding before judging channel health.
-For website channels, verify fetch_runs and web_resources before article selection outcomes.
+For website channels, verify fetch_runs and web_resources before signal_candidate selection outcomes.
 For research_only adapters, treat output as acquisition signal only unless explicitly promoted.
 ```
 
@@ -1447,7 +1447,7 @@ export const descriptor: IngressAdapterDescriptor = {
   description: 'Reads My Vendor public jobs API.',
   runtime: 'builtin',
   providerType: 'api',
-  outputMode: 'articles',
+  outputMode: 'signal_candidates',
   priority: 180,
   status: 'active',
   match: {
@@ -1806,7 +1806,7 @@ Test cases:
 - tie recommendation does not auto-bind
 - disabled adapter is not recommended
 - research_only adapter is not auto-selected
-- declarative runtime maps JSON items to article drafts
+- declarative runtime maps JSON items to signal_candidate drafts
 ```
 
 ### 16.2. Migration tests
@@ -2057,7 +2057,7 @@ do not introduce sandbox until repeated real need appears.
 [ ] catalog-backed RSS adapter select
 [ ] catalog-backed API adapter select
 [ ] dry-run UI
-[ ] adapter badges on channels/resources/articles/fetch runs
+[ ] adapter badges on channels/resources/signal-candidates/fetch runs
 ```
 
 ### services/mcp
@@ -2103,27 +2103,27 @@ After migration, every channel has an explicit or default adapter path:
 RSS channel
   -> source_channel_adapter_binding.adapter_key = rss.*
   -> fetchers RSS wrapper
-  -> articles
-  -> article.ingest.requested
+  -> signal_candidates
+  -> signal_candidate.ingest.requested
 
 API channel
   -> source_channel_adapter_binding.adapter_key = api.* or api.generic_json_mapping
   -> fetchers API wrapper / declarative recipe
-  -> articles
-  -> article.ingest.requested
+  -> signal_candidates
+  -> signal_candidate.ingest.requested
 
 Website channel
   -> source_channel_adapter_binding.adapter_key = website.generic_discovery
   -> fetchers website poller
   -> web_resources
   -> resource.ingest.requested
-  -> optional article projection
+  -> optional signal_candidate projection
 
 Email channel
   -> source_channel_adapter_binding.adapter_key = email_imap.generic_mailbox
   -> fetchers IMAP poller
-  -> articles
-  -> article.ingest.requested
+  -> signal_candidates
+  -> signal_candidate.ingest.requested
 ```
 
 Admin sees:

@@ -37,7 +37,7 @@ test("DiscoveryBrief payload schema requires signals and constraints", () => {
     goal: "Find public evidence.",
     desiredSignals: [],
     negativeSignals: [],
-    artifactExpectations: ["article"],
+    artifactExpectations: ["signal_candidate"],
     freshnessNeed: "normal",
   });
 
@@ -51,7 +51,7 @@ test("SourceUnderstanding payload requires yieldIndependent flag", () => {
     sourceVoice: "owner_or_operator",
     artifactFreshnessKind: "official_update",
     signalProductionMode: "official_update",
-    observedArtifactTypes: ["article"],
+    observedArtifactTypes: ["signal_candidate"],
     canProduceSignals: [
       {
         signalDescription: "Public update",

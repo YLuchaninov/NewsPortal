@@ -24,7 +24,7 @@ def derive_canonical_domain(raw_url: str | None) -> str | None:
 
 def resolve_observation_duplicate_kind(
     *,
-    article_doc_id: uuid.UUID,
+    signal_candidate_doc_id: uuid.UUID,
     canonical_document_id: uuid.UUID | None,
     is_exact_duplicate: bool,
     is_near_duplicate: bool,
@@ -35,7 +35,7 @@ def resolve_observation_duplicate_kind(
         return "exact_duplicate"
     if is_near_duplicate:
         return "near_duplicate"
-    if canonical_document_id == article_doc_id:
+    if canonical_document_id == signal_candidate_doc_id:
         return "canonical"
     return "canonical"
 
@@ -53,24 +53,24 @@ async def fetch_canonical_document_source(
         select
           a.*,
           coalesce(a.extracted_source_name, sc.name) as resolved_source_name
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
         where a.doc_id = %s
         limit 1
         """,
         (canonical_document_id,),
     )
-    article = await cursor.fetchone()
-    if article is None:
+    signal_candidate = await cursor.fetchone()
+    if signal_candidate is None:
         raise ValueError(
-            f"Canonical document source article {canonical_document_id} was not found."
+            f"Canonical document source signal_candidate {canonical_document_id} was not found."
         )
-    return article
+    return signal_candidate
 
 
 async def upsert_canonical_document(
     cursor: psycopg.AsyncCursor[Any],
-    canonical_article: dict[str, Any],
+    canonical_signal_candidate: dict[str, Any],
 ) -> None:
     await cursor.execute(
         """
@@ -133,31 +133,31 @@ async def upsert_canonical_document(
           updated_at = now()
         """,
         (
-            canonical_article["doc_id"],
-            canonical_article.get("content_kind") or "editorial",
-            canonical_article["content_format"],
-            canonical_article["url"],
-            derive_canonical_domain(canonical_article.get("url")),
-            canonical_article["title"],
-            canonical_article["lead"],
-            canonical_article["body"],
-            canonical_article.get("lang"),
-            canonical_article.get("lang_confidence"),
-            canonical_article.get("exact_hash"),
-            canonical_article.get("simhash64"),
-            canonical_article.get("resolved_source_name"),
-            canonical_article.get("extracted_author"),
-            canonical_article.get("published_at"),
-            canonical_article.get("ingested_at"),
-            canonical_article.get("updated_at"),
-            canonical_article.get("ingested_at"),
+            canonical_signal_candidate["doc_id"],
+            canonical_signal_candidate.get("content_kind") or "editorial",
+            canonical_signal_candidate["content_format"],
+            canonical_signal_candidate["url"],
+            derive_canonical_domain(canonical_signal_candidate.get("url")),
+            canonical_signal_candidate["title"],
+            canonical_signal_candidate["lead"],
+            canonical_signal_candidate["body"],
+            canonical_signal_candidate.get("lang"),
+            canonical_signal_candidate.get("lang_confidence"),
+            canonical_signal_candidate.get("exact_hash"),
+            canonical_signal_candidate.get("simhash64"),
+            canonical_signal_candidate.get("resolved_source_name"),
+            canonical_signal_candidate.get("extracted_author"),
+            canonical_signal_candidate.get("published_at"),
+            canonical_signal_candidate.get("ingested_at"),
+            canonical_signal_candidate.get("updated_at"),
+            canonical_signal_candidate.get("ingested_at"),
         ),
     )
 
 
 async def upsert_document_observation(
     cursor: psycopg.AsyncCursor[Any],
-    article: dict[str, Any],
+    signal_candidate: dict[str, Any],
     *,
     canonical_document_id: uuid.UUID | None,
     duplicate_kind: str,
@@ -178,7 +178,7 @@ async def upsert_document_observation(
           observation_state
         )
         values (
-          'article',
+          'signal_candidate',
           %s,
           %s,
           %s,
@@ -202,12 +202,12 @@ async def upsert_document_observation(
           updated_at = now()
         """,
         (
-            article["doc_id"],
-            article["channel_id"],
-            article.get("source_article_id"),
-            article["url"],
-            article.get("published_at"),
-            article.get("ingested_at"),
+            signal_candidate["doc_id"],
+            signal_candidate["channel_id"],
+            signal_candidate.get("source_signal_candidate_id"),
+            signal_candidate["url"],
+            signal_candidate.get("published_at"),
+            signal_candidate.get("ingested_at"),
             canonical_document_id,
             duplicate_kind,
             observation_state,
@@ -243,19 +243,19 @@ async def refresh_canonical_document_stats(
     )
 
 
-async def sync_article_canonical_document(
+async def sync_signal_candidate_canonical_document(
     cursor: psycopg.AsyncCursor[Any],
-    article: dict[str, Any],
+    signal_candidate: dict[str, Any],
     *,
     canonical_document_id: uuid.UUID,
     is_exact_duplicate: bool,
     is_near_duplicate: bool,
 ) -> None:
-    canonical_article = await fetch_canonical_document_source(cursor, canonical_document_id)
-    await upsert_canonical_document(cursor, canonical_article)
+    canonical_signal_candidate = await fetch_canonical_document_source(cursor, canonical_document_id)
+    await upsert_canonical_document(cursor, canonical_signal_candidate)
     await upsert_document_observation(
         cursor,
-        canonical_article,
+        canonical_signal_candidate,
         canonical_document_id=canonical_document_id,
         duplicate_kind="canonical",
         observation_state=resolve_observation_state(
@@ -263,7 +263,7 @@ async def sync_article_canonical_document(
         ),
     )
     duplicate_kind = resolve_observation_duplicate_kind(
-        article_doc_id=article["doc_id"],
+        signal_candidate_doc_id=signal_candidate["doc_id"],
         canonical_document_id=canonical_document_id,
         is_exact_duplicate=is_exact_duplicate,
         is_near_duplicate=is_near_duplicate,
@@ -271,10 +271,10 @@ async def sync_article_canonical_document(
     observation_state = resolve_observation_state(
         canonical_document_id=canonical_document_id
     )
-    if article["doc_id"] != canonical_article["doc_id"]:
+    if signal_candidate["doc_id"] != canonical_signal_candidate["doc_id"]:
         await upsert_document_observation(
             cursor,
-            article,
+            signal_candidate,
             canonical_document_id=canonical_document_id,
             duplicate_kind=duplicate_kind,
             observation_state=observation_state,

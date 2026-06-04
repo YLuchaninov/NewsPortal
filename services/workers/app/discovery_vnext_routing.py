@@ -278,7 +278,7 @@ def _is_context_only(source_understanding: dict[str, Any]) -> bool:
     mode = str(source_understanding.get("signalProductionMode") or "unknown")
     if voice in {"seller_or_vendor", "third_party_commentary"} and mode in {"secondary_context", "unlikely", "unknown"}:
         return True
-    if freshness in {"static_service_page", "evergreen_article", "documentation_or_guide"} and mode in {"secondary_context", "unlikely"}:
+    if freshness in {"static_service_page", "evergreen_signal_candidate", "documentation_or_guide"} and mode in {"secondary_context", "unlikely"}:
         return True
     return False
 

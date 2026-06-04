@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Queue } from "bullmq";
 import {
-  ARTICLE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
   CRITERION_COMPILE_REQUESTED_EVENT,
   INTEREST_COMPILE_REQUESTED_EVENT,
   SEQUENCE_QUEUE
@@ -252,8 +252,8 @@ async function main(): Promise<void> {
     const criterionId = randomUUID();
 
     await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
-      eventType: ARTICLE_INGEST_REQUESTED_EVENT,
-      aggregateType: "article",
+      eventType: SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
+      aggregateType: "signal_candidate",
       aggregateId: docId,
       payload: {
         docId,
@@ -263,7 +263,7 @@ async function main(): Promise<void> {
         doc_id: docId,
         version: 1
       },
-      label: "article.ingest.requested"
+      label: "signal_candidate.ingest.requested"
     });
 
     await assertSequenceManagedRouting(pool, relay, sequenceQueue, {
@@ -297,7 +297,7 @@ async function main(): Promise<void> {
     });
 
     console.log(
-      `Phase 3 relay routing smoke passed: sequence-managed article/interest/criterion events created PostgreSQL-backed sequence runs and thin ${SEQUENCE_QUEUE} jobs.`
+      `Phase 3 relay routing smoke passed: sequence-managed signal_candidate/interest/criterion events created PostgreSQL-backed sequence runs and thin ${SEQUENCE_QUEUE} jobs.`
     );
   } finally {
     await relay.close();

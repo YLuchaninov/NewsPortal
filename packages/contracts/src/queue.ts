@@ -2,13 +2,13 @@ export const FOUNDATION_SMOKE_EVENT = "foundation.smoke.requested";
 export const FOUNDATION_SMOKE_QUEUE = "q.foundation.smoke";
 export const SOURCE_CHANNEL_SYNC_REQUESTED_EVENT = "source.channel.sync.requested";
 export const FETCH_QUEUE = "q.fetch";
-export const ARTICLE_INGEST_REQUESTED_EVENT = "article.ingest.requested";
+export const SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT = "signal_candidate.ingest.requested";
 export const RESOURCE_INGEST_REQUESTED_EVENT = "resource.ingest.requested";
-export const ARTICLE_NORMALIZED_EVENT = "article.normalized";
-export const ARTICLE_EMBEDDED_EVENT = "article.embedded";
-export const ARTICLE_CLUSTERED_EVENT = "article.clustered";
-export const ARTICLE_CRITERIA_MATCHED_EVENT = "article.criteria.matched";
-export const ARTICLE_INTERESTS_MATCHED_EVENT = "article.interests.matched";
+export const SIGNAL_CANDIDATE_NORMALIZED_EVENT = "signal_candidate.normalized";
+export const SIGNAL_CANDIDATE_EMBEDDED_EVENT = "signal_candidate.embedded";
+export const SIGNAL_CANDIDATE_CLUSTERED_EVENT = "signal_candidate.clustered";
+export const SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT = "signal_candidate.criteria.matched";
+export const SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT = "signal_candidate.interests.matched";
 export const LLM_REVIEW_REQUESTED_EVENT = "llm.review.requested";
 export const NOTIFICATION_FEEDBACK_RECORDED_EVENT = "notification.feedback.recorded";
 export const REINDEX_REQUESTED_EVENT = "reindex.requested";
@@ -90,7 +90,7 @@ export function buildOutboxEventQueueMap(
 
 export const OUTBOX_EVENT_QUEUE_MAP = buildOutboxEventQueueMap();
 export const SEQUENCE_MANAGED_OUTBOX_EVENTS = [
-  ARTICLE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
   RESOURCE_INGEST_REQUESTED_EVENT,
   INTEREST_COMPILE_REQUESTED_EVENT,
   CRITERION_COMPILE_REQUESTED_EVENT,
@@ -107,7 +107,7 @@ export interface ThinQueueJobPayload {
   version: number;
 }
 
-export interface ArticleQueueJobPayload {
+export interface SignalCandidateQueueJobPayload {
   jobId: string;
   eventId: string;
   docId: string;
@@ -169,14 +169,14 @@ export interface SequenceQueueJobPayload {
   sequenceId: string;
 }
 
-export function isArticleOutboxEvent(eventType: string): boolean {
+export function isSignalCandidateOutboxEvent(eventType: string): boolean {
   return (
-    eventType === ARTICLE_INGEST_REQUESTED_EVENT ||
-    eventType === ARTICLE_NORMALIZED_EVENT ||
-    eventType === ARTICLE_EMBEDDED_EVENT ||
-    eventType === ARTICLE_CLUSTERED_EVENT ||
-    eventType === ARTICLE_CRITERIA_MATCHED_EVENT ||
-    eventType === ARTICLE_INTERESTS_MATCHED_EVENT
+    eventType === SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT ||
+    eventType === SIGNAL_CANDIDATE_NORMALIZED_EVENT ||
+    eventType === SIGNAL_CANDIDATE_EMBEDDED_EVENT ||
+    eventType === SIGNAL_CANDIDATE_CLUSTERED_EVENT ||
+    eventType === SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT ||
+    eventType === SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT
   );
 }
 

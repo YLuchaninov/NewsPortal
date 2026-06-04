@@ -84,9 +84,9 @@ def list_llm_reviews(
     llm_review_select = """
         select
           lr.*,
-          a.title as article_title
+          a.title as signal_candidate_title
         from llm_review_log lr
-        join articles a on a.doc_id = lr.doc_id
+        join signal_candidates a on a.doc_id = lr.doc_id
         order by lr.created_at desc
     """
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination(

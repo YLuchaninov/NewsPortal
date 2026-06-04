@@ -218,7 +218,7 @@ Magic numbers and magic strings запрещены, кроме очевидны�
 
 - Preserve asynchronous boundaries for heavy processing: use outbox/relay/BullMQ/worker flows instead of direct synchronous cross-service work.
 - Jobs remain thin and reload authoritative state from PostgreSQL.
-- Every new loop over database rows, sources, resources, articles, users or notifications must have an explicit bound, pagination/cursor, batch size or backpressure story.
+- Every new loop over database rows, sources, resources, signal_candidates, users or notifications must have an explicit bound, pagination/cursor, batch size or backpressure story.
 - Every external call must have timeout, error classification, retry/backoff policy or explicit no-retry rationale.
 - Concurrency must be bounded and configurable when it can affect CPU, network, DB connections, provider limits or queue pressure.
 - Idempotency is required for retries, replay, outbox/inbox consumers, migrations, delivery attempts and cleanup scripts.

@@ -189,7 +189,7 @@ def _evidence_patterns_for_text(text: str) -> list[str]:
 
 def _artifact_expectations_for_text(text: str) -> list[str]:
     lower = text.lower()
-    values = ["article", "listing", "document", "dataset", "thread", "changelog", "registry_entry", "unknown"]
+    values = ["signal_candidate", "listing", "document", "dataset", "thread", "changelog", "registry_entry", "unknown"]
     if "profile" in lower:
         values.insert(4, "profile")
     return _unique(values)

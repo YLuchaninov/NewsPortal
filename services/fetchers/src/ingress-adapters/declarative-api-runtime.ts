@@ -16,7 +16,7 @@ export interface DeclarativeApiPageResult {
 }
 
 export interface DeclarativeApiMappedItem {
-  externalArticleId: string;
+  externalSignalCandidateId: string;
   url: string;
   publishedAt: string;
   title: string;
@@ -190,11 +190,11 @@ export async function executeDeclarativeApiRuntime(input: {
       const issuerOrOwner = String(getVirtualField(record, "firstIssuerName") ?? "").trim() || null;
       latestPublishedAt = (latestPublishedAt ?? "") > publishedAt ? latestPublishedAt : publishedAt;
       items.push({
-        externalArticleId:
+        externalSignalCandidateId:
           String(getByFirstPath(record, input.apiConfig.externalIdField) ?? rawUrl).trim() || rawUrl,
         url: resolveApiItemUrl(rawUrl, page.finalUrl),
         publishedAt,
-        title: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "Untitled article")),
+        title: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "Untitled signal_candidate")),
         lead: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.leadField) ?? "")),
         body: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.bodyField) ?? "")),
         lang:
@@ -206,7 +206,7 @@ export async function executeDeclarativeApiRuntime(input: {
           pageIndex,
           sourceItem: record,
           itemObservation: {
-            title: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "Untitled article")),
+            title: normalizeWhitespace(String(getByFirstPath(record, input.apiConfig.titleField) ?? "Untitled signal_candidate")),
             source_url: input.fetchUrl,
             item_url: resolveApiItemUrl(rawUrl, page.finalUrl),
             document_url: documentUrl,

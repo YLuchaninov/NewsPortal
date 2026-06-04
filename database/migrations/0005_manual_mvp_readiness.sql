@@ -83,7 +83,7 @@ create table if not exists channel_fetch_runs (
   retry_after_seconds integer,
   fetch_duration_ms integer not null default 0,
   fetched_item_count integer not null default 0,
-  new_article_count integer not null default 0,
+  new_signal_candidate_count integer not null default 0,
   duplicate_suppressed_count integer not null default 0,
   cursor_changed boolean not null default false,
   error_text text,
@@ -107,8 +107,8 @@ create table if not exists channel_fetch_runs (
     check (retry_after_seconds is null or retry_after_seconds >= 0),
   constraint channel_fetch_runs_fetched_item_count_check
     check (fetched_item_count >= 0),
-  constraint channel_fetch_runs_new_article_count_check
-    check (new_article_count >= 0),
+  constraint channel_fetch_runs_new_signal_candidate_count_check
+    check (new_signal_candidate_count >= 0),
   constraint channel_fetch_runs_duplicate_suppressed_count_check
     check (duplicate_suppressed_count >= 0),
   constraint channel_fetch_runs_finished_after_started_check

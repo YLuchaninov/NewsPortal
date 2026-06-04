@@ -81,13 +81,13 @@ function parseRepairJob(row: RepairJobRow): LiveRepairJobSnapshot {
       typeof optionsJson.interestId === "string" && optionsJson.interestId.trim()
         ? optionsJson.interestId.trim()
         : null,
-    processedArticles:
-      progress && Number.isFinite(Number(progress.processedArticles))
-        ? Number(progress.processedArticles)
+    processedSignalCandidates:
+      progress && Number.isFinite(Number(progress.processedSignalCandidates))
+        ? Number(progress.processedSignalCandidates)
         : null,
-    totalArticles:
-      progress && Number.isFinite(Number(progress.totalArticles))
-        ? Number(progress.totalArticles)
+    totalSignalCandidates:
+      progress && Number.isFinite(Number(progress.totalSignalCandidates))
+        ? Number(progress.totalSignalCandidates)
         : null,
     finishedAt: row.finished_at,
     errorText: row.error_text,

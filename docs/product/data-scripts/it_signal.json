@@ -196,7 +196,7 @@
     "isActive": true
   },
   {
-    "name": "TechRadar: All Articles",
+    "name": "TechRadar: All Signal Candidates",
     "providerType": "rss",
     "fetchUrl": "https://www.techradar.com/uk/feeds.xml",
     "language": "en",
@@ -212,7 +212,7 @@
   {
     "name": "TechRadar: News",
     "providerType": "rss",
-    "fetchUrl": "https://www.techradar.com/uk/feeds/articletype/news",
+    "fetchUrl": "https://www.techradar.com/uk/feeds/signal_candidatetype/news",
     "language": "en",
     "pollIntervalSeconds": 900,
     "adaptiveEnabled": true,
@@ -226,7 +226,7 @@
   {
     "name": "TechRadar: Reviews",
     "providerType": "rss",
-    "fetchUrl": "https://www.techradar.com/uk/feeds/articletype/review",
+    "fetchUrl": "https://www.techradar.com/uk/feeds/signal_candidatetype/review",
     "language": "en",
     "pollIntervalSeconds": 3600,
     "adaptiveEnabled": true,
@@ -378,9 +378,9 @@
     "isActive": true
   },
   {
-    "name": "TechRepublic: Articles",
+    "name": "TechRepublic: Signal Candidates",
     "providerType": "rss",
-    "fetchUrl": "https://www.techrepublic.com/rssfeeds/articles/",
+    "fetchUrl": "https://www.techrepublic.com/rssfeeds/signal-candidates/",
     "language": "en",
     "pollIntervalSeconds": 900,
     "adaptiveEnabled": true,
@@ -3010,9 +3010,9 @@
     "isActive": true
   },
   {
-    "name": "Adsmurai Articles",
+    "name": "Adsmurai Signal Candidates",
     "providerType": "rss",
-    "fetchUrl": "https://www.adsmurai.com/en/articles/rss.xml",
+    "fetchUrl": "https://www.adsmurai.com/en/signal-candidates/rss.xml",
     "language": "en",
     "pollIntervalSeconds": 21600,
     "adaptiveEnabled": true,

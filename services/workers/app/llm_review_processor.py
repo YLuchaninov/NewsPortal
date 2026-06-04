@@ -10,8 +10,8 @@ from psycopg.types.json import Json
 from .runtime_json import coerce_json_object, make_json_safe
 from .runtime_values import coerce_bool
 from .worker_queues import (
-    ARTICLE_CRITERIA_MATCHED_EVENT,
-    ARTICLE_INTERESTS_MATCHED_EVENT,
+    SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+    SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT,
     LLM_REVIEW_CONSUMER,
 )
 
@@ -21,7 +21,7 @@ class LlmReviewProcessorDependencies:
     open_connection: Callable[[], Awaitable[Any]]
     suppress_downstream_outbox: Callable[[Any], bool]
     is_event_processed: Callable[..., Awaitable[bool]]
-    fetch_article_for_update: Callable[..., Awaitable[dict[str, Any]]]
+    fetch_signal_candidate_for_update: Callable[..., Awaitable[dict[str, Any]]]
     find_prompt_template: Callable[..., Awaitable[dict[str, Any] | None]]
     get_llm_review_monthly_quota_snapshot: Callable[..., Awaitable[dict[str, Any]]]
     resolve_criterion_gray_zone_runtime_resolution: Callable[..., dict[str, Any] | None]
@@ -47,7 +47,7 @@ def build_llm_review_processor_dependencies() -> LlmReviewProcessorDependencies:
         open_connection=legacy_main.open_connection,
         suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
         is_event_processed=legacy_main.is_event_processed,
-        fetch_article_for_update=legacy_main.fetch_article_for_update,
+        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
         find_prompt_template=legacy_main.find_prompt_template,
         get_llm_review_monthly_quota_snapshot=legacy_main.get_llm_review_monthly_quota_snapshot,
         resolve_criterion_gray_zone_runtime_resolution=legacy_main.resolve_criterion_gray_zone_runtime_resolution,
@@ -91,7 +91,7 @@ async def process_llm_review_with_dependencies(
                 if await deps.is_event_processed(cursor, LLM_REVIEW_CONSUMER, event_id):
                     return {"status": "duplicate-event", "docId": doc_id, "scope": scope}
 
-                article = await deps.fetch_article_for_update(cursor, doc_id)
+                signal_candidate = await deps.fetch_signal_candidate_for_update(cursor, doc_id)
                 await cursor.execute(
                     """
                     select
@@ -115,7 +115,7 @@ async def process_llm_review_with_dependencies(
                     str(prompt_template.get("template_text"))
                     if prompt_template is not None
                     else (
-                        "Review the news match below and respond with JSON "
+                        "Review the signal match below and respond with JSON "
                         '{"decision":"approve|reject|uncertain","score":0.0,"reason":"..."}.\n'
                         "Title: {title}\nLead: {lead}\nBody: {body}\nContext: {context}"
                     )
@@ -135,7 +135,7 @@ async def process_llm_review_with_dependencies(
                         order by cmr.created_at desc
                         limit 1
                         """,
-                        (article["doc_id"], target_id),
+                        (signal_candidate["doc_id"], target_id),
                     )
                     review_context = await cursor.fetchone() or {}
                 else:
@@ -153,7 +153,7 @@ async def process_llm_review_with_dependencies(
                         order by imr.created_at desc
                         limit 1
                         """,
-                        (article["doc_id"], target_id),
+                        (signal_candidate["doc_id"], target_id),
                     )
                     review_context = await cursor.fetchone() or {}
 
@@ -183,13 +183,13 @@ async def process_llm_review_with_dependencies(
                             (
                                 final_decision,
                                 Json({"llmBudgetGate": llm_budget_gate_explain}),
-                                article["doc_id"],
+                                signal_candidate["doc_id"],
                                 target_id,
                             ),
                         )
                         filter_context = await deps.resolve_interest_filter_context(
                             cursor,
-                            article=article,
+                            signal_candidate=signal_candidate,
                             prefer_story_cluster=False,
                         )
                         (
@@ -206,7 +206,7 @@ async def process_llm_review_with_dependencies(
                         await deps.upsert_interest_filter_result(
                             cursor,
                             filter_scope="system_criterion",
-                            doc_id=uuid.UUID(str(article["doc_id"])),
+                            doc_id=uuid.UUID(str(signal_candidate["doc_id"])),
                             canonical_document_id=filter_context["canonicalDocumentId"],
                             story_cluster_id=filter_context["storyClusterId"],
                             user_id=None,
@@ -235,7 +235,7 @@ async def process_llm_review_with_dependencies(
                         )
                         system_feed_result = await deps.upsert_system_feed_result(
                             cursor,
-                            article["doc_id"],
+                            signal_candidate["doc_id"],
                         )
                         if (
                             deps.should_dispatch_clustering(system_feed_result)
@@ -244,10 +244,10 @@ async def process_llm_review_with_dependencies(
                         ):
                             await deps.insert_outbox_event(
                                 cursor,
-                                ARTICLE_CRITERIA_MATCHED_EVENT,
-                                "article",
-                                article["doc_id"],
-                                {"docId": str(article["doc_id"]), "version": 1},
+                                SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+                                "signal_candidate",
+                                signal_candidate["doc_id"],
+                                {"docId": str(signal_candidate["doc_id"]), "version": 1},
                             )
                         await deps.record_processed_event(
                             cursor,
@@ -264,7 +264,7 @@ async def process_llm_review_with_dependencies(
 
                 prompt = deps.render_llm_prompt_template(
                     template_text,
-                    article=article,
+                    signal_candidate=signal_candidate,
                     review_context=review_context,
                     scope=scope,
                 )
@@ -292,7 +292,7 @@ async def process_llm_review_with_dependencies(
                     returning review_id
                     """,
                     (
-                        article["doc_id"],
+                        signal_candidate["doc_id"],
                         "criterion" if scope == "criterion" else "interest",
                         target_id,
                         prompt_template["prompt_template_id"] if prompt_template is not None else None,
@@ -314,7 +314,7 @@ async def process_llm_review_with_dependencies(
                 if scope == "criterion":
                     await deps.persist_criterion_review_resolution(
                         cursor,
-                        article=article,
+                        signal_candidate=signal_candidate,
                         criterion_id=target_id,
                         review_context=review_context,
                         provider_decision=review_result.decision,
@@ -356,13 +356,13 @@ async def process_llm_review_with_dependencies(
                                     }
                                 }
                             ),
-                            article["doc_id"],
+                            signal_candidate["doc_id"],
                             target_id,
                         ),
                     )
                     filter_context = await deps.resolve_interest_filter_context(
                         cursor,
-                        article=article,
+                        signal_candidate=signal_candidate,
                         prefer_story_cluster=True,
                     )
                     (
@@ -381,7 +381,7 @@ async def process_llm_review_with_dependencies(
                     await deps.upsert_interest_filter_result(
                         cursor,
                         filter_scope="user_interest",
-                        doc_id=uuid.UUID(str(article["doc_id"])),
+                        doc_id=uuid.UUID(str(signal_candidate["doc_id"])),
                         canonical_document_id=filter_context["canonicalDocumentId"],
                         story_cluster_id=filter_context["storyClusterId"],
                         user_id=uuid.UUID(str(review_context["user_id"])),
@@ -410,10 +410,10 @@ async def process_llm_review_with_dependencies(
                     ):
                         await deps.insert_outbox_event(
                             cursor,
-                            ARTICLE_INTERESTS_MATCHED_EVENT,
-                            "article",
-                            article["doc_id"],
-                            {"docId": str(article["doc_id"]), "version": 1},
+                            SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT,
+                            "signal_candidate",
+                            signal_candidate["doc_id"],
+                            {"docId": str(signal_candidate["doc_id"]), "version": 1},
                         )
 
                 await deps.record_processed_event(cursor, LLM_REVIEW_CONSUMER, event_id)

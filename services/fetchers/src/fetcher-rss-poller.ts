@@ -18,7 +18,7 @@ import { validateAcquisitionUrl } from "./probe-url-guard";
 import type {
   ChannelPollCompletion,
   CursorMap,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow
 } from "./fetcher-persistence";
 
@@ -29,13 +29,13 @@ interface RssChannelPollerDependencies {
   loadCursorMap: (channelId: string) => Promise<CursorMap>;
   persistInputsWithPreflight: (
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ) => Promise<{ ingestedCount: number; duplicateCount: number }>;
   markChannelSuccess: (
     channel: SourceChannelRow,
     completion: ChannelPollCompletion
   ) => Promise<void>;
-  addDuplicateArticleCount: (count: number) => void;
+  addDuplicateSignalCandidateCount: (count: number) => void;
   adapterStrategy?: FeedIngressAdapterStrategy;
   adapterMaxEntryAgeHours?: number | null;
 }
@@ -51,7 +51,7 @@ export async function pollRssProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: `RSS channel ${channel.channelId} is missing fetchUrl.`
@@ -66,7 +66,7 @@ export async function pollRssProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -109,7 +109,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -128,7 +128,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: cursorValue !== (cursors.timestamp?.cursorValue ?? null),
       errorMessage: null,
@@ -162,7 +162,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after")),
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -177,7 +177,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -191,7 +191,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -210,7 +210,7 @@ export async function pollRssProviderChannel(
     });
     const items = adaptedFeed.entries;
     let invalidItemCount = 0;
-    const inputs: PersistArticleInput[] = [];
+    const inputs: PersistSignalCandidateInput[] = [];
     for (const item of items) {
       const input = buildRssPersistInput(
         channel,
@@ -246,7 +246,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: adaptedFeed.parsedFeed.entries.slice(0, rssConfig.maxItemsPerPoll).length,
-      newArticleCount: ingestedCount,
+      newSignalCandidateCount: ingestedCount,
       duplicateSuppressedCount: duplicateCount,
       cursorChanged:
         (response.headers.get("etag") ?? null) !== (cursors.etag?.cursorValue ?? null) ||
@@ -269,7 +269,7 @@ export async function pollRssProviderChannel(
         }
       ]
     });
-    dependencies.addDuplicateArticleCount(
+    dependencies.addDuplicateSignalCandidateCount(
       invalidItemCount + adaptedFeed.droppedAdapterCount + adaptedFeed.droppedStaleCount
     );
   } catch (error) {
@@ -279,7 +279,7 @@ export async function pollRssProviderChannel(
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message

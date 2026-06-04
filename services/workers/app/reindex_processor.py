@@ -25,7 +25,7 @@ class ReindexProcessorDependencies:
     read_reindex_job_context: Callable[..., Awaitable[tuple[str, dict[str, Any]]]]
     interest_indexer: Any
     read_active_selection_profile_snapshot: Callable[..., Awaitable[dict[str, Any]]]
-    replay_historical_articles: Callable[..., Awaitable[dict[str, Any]]]
+    replay_historical_signal_candidates: Callable[..., Awaitable[dict[str, Any]]]
     normalize_content_analysis_backfill_modules: Callable[..., set[str]]
     normalize_content_analysis_backfill_subject_types: Callable[..., set[str]]
     replay_content_analysis: Callable[..., Awaitable[dict[str, Any]]]
@@ -41,7 +41,7 @@ def build_reindex_processor_dependencies() -> ReindexProcessorDependencies:
         read_reindex_job_context=legacy_main.read_reindex_job_context,
         interest_indexer=legacy_main.INTEREST_INDEXER,
         read_active_selection_profile_snapshot=legacy_main.read_active_selection_profile_snapshot,
-        replay_historical_articles=legacy_main.replay_historical_articles,
+        replay_historical_signal_candidates=legacy_main.replay_historical_signal_candidates,
         normalize_content_analysis_backfill_modules=legacy_main.normalize_content_analysis_backfill_modules,
         normalize_content_analysis_backfill_subject_types=legacy_main.normalize_content_analysis_backfill_subject_types,
         replay_content_analysis=legacy_main.replay_content_analysis,
@@ -145,7 +145,7 @@ async def process_reindex_with_dependencies(
             include_enrichment = coerce_bool(job_options.get("includeEnrichment"))
             force_enrichment = coerce_bool(job_options.get("forceEnrichment"))
             selection_profile_snapshot = await deps.read_active_selection_profile_snapshot()
-            result["backfill"] = await deps.replay_historical_articles(
+            result["backfill"] = await deps.replay_historical_signal_candidates(
                 reindex_job_id=reindex_job_id,
                 batch_size=batch_size,
                 doc_ids=target_doc_ids or None,

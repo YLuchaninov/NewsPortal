@@ -20,7 +20,7 @@ def _make_json_safe(value: Any) -> Any:
 def render_llm_prompt_template(
     template_text: str,
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     review_context: Mapping[str, Any],
     scope: str,
 ) -> str:
@@ -37,12 +37,12 @@ def render_llm_prompt_template(
         else ""
     )
     replacements = {
-        "{title}": str(article.get("title") or ""),
-        "{{title}}": str(article.get("title") or ""),
-        "{lead}": str(article.get("lead") or ""),
-        "{{lead}}": str(article.get("lead") or ""),
-        "{body}": str(article.get("body") or "")[:4000],
-        "{{body}}": str(article.get("body") or "")[:4000],
+        "{title}": str(signal_candidate.get("title") or ""),
+        "{{title}}": str(signal_candidate.get("title") or ""),
+        "{lead}": str(signal_candidate.get("lead") or ""),
+        "{{lead}}": str(signal_candidate.get("lead") or ""),
+        "{body}": str(signal_candidate.get("body") or "")[:4000],
+        "{{body}}": str(signal_candidate.get("body") or "")[:4000],
         "{context}": context_text,
         "{{context}}": context_text,
         "{explain_json}": context_text,

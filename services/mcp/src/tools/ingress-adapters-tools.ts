@@ -78,7 +78,7 @@ const bindingSetSchema = {
 } satisfies JsonSchema;
 
 const STATUSES = new Set(["active", "draft", "disabled", "archived"]);
-const OUTPUT_MODES = new Set(["articles", "web_resources", "mixed"]);
+const OUTPUT_MODES = new Set(["signal_candidates", "web_resources", "mixed"]);
 const SELECTION_MODES = new Set(["manual", "mcp", "auto", "migration", "builtin_default"]);
 const SECRET_FIELD_PARTS = ["authorization", "cookie", "password", "secret", "token", "api_key", "apikey"];
 const DECLARATIVE_RECIPE_TOP_LEVEL_KEYS = new Set([
@@ -428,7 +428,7 @@ export const INGRESS_ADAPTER_MCP_TOOLS: readonly McpToolDefinition[] = [
           statusCode: 400,
         });
       }
-      const outputMode = readEnum(payload.outputMode, "payload.outputMode", OUTPUT_MODES, "articles");
+      const outputMode = readEnum(payload.outputMode, "payload.outputMode", OUTPUT_MODES, "signal_candidates");
       const status = readEnum(payload.status, "payload.status", STATUSES, "draft");
       const matchRules = asJsonObject(payload.matchRules);
       const configSchema = asJsonObject(payload.configSchema);
@@ -540,7 +540,7 @@ export const INGRESS_ADAPTER_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "ingress.adapters.dry_run",
-    "Dry-run an ingress adapter through the fetchers internal runtime. The dry-run does not write articles, resources, cursors or outbox rows.",
+    "Dry-run an ingress adapter through the fetchers internal runtime. The dry-run does not write signal_candidates, resources, cursors or outbox rows.",
     adapterDryRunSchema,
     async (_context, args) => {
       const baseUrl = (process.env.FETCHERS_INTERNAL_BASE_URL ?? "http://fetchers:4100").replace(/\/+$/u, "");

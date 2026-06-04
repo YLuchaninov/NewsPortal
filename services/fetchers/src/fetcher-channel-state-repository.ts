@@ -409,7 +409,7 @@ export class FetcherChannelStateRepository {
           retry_after_seconds,
           fetch_duration_ms,
           fetched_item_count,
-          new_article_count,
+          new_signal_candidate_count,
           duplicate_suppressed_count,
           cursor_changed,
           error_text,
@@ -457,7 +457,7 @@ export class FetcherChannelStateRepository {
           new Date(completion.finishedAt).getTime() - new Date(completion.startedAt).getTime()
         ),
         completion.fetchedItemCount,
-        completion.newArticleCount,
+        completion.newSignalCandidateCount,
         completion.duplicateSuppressedCount,
         completion.cursorChanged,
         completion.errorMessage,

@@ -62,7 +62,7 @@ export function ContentItemCard({
   );
   const canReact =
     isLoggedIn &&
-    contentItem.origin_type === "editorial" &&
+    contentItem.origin_type === "signal_candidate" &&
     !!String(contentItem.origin_id ?? "").trim();
   const canManageState = isLoggedIn && !!contentStatePath && userState != null;
 

@@ -10,7 +10,7 @@ from services.workers.app import reindex_backfill_runtime
 
 
 class WorkerHardFilterTests(unittest.TestCase):
-    def _make_article(
+    def _make_signal_candidate(
         self,
         *,
         title: str,
@@ -29,10 +29,10 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_must_have_terms_pass_when_any_term_matches(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Enterprise launches vendor selection for ERP implementation partner"
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={
                 "must_have_terms": ["rfp", "vendor selection"],
                 "time_window_hours": 168,
@@ -45,10 +45,10 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_must_have_terms_fail_only_when_no_term_matches(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Company announces new internal platform roadmap"
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={
                 "must_have_terms": ["rfp", "vendor selection"],
                 "time_window_hours": 168,
@@ -60,14 +60,14 @@ class WorkerHardFilterTests(unittest.TestCase):
         self.assertTrue(within_window)
 
     def test_blank_time_window_behaves_as_no_age_limit(self) -> None:
-        article = self._make_article(title="Old but still relevant")
-        article["published_at"] = (
+        signal_candidate = self._make_signal_candidate(title="Old but still relevant")
+        signal_candidate["published_at"] = (
             datetime.now(timezone.utc) - timedelta(days=365)
         ).isoformat()
 
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=article,
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate=signal_candidate,
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -77,10 +77,10 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_global_place_constraint_behaves_as_worldwide_wildcard(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Netherlands software development tender notice"
             ),
-            article_features={"places": ["Netherlands"], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": ["Netherlands"], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={
                 "places": ["global"],
                 "time_window_hours": 168,
@@ -93,14 +93,14 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_wrapper_directory_noise_without_direct_request_signal(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Cold Calling Remote Jobs: Work Remote & Earn Online",
                 body=(
                     "Browse by Category. Browse profiles. Find work. "
                     "Search buyers can search offers to buy now."
                 ),
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -110,14 +110,14 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_keeps_buyer_request_page_even_with_marketplace_wrapper_text(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Looking for Developer Support on Ongoing Technical Projects",
                 body=(
                     "Post Project. Browse by Category. Browse profiles. "
                     "Search providers to request a proposal."
                 ),
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -127,11 +127,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_marketplace_category_url_without_project_id(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="ERP/CRM Development",
                 url="https://www.peopleperhour.com/freelance-jobs/technology-programming/erp-crm-development",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -141,11 +141,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_keeps_marketplace_project_detail_url_with_project_id(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Need Shopify POS custom app developer",
                 url="https://www.peopleperhour.com/freelance-jobs/technology-programming/shopify-pos-custom-app-987654",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -155,11 +155,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_search_ad_click_url(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Hubspot developer - Contact Us & Get Started - 4.9/5 on Clutch",
                 url="https://www.bing.com/aclick?u=https%3A%2F%2Fvendor.example%2Fservices",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -169,11 +169,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_generic_advice_without_buyer_request(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="How to Hire Dedicated Node.js Developers for Your Team",
                 url="https://www.linkedin.com/pulse/how-hire-dedicated-nodejs-developers",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -183,11 +183,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_professional_network_pulse_even_when_title_says_looking_for(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Looking for a talented developer with automation experience",
                 url="https://www.linkedin.com/pulse/looking-talented-developer-knack-automation",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -197,11 +197,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_professional_network_job_posts_as_selection_noise(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Senior ServiceNow Developer - Full Remote Contractor in USD",
                 url="https://www.linkedin.com/jobs/view/senior-servicenow-developer",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -211,11 +211,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_keeps_non_job_social_post_with_project_proposal_markers(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="Looking for developer partner for fixed-price CRM integration proposal",
                 url="https://www.linkedin.com/posts/example-looking-for-developer",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -225,11 +225,11 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_rejects_tag_filter_pages(self) -> None:
         passes, reasons, within_window = worker_main.passes_hard_filters(
-            article=self._make_article(
+            signal_candidate=self._make_signal_candidate(
                 title="on hand | Odoo",
                 url="https://www.odoo.com/forum/help-1/tag/on-hand-11883/questions?filters=tag",
             ),
-            article_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
+            signal_candidate_features={"places": [], "short_tokens": [], "entities": [], "numbers": []},
             hard_constraints={},
         )
 
@@ -240,7 +240,7 @@ class WorkerHardFilterTests(unittest.TestCase):
     def test_content_analysis_backfill_defaults_are_safe(self) -> None:
         self.assertEqual(
             worker_main.normalize_content_analysis_backfill_subject_types(None),
-            ["article", "web_resource", "story_cluster"],
+            ["signal_candidate", "web_resource", "story_cluster"],
         )
         self.assertEqual(
             worker_main.normalize_content_analysis_backfill_modules(None),
@@ -271,7 +271,7 @@ class WorkerHardFilterTests(unittest.TestCase):
             job_kind="backfill",
             options_json={
                 "batchSize": 50,
-                "progress": {"processedArticles": 1},
+                "progress": {"processedSignalCandidates": 1},
                 "docIds": ["b", "a"],
                 "includeEnrichment": False,
             },
@@ -281,7 +281,7 @@ class WorkerHardFilterTests(unittest.TestCase):
             job_kind="backfill",
             options_json={
                 "batchSize": 500,
-                "backfill": {"processedArticles": 99},
+                "backfill": {"processedSignalCandidates": 99},
                 "docIds": ["a", "b"],
                 "includeEnrichment": False,
             },
@@ -326,14 +326,14 @@ class WorkerHardFilterTests(unittest.TestCase):
 
     def test_content_analysis_missing_clause_supports_structured_extraction(self) -> None:
         clause, params = worker_main.build_content_analysis_missing_clause(
-            subject_type="article",
+            subject_type="signal_candidate",
             modules={"structured_extraction"},
             policy_key="recent_gate",
             alias="a.doc_id",
         )
 
         self.assertIn("analysis_type = 'structured_extraction'", clause)
-        self.assertEqual(params, ["article"])
+        self.assertEqual(params, ["signal_candidate"])
 
 
 if __name__ == "__main__":

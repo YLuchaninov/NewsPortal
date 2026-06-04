@@ -17,13 +17,13 @@ install_psycopg_stub(connection=SubscriptableConnection, json_wrapper=JsonValueW
 from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
 from services.workers.app.task_engine.exceptions import TaskExecutionError
 from services.workers.app.task_engine.plugin_contracts import TaskPluginOutputCaps
-from services.workers.app.task_engine.pipeline_article_plugins import (
-    EmbedArticlePlugin,
+from services.workers.app.task_engine.pipeline_signal_candidate_plugins import (
+    EmbedSignalCandidatePlugin,
     LlmReviewPlugin,
     MatchInterestsPlugin,
 )
 from services.workers.app.task_engine.pipeline_enrichment_plugins import (
-    ArticleExtractPlugin,
+    SignalCandidateExtractPlugin,
     ResourceExtractPlugin,
 )
 from services.workers.app.task_engine.pipeline_maintenance_plugins import (
@@ -77,14 +77,14 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
         self.assertEqual(
             modules,
             {
-                "article.cluster",
-                "article.dedup",
-                "article.embed",
-                "article.llm_review",
-                "article.match_criteria",
-                "article.match_interests",
-                "article.normalize",
-                "article.notify",
+                "signal_candidate.cluster",
+                "signal_candidate.dedup",
+                "signal_candidate.embed",
+                "signal_candidate.llm_review",
+                "signal_candidate.match_criteria",
+                "signal_candidate.match_interests",
+                "signal_candidate.normalize",
+                "signal_candidate.notify",
                 "content.filter_gate",
                 "content.category_classify",
                 "content.cluster_summary_project",
@@ -92,7 +92,7 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
                 "content.sentiment_analyze",
                 "content.structured_extract",
                 "content.system_interest_label_project",
-                "enrichment.article_extract",
+                "enrichment.signal_candidate_extract",
                 "enrichment.resource_extract",
                 "discovery.content_sampler",
                 "discovery.llm_analyzer",
@@ -102,8 +102,8 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
                 "discovery.url_validator",
                 "discovery.web_search",
                 "discovery.website_probe",
-                "enrichment.article_enricher",
-                "enrichment.article_loader",
+                "enrichment.signal_candidate_enricher",
+                "enrichment.signal_candidate_loader",
                 "maintenance.criterion_compile",
                 "maintenance.feedback_ingest",
                 "maintenance.interest_compile",
@@ -112,8 +112,8 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
             },
         )
         by_module = {item["module"]: item for item in registry.list_all()}
-        embed_contract = by_module["article.embed"]["contract"]
-        self.assertEqual(embed_contract["module"], "article.embed")
+        embed_contract = by_module["signal_candidate.embed"]["contract"]
+        self.assertEqual(embed_contract["module"], "signal_candidate.embed")
         self.assertEqual(
             embed_contract["retry_classification"],
             "task_retry_with_transient_database_retry",
@@ -160,7 +160,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
                 "dimensions": 384,
             }
 
-        plugin = EmbedArticlePlugin()
+        plugin = EmbedSignalCandidatePlugin()
         with patch(
             "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
@@ -193,7 +193,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["dimensions"], 384)
         self.assertEqual(result["legacy_handler"], "process_embed")
 
-    async def test_article_extract_plugin_calls_fetchers_contract_and_normalizes_context(self) -> None:
+    async def test_signal_candidate_extract_plugin_calls_fetchers_contract_and_normalizes_context(self) -> None:
         captured: dict[str, Any] = {}
 
         def fake_request(job_data: dict[str, Any]) -> dict[str, Any]:
@@ -206,7 +206,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
                 "media_asset_count": 2,
             }
 
-        plugin = ArticleExtractPlugin()
+        plugin = SignalCandidateExtractPlugin()
         with patch.object(plugin, "_request_enrichment", side_effect=fake_request):
             result = await plugin.execute(
                 options={"force_enrichment": True},
@@ -273,8 +273,8 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["projected_doc_id"], "doc-123")
         self.assertTrue(result["force_enrichment"])
 
-    def test_article_extract_request_retries_transient_transport_failure(self) -> None:
-        plugin = ArticleExtractPlugin()
+    def test_signal_candidate_extract_request_retries_transient_transport_failure(self) -> None:
+        plugin = SignalCandidateExtractPlugin()
         attempts: list[int] = []
 
         def fake_urlopen(*_args: Any, **_kwargs: Any) -> _FakeUrlopenResponse:
@@ -302,8 +302,8 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "enriched")
         self.assertEqual(result["enrichmentState"], "enriched")
 
-    def test_article_extract_request_raises_retryable_error_after_transient_failures_exhaust(self) -> None:
-        plugin = ArticleExtractPlugin()
+    def test_signal_candidate_extract_request_raises_retryable_error_after_transient_failures_exhaust(self) -> None:
+        plugin = SignalCandidateExtractPlugin()
 
         with patch(
             "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
@@ -355,10 +355,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "enriched")
         self.assertEqual(result["resourceKind"], "editorial")
 
-    def test_article_extract_request_does_not_retry_permanent_http_errors(self) -> None:
-        plugin = ArticleExtractPlugin()
+    def test_signal_candidate_extract_request_does_not_retry_permanent_http_errors(self) -> None:
+        plugin = SignalCandidateExtractPlugin()
         http_error = HTTPError(
-            url="http://fetchers/internal/enrichment/articles/doc-permanent",
+            url="http://fetchers/internal/enrichment/signal-candidates/doc-permanent",
             code=400,
             msg="Bad Request",
             hdrs=None,

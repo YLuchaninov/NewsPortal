@@ -9,13 +9,13 @@ from services.api.app import main as api_main
 
 
 class ApiFeedDedupTests(unittest.TestCase):
-    def test_processed_article_clause_includes_final_system_gate_rows(self) -> None:
-        clause = api_main.processed_article_clause("articles")
+    def test_processed_signal_candidate_clause_includes_final_system_gate_rows(self) -> None:
+        clause = api_main.processed_signal_candidate_clause("signal_candidates")
 
-        self.assertIn("articles.processing_state in ('matched', 'notified')", clause)
+        self.assertIn("signal_candidates.processing_state in ('matched', 'notified')", clause)
         self.assertIn("from final_selection_results fsr_processed", clause)
         self.assertIn("from system_feed_results sfr_processed", clause)
-        self.assertIn("sfr_processed.doc_id = articles.doc_id", clause)
+        self.assertIn("sfr_processed.doc_id = signal_candidates.doc_id", clause)
         self.assertIn(
             "fsr_processed.final_decision in ('selected', 'rejected', 'gray_zone')",
             clause,
@@ -26,7 +26,7 @@ class ApiFeedDedupTests(unittest.TestCase):
         )
 
     def test_list_system_selected_content_items_uses_canonical_family_dedup(self) -> None:
-        items = [{"content_item_id": "editorial:doc-1", "title": "One copy only"}]
+        items = [{"content_item_id": "signal_candidate:doc-1", "title": "One copy only"}]
         with (
             patch.object(api_main, "query_one", return_value={"total": 2}) as query_one,
             patch.object(api_main, "query_all", return_value=items) as query_all,
@@ -62,7 +62,7 @@ class ApiFeedDedupTests(unittest.TestCase):
     def test_resource_content_items_require_projected_final_selection(self) -> None:
         sql = api_main.resource_content_select_sql(include_internal_fields=True)
 
-        self.assertIn("join articles pa on pa.doc_id = wr.projected_article_id", sql)
+        self.assertIn("join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id", sql)
         self.assertIn("join final_selection_results fsr on fsr.doc_id = pa.doc_id", sql)
         self.assertIn("and pa.visibility_state = 'visible'", sql)
         self.assertIn("and coalesce(fsr.is_selected, false) = true", sql)
@@ -78,7 +78,7 @@ class ApiFeedDedupTests(unittest.TestCase):
 
         self.assertEqual(getattr(caught.exception, "status_code", None), 404)
         sql, params = query_one.call_args.args
-        self.assertIn("join articles pa on pa.doc_id = wr.projected_article_id", sql)
+        self.assertIn("join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id", sql)
         self.assertIn("join final_selection_results fsr on fsr.doc_id = pa.doc_id", sql)
         self.assertIn("and pa.visibility_state = 'visible'", sql)
         self.assertIn("and coalesce(fsr.is_selected, false) = true", sql)
@@ -89,7 +89,7 @@ class ApiFeedDedupTests(unittest.TestCase):
     def test_invalid_public_content_item_id_returns_404_before_query(self) -> None:
         with patch.object(api_main, "query_one") as query_one:
             with self.assertRaises(api_main.HTTPException) as caught:
-                api_main.get_content_item("editorial:not-a-uuid")
+                api_main.get_content_item("signal_candidate:not-a-uuid")
 
         self.assertEqual(caught.exception.status_code, 404)
         query_one.assert_not_called()
@@ -147,7 +147,7 @@ class ApiFeedDedupTests(unittest.TestCase):
 
     def test_dashboard_summary_counts_canonical_feed_families(self) -> None:
         summary = {
-            "active_news": 7,
+            "active_signals": 7,
             "processed_total": 0,
             "processed_today": 0,
             "total_users": 0,
@@ -187,7 +187,7 @@ class ApiFeedDedupTests(unittest.TestCase):
             sql,
         )
         self.assertIn("else coalesce(sfr.eligible_for_feed, false)", sql)
-        self.assertIn("from final_selection_results fsr_processed", api_main.processed_article_clause("a"))
+        self.assertIn("from final_selection_results fsr_processed", api_main.processed_signal_candidate_clause("a"))
         self.assertIn("from system_feed_results sfr_processed", sql)
         budget_sql = query_one.call_args_list[1].args[0]
         self.assertIn("from llm_review_log", budget_sql)

@@ -116,7 +116,7 @@ export function buildChannelEditorViewModel(
       ? isWebsite
         ? "Start with the site entry URL and safe discovery defaults. You can fine-tune crawl behavior below."
         : isApi
-          ? "Start with the JSON endpoint, then map the payload fields that contain article-level content."
+          ? "Start with the JSON endpoint, then map the payload fields that contain signal_candidate-level content."
           : isEmailImap
             ? "Connect one mailbox with IMAP credentials and an optional sender filter for ingest."
             : "Start with the feed endpoint and polling defaults. You can fine-tune advanced fetch settings below."
@@ -145,7 +145,7 @@ export function buildChannelEditorViewModel(
   const urlHelpText = isWebsite
     ? "Must be a valid absolute http(s) website URL. The fetcher will probe sitemaps, feeds, collection pages, and downloadable resources from here."
     : isApi
-      ? "Must be a valid absolute http(s) JSON endpoint. Use the field mapping below to point at the array and properties that contain article data."
+      ? "Must be a valid absolute http(s) JSON endpoint. Use the field mapping below to point at the array and properties that contain signal_candidate data."
       : "Must be a valid absolute http(s) RSS feed URL.";
 
   const urlPlaceholder = isWebsite

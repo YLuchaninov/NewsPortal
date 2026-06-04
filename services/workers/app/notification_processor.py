@@ -7,7 +7,7 @@ from typing import Any
 
 import psycopg
 
-from .article_repository import fetch_article_for_update as default_fetch_article_for_update
+from .signal_candidate_repository import fetch_signal_candidate_for_update as default_fetch_signal_candidate_for_update
 from .runtime_json import coerce_json_object
 from .worker_events import (
     advance_processing_state,
@@ -18,9 +18,9 @@ from .worker_queues import NOTIFY_CONSUMER
 
 
 @dataclass(frozen=True)
-class ArticleNotifyProcessorDependencies:
+class SignalCandidateNotifyProcessorDependencies:
     open_connection: Callable[[], Awaitable[Any]]
-    fetch_article_for_update: Callable[
+    fetch_signal_candidate_for_update: Callable[
         [psycopg.AsyncCursor[Any], str],
         Awaitable[dict[str, Any]],
     ]
@@ -34,13 +34,13 @@ class ArticleNotifyProcessorDependencies:
     update_notification_delivery_status: Callable[..., Awaitable[None]]
 
 
-def build_article_notify_processor_dependencies(
+def build_signal_candidate_notify_processor_dependencies(
     *,
     open_connection: Callable[[], Awaitable[Any]] | None = None,
-    fetch_article_for_update: Callable[
+    fetch_signal_candidate_for_update: Callable[
         [psycopg.AsyncCursor[Any], str],
         Awaitable[dict[str, Any]],
-    ] = default_fetch_article_for_update,
+    ] = default_fetch_signal_candidate_for_update,
     fetch_recent_notification_history: Callable[..., Awaitable[list[dict[str, Any]]]]
     | None = None,
     fetch_user_notification_preferences: Callable[..., Awaitable[dict[str, Any]]] | None = None,
@@ -53,7 +53,7 @@ def build_article_notify_processor_dependencies(
     | None = None,
     dispatch_channel_message: Callable[..., Any] | None = None,
     update_notification_delivery_status: Callable[..., Awaitable[None]] | None = None,
-) -> ArticleNotifyProcessorDependencies:
+) -> SignalCandidateNotifyProcessorDependencies:
     if open_connection is None:
         from .runtime_db import open_connection as default_open_connection
 
@@ -98,9 +98,9 @@ def build_article_notify_processor_dependencies(
         if update_notification_delivery_status is None:
             update_notification_delivery_status = default_update_notification_delivery_status
 
-    return ArticleNotifyProcessorDependencies(
+    return SignalCandidateNotifyProcessorDependencies(
         open_connection=open_connection,
-        fetch_article_for_update=fetch_article_for_update,
+        fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
         fetch_recent_notification_history=fetch_recent_notification_history,
         fetch_user_notification_preferences=fetch_user_notification_preferences,
         fetch_user_notification_channels=fetch_user_notification_channels,
@@ -115,7 +115,7 @@ def build_article_notify_processor_dependencies(
 async def process_notify_with_dependencies(
     job: Any,
     _job_token: str,
-    deps: ArticleNotifyProcessorDependencies,
+    deps: SignalCandidateNotifyProcessorDependencies,
 ) -> dict[str, Any]:
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
@@ -134,7 +134,7 @@ async def process_notify_with_dependencies(
                 if await is_event_processed(cursor, NOTIFY_CONSUMER, event_id):
                     return {"status": "duplicate-event", "docId": doc_id}
 
-                article = await deps.fetch_article_for_update(cursor, doc_id)
+                signal_candidate = await deps.fetch_signal_candidate_for_update(cursor, doc_id)
                 await cursor.execute(
                     """
                     select
@@ -150,7 +150,7 @@ async def process_notify_with_dependencies(
                     where doc_id = %s
                     order by user_id, score_user desc, score_interest desc, created_at desc
                     """,
-                    (article["doc_id"],),
+                    (signal_candidate["doc_id"],),
                 )
                 match_rows = list(await cursor.fetchall())
                 best_by_user: dict[str, dict[str, Any]] = {}
@@ -165,16 +165,16 @@ async def process_notify_with_dependencies(
                     cluster_id = match_row.get("event_cluster_id")
                     explain_json = coerce_json_object(match_row.get("explain_json"))
                     major_update = bool(explain_json.get("majorUpdate"))
-                    if str(article.get("visibility_state") or "visible") == "blocked":
+                    if str(signal_candidate.get("visibility_state") or "visible") == "blocked":
                         await deps.insert_notification_suppression(
                             cursor,
                             user_id=user_id,
                             interest_id=interest_id,
                             notification_id=None,
-                            doc_id=article["doc_id"],
-                            family_id=article.get("family_id"),
+                            doc_id=signal_candidate["doc_id"],
+                            family_id=signal_candidate.get("family_id"),
                             cluster_id=cluster_id,
-                            reason="article_blocked",
+                            reason="signal_candidate_blocked",
                         )
                         suppressed_count += 1
                         continue
@@ -184,7 +184,7 @@ async def process_notify_with_dependencies(
                         user_id=user_id,
                         interest_id=interest_id,
                         cluster_id=cluster_id,
-                        family_id=article.get("family_id"),
+                        family_id=signal_candidate.get("family_id"),
                     )
                     if (
                         history
@@ -196,8 +196,8 @@ async def process_notify_with_dependencies(
                             user_id=user_id,
                             interest_id=interest_id,
                             notification_id=None,
-                            doc_id=article["doc_id"],
-                            family_id=article.get("family_id"),
+                            doc_id=signal_candidate["doc_id"],
+                            family_id=signal_candidate.get("family_id"),
                             cluster_id=cluster_id,
                             reason="recent_send_history",
                         )
@@ -210,8 +210,8 @@ async def process_notify_with_dependencies(
                             user_id=user_id,
                             interest_id=interest_id,
                             notification_id=None,
-                            doc_id=article["doc_id"],
-                            family_id=article.get("family_id"),
+                            doc_id=signal_candidate["doc_id"],
+                            family_id=signal_candidate.get("family_id"),
                             cluster_id=cluster_id,
                             reason="interest_gray_zone_llm_disabled",
                         )
@@ -221,8 +221,8 @@ async def process_notify_with_dependencies(
                     if match_row["decision"] != "notify":
                         continue
 
-                    title = str(article.get("title") or "News update")
-                    body = str(article.get("lead") or article.get("body") or "")[:500]
+                    title = str(signal_candidate.get("title") or "Signal update")
+                    body = str(signal_candidate.get("lead") or signal_candidate.get("body") or "")[:500]
                     notification_preferences = await deps.fetch_user_notification_preferences(
                         cursor,
                         user_id,
@@ -239,8 +239,8 @@ async def process_notify_with_dependencies(
                                 user_id=user_id,
                                 interest_id=interest_id,
                                 notification_id=None,
-                                doc_id=article["doc_id"],
-                                family_id=article.get("family_id"),
+                                doc_id=signal_candidate["doc_id"],
+                                family_id=signal_candidate.get("family_id"),
                                 cluster_id=cluster_id,
                                 reason=f"preference_disabled:{channel_type}",
                             )
@@ -251,7 +251,7 @@ async def process_notify_with_dependencies(
                             cursor,
                             user_id=user_id,
                             interest_id=interest_id,
-                            doc_id=article["doc_id"],
+                            doc_id=signal_candidate["doc_id"],
                             cluster_id=cluster_id,
                             channel_type=channel_type,
                             status="queued",
@@ -284,18 +284,18 @@ async def process_notify_with_dependencies(
 
                 if sent_count > 0:
                     next_state = advance_processing_state(
-                        article.get("processing_state"),
+                        signal_candidate.get("processing_state"),
                         "notified",
                     )
                     await cursor.execute(
                         """
-                        update articles
+                        update signal_candidates
                         set
                           processing_state = %s,
                           updated_at = now()
                         where doc_id = %s
                         """,
-                        (next_state, article["doc_id"]),
+                        (next_state, signal_candidate["doc_id"]),
                     )
                 await record_processed_event(cursor, NOTIFY_CONSUMER, event_id)
 
@@ -312,5 +312,5 @@ async def process_notify(job: Any, job_token: str) -> dict[str, Any]:
     return await process_notify_with_dependencies(
         job,
         job_token,
-        build_article_notify_processor_dependencies(),
+        build_signal_candidate_notify_processor_dependencies(),
     )

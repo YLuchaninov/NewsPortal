@@ -60,7 +60,7 @@ function buildCards(summary: AdminDashboardSummarySnapshot) {
     },
     {
       label: "System-selected",
-      value: String(summary.activeNews),
+      value: String(summary.activeSignals),
       color: "text-emerald-500",
     },
     {

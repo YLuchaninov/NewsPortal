@@ -11,12 +11,12 @@ import {
 test("content analysis helper normalizes bounded backfill list fields", () => {
   assert.deepEqual(
     normalizeContentAnalysisBackfillPayload({
-      subjectTypes: "article,web_resource",
+      subjectTypes: "signal_candidate,web_resource",
       modules: ["ner", "content_filter"],
       subjectIds: "doc-1, doc-2",
     }),
     {
-      subjectTypes: ["article", "web_resource"],
+      subjectTypes: ["signal_candidate", "web_resource"],
       modules: ["ner", "content_filter"],
       subjectIds: ["doc-1", "doc-2"],
     },

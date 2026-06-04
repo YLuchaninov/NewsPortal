@@ -10,10 +10,10 @@ from services.api.app.content_query import (
     strip_web_content_internal_fields,
 )
 from services.api.app.content_selection_read_model import (
-    canonical_article_family_expr,
+    canonical_signal_candidate_family_expr,
     effective_system_selected_expr,
     effective_system_selection_decision_expr,
-    feed_eligible_article_clause,
+    feed_eligible_signal_candidate_clause,
     final_selection_join_clause,
     primary_media_join_clause,
     system_feed_join_clause,
@@ -37,12 +37,12 @@ def list_user_matches(
         [list[dict[str, Any]], int, int, int], dict[str, Any]
     ],
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    family_expr = canonical_article_family_expr("a")
+    family_expr = canonical_signal_candidate_family_expr("a")
     ranked_match_select = f"""
         select
-          {repr('editorial:')} || a.doc_id::text as content_item_id,
+          {repr('signal_candidate:')} || a.doc_id::text as content_item_id,
           coalesce(a.content_kind, 'editorial')::text as content_kind,
-          'editorial'::text as origin_type,
+          'signal_candidate'::text as origin_type,
           a.doc_id::text as origin_id,
           a.url,
           a.title,
@@ -83,16 +83,16 @@ def list_user_matches(
               a.doc_id
           ) as family_rank
         from interest_match_results imr
-        join articles a on a.doc_id = imr.doc_id
+        join signal_candidates a on a.doc_id = imr.doc_id
         join source_channels sc on sc.channel_id = a.channel_id
         join user_interests ui on ui.interest_id = imr.interest_id
         {final_selection_join_clause("a", "fsr")}
         {system_feed_join_clause("a", "sfr")}
         {primary_media_join_clause("a", "pma")}
-        left join article_reaction_stats ars on ars.doc_id = a.doc_id
+        left join signal_candidate_reaction_stats ars on ars.doc_id = a.doc_id
         where imr.user_id = %s
           and imr.decision = 'notify'
-          and {feed_eligible_article_clause("a", "fsr", "sfr")}
+          and {feed_eligible_signal_candidate_clause("a", "fsr", "sfr")}
     """
     paginate, resolved_page, resolved_page_size, offset = resolve_pagination_func(
         page, page_size, limit

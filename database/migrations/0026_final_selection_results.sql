@@ -1,5 +1,5 @@
 create table if not exists final_selection_results (
-  doc_id uuid primary key references articles (doc_id) on delete cascade,
+  doc_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   canonical_document_id uuid references canonical_documents (canonical_document_id) on delete set null,
   story_cluster_id uuid references story_clusters (story_cluster_id) on delete set null,
   verification_target_type text,

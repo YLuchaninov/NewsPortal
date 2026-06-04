@@ -24,7 +24,7 @@ TRACKING_PARAMS = {
     "utm_term",
 }
 DATE_SEGMENT_RE = re.compile(r"^(?:19|20)\d{2}$|^\d{1,2}$")
-ITEM_SEGMENT_RE = re.compile(r"(\d{4}[/_-]\d{1,2}|[a-z0-9-]{18,}|bid_detail|detail|notice|article|post|item|view)", re.I)
+ITEM_SEGMENT_RE = re.compile(r"(\d{4}[/_-]\d{1,2}|[a-z0-9-]{18,}|bid_detail|detail|notice|signal_candidate|post|item|view)", re.I)
 STATIC_CONTEXT_TOKENS = (
     "/pricing",
     "/services",

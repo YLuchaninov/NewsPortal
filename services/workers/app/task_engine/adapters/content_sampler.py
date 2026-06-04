@@ -20,35 +20,35 @@ class FetchersContentSamplerAdapter:
         self,
         *,
         source_urls: list[str],
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         for source_url in source_urls:
-            articles = self._sample_feed(source_url, article_count, max_chars)
-            if not articles:
-                articles = self._sample_website(source_url, article_count, max_chars)
-            if not articles:
-                articles = [
+            signal_candidates = self._sample_feed(source_url, signal_candidate_count, max_chars)
+            if not signal_candidates:
+                signal_candidates = self._sample_website(source_url, signal_candidate_count, max_chars)
+            if not signal_candidates:
+                signal_candidates = [
                     {
                         "title": "",
                         "url": source_url,
                         "content": "No feed or website samples were returned by fetchers.",
                     }
                 ]
-            results.append({"source_url": source_url, "articles": articles[:article_count]})
+            results.append({"source_url": source_url, "signal_candidates": signal_candidates[:signal_candidate_count]})
         return results
 
     def _sample_feed(
         self,
         source_url: str,
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> list[dict[str, str]]:
         try:
             probed = self._rss_probe.probe_feeds(
                 urls=[source_url],
-                sample_count=article_count,
+                sample_count=signal_candidate_count,
             )
         except Exception:
             return []
@@ -71,18 +71,18 @@ class FetchersContentSamplerAdapter:
             }
             for entry in sample_entries
             if isinstance(entry, dict)
-        ][:article_count]
+        ][:signal_candidate_count]
 
     def _sample_website(
         self,
         source_url: str,
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> list[dict[str, str]]:
         try:
             probed = self._website_probe.probe_websites(
                 urls=[source_url],
-                sample_count=article_count,
+                sample_count=signal_candidate_count,
             )
         except Exception:
             return []
@@ -90,17 +90,17 @@ class FetchersContentSamplerAdapter:
         first_probe = probed[0] if probed and isinstance(probed[0], dict) else None
         if not first_probe:
             return []
-        sample_articles = first_probe.get("sample_articles")
-        if isinstance(sample_articles, list) and sample_articles:
+        sample_signal_candidates = first_probe.get("sample_signal_candidates")
+        if isinstance(sample_signal_candidates, list) and sample_signal_candidates:
             return [
                 {
                     "title": str(entry.get("title") or first_probe.get("title") or ""),
                     "url": str(entry.get("url") or first_probe.get("final_url") or source_url),
                     "content": str(entry.get("title") or first_probe.get("title") or "")[:max_chars],
                 }
-                for entry in sample_articles
+                for entry in sample_signal_candidates
                 if isinstance(entry, dict)
-            ][:article_count]
+            ][:signal_candidate_count]
 
         sample_resources = first_probe.get("sample_resources")
         if isinstance(sample_resources, list) and sample_resources:
@@ -117,7 +117,7 @@ class FetchersContentSamplerAdapter:
                 }
                 for entry in sample_resources
                 if isinstance(entry, dict)
-            ][:article_count]
+            ][:signal_candidate_count]
 
         title = str(first_probe.get("title") or "")
         final_url = str(first_probe.get("final_url") or source_url)

@@ -102,7 +102,7 @@ async function main() {
         [
           {
             key: "normalize",
-            module: "article.normalize",
+            module: "signal_candidate.normalize",
             options: {},
           },
         ],
@@ -151,7 +151,7 @@ async function main() {
         [
           {
             key: "normalize",
-            module: "article.normalize",
+            module: "signal_candidate.normalize",
             options: {},
           },
         ],

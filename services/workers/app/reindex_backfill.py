@@ -21,22 +21,22 @@ class HistoricalBackfillDependencies:
     list_target_batch: Callable[..., Awaitable[list[dict[str, Any]]]]
     update_job_options: Callable[[str, dict[str, Any]], Awaitable[None]]
     publish_outbox_event: Callable[..., Awaitable[None]]
-    process_article_extract: Callable[[Any, str], Awaitable[dict[str, Any]]]
+    process_signal_candidate_extract: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_normalize: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_dedup: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_embed: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_cluster: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_match_criteria: Callable[[Any, str], Awaitable[dict[str, Any]]]
     process_match_interests: Callable[[Any, str], Awaitable[dict[str, Any]]]
-    is_article_eligible_for_personalization: Callable[..., Awaitable[bool]]
+    is_signal_candidate_eligible_for_personalization: Callable[..., Awaitable[bool]]
     replay_gray_zone_reviews_for_doc: Callable[..., Awaitable[int | dict[str, Any]]]
     is_cancel_requested: Callable[[str], Awaitable[bool]] = _never_cancel_requested
 
 
 def build_historical_backfill_progress_patch(
     *,
-    processed_articles: int,
-    total_articles: int,
+    processed_signal_candidates: int,
+    total_signal_candidates: int,
     phase: str = "historical_backfill",
     current_doc_id: str | None = None,
     criterion_llm_reviews: int = 0,
@@ -54,8 +54,8 @@ def build_historical_backfill_progress_patch(
         "progress": {
             "phase": phase,
             "currentDocId": current_doc_id,
-            "processedArticles": processed_articles,
-            "totalArticles": total_articles,
+            "processedSignalCandidates": processed_signal_candidates,
+            "totalSignalCandidates": total_signal_candidates,
             "criterionLlmReviews": criterion_llm_reviews,
             "interestLlmReviews": interest_llm_reviews,
             "llmReviewFailures": llm_review_failures,
@@ -79,7 +79,7 @@ def _coerce_replay_review_result(value: int | dict[str, Any]) -> dict[str, int]:
     return {"completed": max(int(value or 0), 0), "failed": 0, "timedOut": 0}
 
 
-async def replay_historical_articles(
+async def replay_historical_signal_candidates(
     *,
     reindex_job_id: str,
     batch_size: int,
@@ -91,14 +91,14 @@ async def replay_historical_articles(
     force_enrichment: bool,
     dependencies: HistoricalBackfillDependencies,
 ) -> dict[str, Any]:
-    total_articles = await dependencies.prepare_target_snapshot(
+    total_signal_candidates = await dependencies.prepare_target_snapshot(
         reindex_job_id=reindex_job_id,
         doc_ids=doc_ids,
         system_feed_only=system_feed_only,
         include_enrichment=include_enrichment,
         force_enrichment=force_enrichment,
     )
-    processed_articles = 0
+    processed_signal_candidates = 0
     enrichment_processed = 0
     enrichment_enriched = 0
     enrichment_skipped = 0
@@ -119,8 +119,8 @@ async def replay_historical_articles(
         await dependencies.update_job_options(
             reindex_job_id,
             build_historical_backfill_progress_patch(
-                processed_articles=processed_articles,
-                total_articles=total_articles,
+                processed_signal_candidates=processed_signal_candidates,
+                total_signal_candidates=total_signal_candidates,
                 phase=phase,
                 current_doc_id=current_doc_id,
                 criterion_llm_reviews=criterion_llm_reviews,
@@ -130,10 +130,10 @@ async def replay_historical_articles(
             ),
         )
         last_progress_monotonic = monotonic()
-        last_progress_processed = processed_articles
+        last_progress_processed = processed_signal_candidates
 
     async def maybe_write_progress(*, phase: str, current_doc_id: str | None = None) -> None:
-        processed_delta = processed_articles - last_progress_processed
+        processed_delta = processed_signal_candidates - last_progress_processed
         elapsed_since_progress = monotonic() - last_progress_monotonic
         if (
             processed_delta >= HISTORICAL_BACKFILL_PROGRESS_DOC_INTERVAL
@@ -148,8 +148,8 @@ async def replay_historical_articles(
             return {
                 "status": "cancelled",
                 "mode": "historical_backfill",
-                "processedArticles": processed_articles,
-                "totalArticles": total_articles,
+                "processedSignalCandidates": processed_signal_candidates,
+                "totalSignalCandidates": total_signal_candidates,
                 "retroNotifications": "skipped",
                 "batchSize": batch_size,
             }
@@ -170,8 +170,8 @@ async def replay_historical_articles(
                 enrichment_processed += 1
                 await dependencies.publish_outbox_event(
                     event_id=enrichment_event_id,
-                    event_type="article.ingest.requested",
-                    aggregate_type="article",
+                    event_type="signal_candidate.ingest.requested",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -180,7 +180,7 @@ async def replay_historical_articles(
                         "version": 1,
                     },
                 )
-                enrichment_result = await dependencies.process_article_extract(
+                enrichment_result = await dependencies.process_signal_candidate_extract(
                     SimpleNamespace(
                         data={
                             "eventId": enrichment_event_id,
@@ -201,8 +201,8 @@ async def replay_historical_articles(
                 normalize_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=normalize_event_id,
-                    event_type="article.ingest.requested",
-                    aggregate_type="article",
+                    event_type="signal_candidate.ingest.requested",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -224,8 +224,8 @@ async def replay_historical_articles(
                 dedup_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=dedup_event_id,
-                    event_type="article.normalized",
-                    aggregate_type="article",
+                    event_type="signal_candidate.normalized",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -247,8 +247,8 @@ async def replay_historical_articles(
                 embed_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=embed_event_id,
-                    event_type="article.normalized",
-                    aggregate_type="article",
+                    event_type="signal_candidate.normalized",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -272,8 +272,8 @@ async def replay_historical_articles(
             criteria_event_id = str(uuid.uuid4())
             await dependencies.publish_outbox_event(
                 event_id=criteria_event_id,
-                event_type="article.embedded",
-                aggregate_type="article",
+                event_type="signal_candidate.embedded",
+                aggregate_type="signal_candidate",
                 aggregate_id=doc_id,
                 payload={
                     "docId": doc_id,
@@ -303,12 +303,12 @@ async def replay_historical_articles(
             criterion_llm_reviews += criterion_review_result["completed"]
             llm_review_failures += criterion_review_result["failed"]
             llm_review_timeouts += criterion_review_result["timedOut"]
-            if await dependencies.is_article_eligible_for_personalization(doc_id=doc_id):
+            if await dependencies.is_signal_candidate_eligible_for_personalization(doc_id=doc_id):
                 cluster_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=cluster_event_id,
-                    event_type="article.criteria.matched",
-                    aggregate_type="article",
+                    event_type="signal_candidate.criteria.matched",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -331,8 +331,8 @@ async def replay_historical_articles(
                 interests_event_id = str(uuid.uuid4())
                 await dependencies.publish_outbox_event(
                     event_id=interests_event_id,
-                    event_type="article.clustered",
-                    aggregate_type="article",
+                    event_type="signal_candidate.clustered",
+                    aggregate_type="signal_candidate",
                     aggregate_id=doc_id,
                     payload={
                         "docId": doc_id,
@@ -357,7 +357,7 @@ async def replay_historical_articles(
                     "",
                 )
                 interest_matches += int(interest_result.get("interestCount") or 0)
-            processed_articles += 1
+            processed_signal_candidates += 1
             await maybe_write_progress(phase="processed_document", current_doc_id=doc_id)
 
         last_position = int(batch_targets[-1]["target_position"])
@@ -369,8 +369,8 @@ async def replay_historical_articles(
         "mode": "historical_backfill",
         "includeEnrichment": include_enrichment,
         "forceEnrichment": force_enrichment,
-        "processedArticles": processed_articles,
-        "totalArticles": total_articles,
+        "processedSignalCandidates": processed_signal_candidates,
+        "totalSignalCandidates": total_signal_candidates,
         "enrichmentProcessed": enrichment_processed,
         "enrichmentEnriched": enrichment_enriched,
         "enrichmentSkipped": enrichment_skipped,

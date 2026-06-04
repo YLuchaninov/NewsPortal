@@ -21,10 +21,10 @@ def list_user_notifications(
     notification_select = """
         select
           nl.*,
-          a.title as article_title,
-          a.lead as article_lead
+          a.title as signal_candidate_title,
+          a.lead as signal_candidate_lead
         from notification_log nl
-        join articles a on a.doc_id = nl.doc_id
+        join signal_candidates a on a.doc_id = nl.doc_id
         where nl.user_id = %s
         order by nl.created_at desc
     """

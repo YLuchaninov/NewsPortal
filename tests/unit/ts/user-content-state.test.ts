@@ -12,7 +12,7 @@ import {
 test("buildUserContentStateView keeps unread items non-new after mark unread semantics", () => {
   const state = buildUserContentStateView(
     {
-      content_item_id: "editorial:1",
+      content_item_id: "signal_candidate:1",
       first_seen_at: "2026-04-04T09:00:00Z",
       last_seen_at: null,
       saved_state: "none",
@@ -30,7 +30,7 @@ test("buildUserContentStateView keeps unread items non-new after mark unread sem
 test("buildUserContentStateView marks followed stories as updated when newer cluster content exists", () => {
   const state = buildUserContentStateView(
     {
-      content_item_id: "editorial:1",
+      content_item_id: "signal_candidate:1",
       first_seen_at: "2026-04-04T09:00:00Z",
       last_seen_at: "2026-04-04T09:00:00Z",
       saved_state: "saved",
@@ -68,8 +68,8 @@ test("getSingleUserContentState falls back to family state for editorial duplica
         return {
           rows: [
             {
-              requested_content_item_id: "editorial:primary",
-              content_item_id: "editorial:duplicate",
+              requested_content_item_id: "signal_candidate:primary",
+              content_item_id: "signal_candidate:duplicate",
               first_seen_at: "2026-04-14T09:00:00Z",
               last_seen_at: "2026-04-14T09:05:00Z",
               saved_state: "saved",
@@ -96,7 +96,7 @@ test("getSingleUserContentState falls back to family state for editorial duplica
     },
   };
 
-  const state = await getSingleUserContentState(pool as any, "user-1", "editorial:primary");
+  const state = await getSingleUserContentState(pool as any, "user-1", "signal_candidate:primary");
 
   assert.equal(state.saved_state, "saved");
   assert.equal(state.saved_at, "2026-04-14T09:10:00Z");
@@ -113,8 +113,8 @@ test("setContentItemSavedState writes editorial state to the current family repr
         return {
           rows: [
             {
-              requested_content_item_id: "editorial:duplicate",
-              content_item_id: "editorial:primary",
+              requested_content_item_id: "signal_candidate:duplicate",
+              content_item_id: "signal_candidate:primary",
             },
           ],
         };
@@ -126,7 +126,7 @@ test("setContentItemSavedState writes editorial state to the current family repr
         return {
           rows: [
             {
-              content_item_id: "editorial:primary",
+              content_item_id: "signal_candidate:primary",
               first_seen_at: null,
               last_seen_at: null,
               saved_state: "saved",
@@ -159,13 +159,13 @@ test("setContentItemSavedState writes editorial state to the current family repr
   const state = await setContentItemSavedState(
     pool as any,
     "user-1",
-    "editorial:duplicate",
+    "signal_candidate:duplicate",
     "saved"
   );
 
   const insertCall = calls.find((call) => call.sql.includes("insert into user_content_state"));
   assert.ok(insertCall);
-  assert.deepEqual(insertCall?.params, ["user-1", "editorial:primary", "saved"]);
+  assert.deepEqual(insertCall?.params, ["user-1", "signal_candidate:primary", "saved"]);
   assert.equal(state.saved_state, "saved");
 });
 
@@ -176,9 +176,9 @@ test("listSavedContentItemRefs collapses historical editorial duplicates to the 
         assert.deepEqual(params, ["user-1"]);
         return {
           rows: [
-            { content_item_id: "editorial:duplicate-a", saved_at: "2026-04-14T11:00:00Z" },
+            { content_item_id: "signal_candidate:duplicate-a", saved_at: "2026-04-14T11:00:00Z" },
             { content_item_id: "resource:3", saved_at: "2026-04-14T10:00:00Z" },
-            { content_item_id: "editorial:duplicate-b", saved_at: "2026-04-14T09:00:00Z" },
+            { content_item_id: "signal_candidate:duplicate-b", saved_at: "2026-04-14T09:00:00Z" },
           ],
         };
       }
@@ -186,12 +186,12 @@ test("listSavedContentItemRefs collapses historical editorial duplicates to the 
         return {
           rows: [
             {
-              requested_content_item_id: "editorial:duplicate-a",
-              content_item_id: "editorial:primary",
+              requested_content_item_id: "signal_candidate:duplicate-a",
+              content_item_id: "signal_candidate:primary",
             },
             {
-              requested_content_item_id: "editorial:duplicate-b",
-              content_item_id: "editorial:primary",
+              requested_content_item_id: "signal_candidate:duplicate-b",
+              content_item_id: "signal_candidate:primary",
             },
           ],
         };
@@ -204,7 +204,7 @@ test("listSavedContentItemRefs collapses historical editorial duplicates to the 
 
   assert.equal(response.total, 2);
   assert.deepEqual(response.items, [
-    { contentItemId: "editorial:primary", savedAt: "2026-04-14T11:00:00Z" },
+    { contentItemId: "signal_candidate:primary", savedAt: "2026-04-14T11:00:00Z" },
     { contentItemId: "resource:3", savedAt: "2026-04-14T10:00:00Z" },
   ]);
 });

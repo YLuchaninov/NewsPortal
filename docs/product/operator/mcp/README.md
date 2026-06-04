@@ -24,9 +24,9 @@ Use it when you need to:
 - [Client Setup Examples](./client-setups.md)
   Real configuration examples for major MCP clients, including Codex, OpenCode, Cursor, VS Code, and Claude Code, plus notes for Claude Desktop.
 - [HTTP Smoke Examples](./http-smoke.md)
-  Minimal `curl` examples for `GET /mcp`, `initialize`, `tools/list`, `resources/read`, `prompts/get`, `tools/call`, and article residual diagnostics.
+  Minimal `curl` examples for `GET /mcp`, `initialize`, `tools/list`, `resources/read`, `prompts/get`, `tools/call`, and signal_candidate residual diagnostics.
 - [Testing Local And Remote](./testing.md)
-  How to test the SignalOps MCP server on the canonical local compose baseline and how to run bounded non-local smoke checks safely, including article/content diagnostics.
+  How to test the SignalOps MCP server on the canonical local compose baseline and how to run bounded non-local smoke checks safely, including signal_candidate/content diagnostics.
 
 ## Canonical SignalOps assumptions
 

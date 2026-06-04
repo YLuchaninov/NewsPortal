@@ -17,8 +17,8 @@ from services.api.app.database import (
 from services.api.app import channel_adapters as _channel_adapters
 from services.api.app import channel_read_model as _channel_read_model
 from services.api.app import cluster_read_model as _cluster_read_model
-from services.api.app import article_list_read_model as _article_list_read_model
-from services.api.app import article_residual_read_model as _article_residual_read_model
+from services.api.app import signal_candidate_list_read_model as _signal_candidate_list_read_model
+from services.api.app import signal_candidate_residual_read_model as _signal_candidate_residual_read_model
 from services.api.app import content_analysis_backfill as _content_analysis_backfill
 from services.api.app import content_analysis_payloads as _content_analysis_payloads
 from services.api.app import content_analysis_policies as _content_analysis_policies
@@ -40,30 +40,30 @@ from services.api.app import user_interest_read_model as _user_interest_read_mod
 from services.api.app import user_match_read_model as _user_match_read_model
 from services.api.app import web_resource_read_model as _web_resource_read_model
 from services.api.app.content_selection_read_model import (
-    apply_article_selection_payload,
+    apply_signal_candidate_selection_payload,
     apply_resource_selection_payload,
-    article_observation_join_clause,
-    article_preview_projection,
+    signal_candidate_observation_join_clause,
+    signal_candidate_preview_projection,
     build_content_item_id,
     build_content_kind_selection_explain_payload,
-    build_editorial_content_item_preview_from_article,
+    build_editorial_content_item_preview_from_signal_candidate,
     build_fallback_selection_blocker_payload,
     build_resource_selection_explain_payload,
     build_selection_diagnostics_payload,
     build_selection_diagnostics_payload_from_counts,
     build_selection_explain_payload,
     build_selection_guidance_payload,
-    canonical_article_family_expr,
-    canonical_article_family_order_clause,
+    canonical_signal_candidate_family_expr,
+    canonical_signal_candidate_family_order_clause,
     combined_content_items_select_sql,
     editorial_content_select_sql,
-    feed_eligible_article_clause,
+    feed_eligible_signal_candidate_clause,
     final_selection_join_clause,
     get_selected_content_item_preview,
     normalize_system_interest_selection_profile_payload,
     parse_content_item_id,
     primary_media_join_clause,
-    processed_article_clause,
+    processed_signal_candidate_clause,
     query_count as _content_selection_query_count,
     resource_content_select_sql,
     system_feed_join_clause,
@@ -97,7 +97,7 @@ API_MAIN_COMPAT_EXPORTS = (
     build_content_item_id,
     build_fallback_selection_blocker_payload,
     build_resource_selection_explain_payload,
-    canonical_article_family_order_clause,
+    canonical_signal_candidate_family_order_clause,
     coerce_llm_review_cost_usd,
     editorial_content_select_sql,
     llm_review_accept_gray_zone_on_budget_exhaustion,
@@ -166,7 +166,7 @@ SequenceManualRunPayload = _sequence_payloads.SequenceManualRunPayload
 SequenceRetryRunPayload = _sequence_payloads.SequenceRetryRunPayload
 AgentSequenceCreatePayload = _sequence_payloads.AgentSequenceCreatePayload
 SequenceCancelPayload = _sequence_payloads.SequenceCancelPayload
-ArticleEnrichmentRetryPayload = _sequence_payloads.ArticleEnrichmentRetryPayload
+SignalCandidateEnrichmentRetryPayload = _sequence_payloads.SignalCandidateEnrichmentRetryPayload
 
 ContentAnalysisPolicyPayload = _content_analysis_payloads.ContentAnalysisPolicyPayload
 ContentAnalysisPolicyUpdatePayload = _content_analysis_payloads.ContentAnalysisPolicyUpdatePayload
@@ -428,8 +428,8 @@ def get_active_sequence_for_trigger(trigger_event: str) -> dict[str, Any]:
     )
 
 
-def ensure_published_article_retry_event(*, event_id: str, doc_id: str) -> None:
-    return _sequence_commands.ensure_published_article_retry_event(
+def ensure_published_signal_candidate_retry_event(*, event_id: str, doc_id: str) -> None:
+    return _sequence_commands.ensure_published_signal_candidate_retry_event(
         event_id=event_id,
         doc_id=doc_id,
         dump_json_value_func=dump_json_value,
@@ -439,17 +439,17 @@ def ensure_published_article_retry_event(*, event_id: str, doc_id: str) -> None:
     )
 
 
-def request_article_enrichment_retry(
+def request_signal_candidate_enrichment_retry(
     doc_id: str,
-    payload: ArticleEnrichmentRetryPayload | None = None,
+    payload: SignalCandidateEnrichmentRetryPayload | None = None,
 ) -> dict[str, Any]:
-    return _sequence_commands.request_article_enrichment_retry(
+    return _sequence_commands.request_signal_candidate_enrichment_retry(
         doc_id,
         payload,
         query_one_func=query_one,
         get_active_sequence_for_trigger_func=get_active_sequence_for_trigger,
         uuid4_func=uuid.uuid4,
-        ensure_published_article_retry_event_func=ensure_published_article_retry_event,
+        ensure_published_signal_candidate_retry_event_func=ensure_published_signal_candidate_retry_event,
         create_sequence_run_request_for_trigger_func=create_sequence_run_request_for_trigger,
     )
 
@@ -574,7 +574,7 @@ def retry_sequence_run(
     return _sequence_route_compat.retry_sequence_run(globals(), run_id, payload)
 
 
-def list_articles(
+def list_signal_candidates(
     limit: int = Query(default=20, ge=1, le=100),
     entity_type: str | None = Query(default=None, alias="entityType"),
     entity_text: str | None = Query(default=None, alias="entityText"),
@@ -591,7 +591,7 @@ def list_articles(
     page: int | None = Query(default=None, ge=1),
     page_size: int | None = Query(default=None, ge=1, le=100, alias="pageSize"),
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    return _article_list_read_model.list_articles(
+    return _signal_candidate_list_read_model.list_signal_candidates(
         limit=limit,
         entity_type=entity_type,
         entity_text=entity_text,
@@ -609,8 +609,8 @@ def list_articles(
         page_size=page_size,
         build_content_analysis_filter_clause_func=build_content_analysis_filter_clause,
         normalize_content_filter_decision_func=normalize_content_filter_decision,
-        article_preview_projection_func=article_preview_projection,
-        article_observation_join_clause_func=article_observation_join_clause,
+        signal_candidate_preview_projection_func=signal_candidate_preview_projection,
+        signal_candidate_observation_join_clause_func=signal_candidate_observation_join_clause,
         final_selection_join_clause_func=final_selection_join_clause,
         system_feed_join_clause_func=system_feed_join_clause,
         primary_media_join_clause_func=primary_media_join_clause,
@@ -618,18 +618,18 @@ def list_articles(
         query_all_func=query_all,
         query_count_func=query_count,
         build_paginated_response_func=build_paginated_response,
-        apply_article_selection_payload_func=apply_article_selection_payload,
+        apply_signal_candidate_selection_payload_func=apply_signal_candidate_selection_payload,
     )
 
 
-def summarize_article_selection_counts() -> dict[str, Any]:
-    return _article_list_read_model.summarize_article_selection_counts(
+def summarize_signal_candidate_selection_counts() -> dict[str, Any]:
+    return _signal_candidate_list_read_model.summarize_signal_candidate_selection_counts(
         query_all_func=query_all,
         query_count_func=query_count,
     )
 
 
-def load_article_residual_rows(
+def load_signal_candidate_residual_rows(
     *,
     q: str | None = None,
     verification_state: str | None = None,
@@ -637,7 +637,7 @@ def load_article_residual_rows(
     observation_state: str | None = None,
     duplicate_kind: str | None = None,
 ) -> list[dict[str, Any]]:
-    return _article_residual_read_model.load_article_residual_rows(
+    return _signal_candidate_residual_read_model.load_signal_candidate_residual_rows(
         q=q,
         verification_state=verification_state,
         processing_state=processing_state,
@@ -646,18 +646,18 @@ def load_article_residual_rows(
         normalize_web_content_search_query_func=normalize_web_content_search_query,
         build_web_content_search_pattern_func=build_web_content_search_pattern,
         query_all_func=query_all,
-        article_preview_projection_func=article_preview_projection,
-        article_observation_join_clause_func=article_observation_join_clause,
+        signal_candidate_preview_projection_func=signal_candidate_preview_projection,
+        signal_candidate_observation_join_clause_func=signal_candidate_observation_join_clause,
         final_selection_join_clause_func=final_selection_join_clause,
         system_feed_join_clause_func=system_feed_join_clause,
         primary_media_join_clause_func=primary_media_join_clause,
     )
 
 
-def build_article_residual_payload(article_like: Mapping[str, Any]) -> dict[str, Any]:
-    return _article_residual_read_model.build_article_residual_payload(
-        article_like,
-        apply_article_selection_payload_func=apply_article_selection_payload,
+def build_signal_candidate_residual_payload(signal_candidate_like: Mapping[str, Any]) -> dict[str, Any]:
+    return _signal_candidate_residual_read_model.build_signal_candidate_residual_payload(
+        signal_candidate_like,
+        apply_signal_candidate_selection_payload_func=apply_signal_candidate_selection_payload,
         build_selection_explain_payload_func=build_selection_explain_payload,
         build_selection_diagnostics_payload_from_counts_func=(
             build_selection_diagnostics_payload_from_counts
@@ -665,16 +665,16 @@ def build_article_residual_payload(article_like: Mapping[str, Any]) -> dict[str,
     )
 
 
-def article_matches_residual_filters(
-    article: Mapping[str, Any],
+def signal_candidate_matches_residual_filters(
+    signal_candidate: Mapping[str, Any],
     *,
     downstream_loss_bucket: str | None = None,
     selection_blocker_stage: str | None = None,
     selection_blocker_reason: str | None = None,
     selection_mode: str | None = None,
 ) -> bool:
-    return _article_residual_read_model.article_matches_residual_filters(
-        article,
+    return _signal_candidate_residual_read_model.signal_candidate_matches_residual_filters(
+        signal_candidate,
         downstream_loss_bucket=downstream_loss_bucket,
         selection_blocker_stage=selection_blocker_stage,
         selection_blocker_reason=selection_blocker_reason,
@@ -682,11 +682,11 @@ def article_matches_residual_filters(
     )
 
 
-def summarize_article_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
-    return _article_residual_read_model.summarize_article_residual_rows(rows)
+def summarize_signal_candidate_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    return _signal_candidate_residual_read_model.summarize_signal_candidate_residual_rows(rows)
 
 
-def list_article_residuals(
+def list_signal_candidate_residuals(
     downstream_loss_bucket: str | None = Query(default=None, alias="downstreamLossBucket"),
     selection_blocker_stage: str | None = Query(default=None, alias="selectionBlockerStage"),
     selection_blocker_reason: str | None = Query(default=None, alias="selectionBlockerReason"),
@@ -699,7 +699,7 @@ def list_article_residuals(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
 ) -> dict[str, Any]:
-    return _article_residual_read_model.list_article_residuals(
+    return _signal_candidate_residual_read_model.list_signal_candidate_residuals(
         downstream_loss_bucket=downstream_loss_bucket,
         selection_blocker_stage=selection_blocker_stage,
         selection_blocker_reason=selection_blocker_reason,
@@ -713,14 +713,14 @@ def list_article_residuals(
         page_size=page_size,
         normalize_optional_query_string_func=normalize_optional_query_string,
         normalize_web_content_search_query_func=normalize_web_content_search_query,
-        load_article_residual_rows_func=load_article_residual_rows,
-        build_article_residual_payload_func=build_article_residual_payload,
-        article_matches_residual_filters_func=article_matches_residual_filters,
+        load_signal_candidate_residual_rows_func=load_signal_candidate_residual_rows,
+        build_signal_candidate_residual_payload_func=build_signal_candidate_residual_payload,
+        signal_candidate_matches_residual_filters_func=signal_candidate_matches_residual_filters,
         build_paginated_response_func=build_paginated_response,
     )
 
 
-def summarize_article_residuals(
+def summarize_signal_candidate_residuals(
     downstream_loss_bucket: str | None = Query(default=None, alias="downstreamLossBucket"),
     selection_blocker_stage: str | None = Query(default=None, alias="selectionBlockerStage"),
     selection_blocker_reason: str | None = Query(default=None, alias="selectionBlockerReason"),
@@ -731,7 +731,7 @@ def summarize_article_residuals(
     duplicate_kind: str | None = Query(default=None, alias="duplicateKind"),
     q: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    return _article_residual_read_model.summarize_article_residuals(
+    return _signal_candidate_residual_read_model.summarize_signal_candidate_residuals(
         downstream_loss_bucket=downstream_loss_bucket,
         selection_blocker_stage=selection_blocker_stage,
         selection_blocker_reason=selection_blocker_reason,
@@ -743,10 +743,10 @@ def summarize_article_residuals(
         q=q,
         normalize_optional_query_string_func=normalize_optional_query_string,
         normalize_web_content_search_query_func=normalize_web_content_search_query,
-        load_article_residual_rows_func=load_article_residual_rows,
-        build_article_residual_payload_func=build_article_residual_payload,
-        article_matches_residual_filters_func=article_matches_residual_filters,
-        summarize_article_residual_rows_func=summarize_article_residual_rows,
+        load_signal_candidate_residual_rows_func=load_signal_candidate_residual_rows,
+        build_signal_candidate_residual_payload_func=build_signal_candidate_residual_payload,
+        signal_candidate_matches_residual_filters_func=signal_candidate_matches_residual_filters,
+        summarize_signal_candidate_residual_rows_func=summarize_signal_candidate_residual_rows,
     )
 
 
@@ -828,10 +828,10 @@ def get_content_item(content_item_id: str) -> dict[str, Any]:
     return _content_detail_read_model.get_content_item(
         content_item_id,
         parse_content_item_id_func=parse_content_item_id,
-        get_article_func=get_article,
+        get_signal_candidate_func=get_signal_candidate,
         get_selected_content_item_preview_func=get_selected_content_item_preview,
-        build_editorial_content_item_preview_from_article_func=(
-            build_editorial_content_item_preview_from_article
+        build_editorial_content_item_preview_from_signal_candidate_func=(
+            build_editorial_content_item_preview_from_signal_candidate
         ),
         get_resource_content_item_func=get_resource_content_item,
         load_content_analysis_summary_func=load_content_analysis_summary,
@@ -951,23 +951,23 @@ def get_web_resource(resource_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Web resource not found.")
 
 
-def get_article(doc_id: str) -> dict[str, Any]:
+def get_signal_candidate(doc_id: str) -> dict[str, Any]:
     try:
-        return _content_detail_read_model.get_article(
+        return _content_detail_read_model.get_signal_candidate(
             doc_id,
             query_one_func=query_one,
             query_all_func=query_all,
-            apply_article_selection_payload_func=apply_article_selection_payload,
+            apply_signal_candidate_selection_payload_func=apply_signal_candidate_selection_payload,
             load_content_analysis_summary_func=load_content_analysis_summary,
         )
-    except _content_detail_read_model.ArticleNotFoundError:
-        raise HTTPException(status_code=404, detail="Article not found.")
+    except _content_detail_read_model.SignalCandidateNotFoundError:
+        raise HTTPException(status_code=404, detail="SignalCandidate not found.")
 
 
-def get_article_explain(doc_id: str) -> dict[str, Any]:
-    return _content_detail_read_model.get_article_explain(
+def get_signal_candidate_explain(doc_id: str) -> dict[str, Any]:
+    return _content_detail_read_model.get_signal_candidate_explain(
         doc_id,
-        get_article_func=get_article,
+        get_signal_candidate_func=get_signal_candidate,
         query_one_func=query_one,
         query_all_func=query_all,
         build_selection_explain_payload_func=build_selection_explain_payload,
@@ -978,11 +978,11 @@ def get_article_explain(doc_id: str) -> dict[str, Any]:
 
 def get_dashboard_summary() -> dict[str, Any]:
     return _dashboard_read_model.get_dashboard_summary(
-        canonical_article_family_expr_func=canonical_article_family_expr,
+        canonical_signal_candidate_family_expr_func=canonical_signal_candidate_family_expr,
         final_selection_join_clause_func=final_selection_join_clause,
         system_feed_join_clause_func=system_feed_join_clause,
-        feed_eligible_article_clause_func=feed_eligible_article_clause,
-        processed_article_clause_func=processed_article_clause,
+        feed_eligible_signal_candidate_clause_func=feed_eligible_signal_candidate_clause,
+        processed_signal_candidate_clause_func=processed_signal_candidate_clause,
         query_one_func=query_one,
         get_llm_budget_summary_func=get_llm_budget_summary,
     )
@@ -1367,11 +1367,11 @@ def list_content_filter_results(
         query_count_func=query_count,
     )
 
-def request_article_enrichment_retry_route(
+def request_signal_candidate_enrichment_retry_route(
     doc_id: str,
-    payload: ArticleEnrichmentRetryPayload | None = None,
+    payload: SignalCandidateEnrichmentRetryPayload | None = None,
 ) -> dict[str, Any]:
-    return _sequence_route_compat.request_article_enrichment_retry_route(
+    return _sequence_route_compat.request_signal_candidate_enrichment_retry_route(
         globals(),
         doc_id,
         payload,
@@ -1380,7 +1380,7 @@ def request_article_enrichment_retry_route(
 
 def request_content_item_enrichment_retry_route(
     content_item_id: str,
-    payload: ArticleEnrichmentRetryPayload | None = None,
+    payload: SignalCandidateEnrichmentRetryPayload | None = None,
 ) -> dict[str, Any]:
     return _sequence_route_compat.request_content_item_enrichment_retry_route(
         globals(),

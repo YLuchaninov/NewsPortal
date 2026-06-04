@@ -19,7 +19,7 @@ def _get_discovery_runtime() -> Any:
 
 class ContentSamplerPlugin(ContextTaskPlugin):
     name = "discovery.content_sampler"
-    description = "Sample full article content from candidate sources."
+    description = "Sample full signal_candidate content from candidate sources."
     category = "discovery"
 
     async def execute(
@@ -33,11 +33,11 @@ class ContentSamplerPlugin(ContextTaskPlugin):
             key="sources_field",
             aliases=("sourcesField",),
         ) or "probed_feeds"
-        article_count = self._resolve_positive_int(
+        signal_candidate_count = self._resolve_positive_int(
             options=options,
             context=context,
-            key="article_count",
-            aliases=("articleCount",),
+            key="signal_candidate_count",
+            aliases=("signalCandidateCount",),
             default=3,
         )
         max_chars = self._resolve_positive_int(
@@ -62,7 +62,7 @@ class ContentSamplerPlugin(ContextTaskPlugin):
         raw_results = await resolve_runtime_call(
             runtime.content_sampler.sample_content(
                 source_urls=_unique_preserving_order(urls),
-                article_count=article_count,
+                signal_candidate_count=signal_candidate_count,
                 max_chars=max_chars,
             )
         )
@@ -73,9 +73,9 @@ class ContentSamplerPlugin(ContextTaskPlugin):
             normalized_results.append(
                 {
                     "source_url": str(item.get("source_url") or item.get("url") or ""),
-                    "articles": _coerce_mapping_list(
-                        item.get("articles") or [],
-                        field_name="articles",
+                    "signal_candidates": _coerce_mapping_list(
+                        item.get("signal_candidates") or [],
+                        field_name="signal_candidates",
                     ),
                 }
             )
@@ -93,8 +93,8 @@ class ContentSamplerPlugin(ContextTaskPlugin):
         self._validate_optional_positive_int(
             options,
             errors,
-            option_key="article_count",
-            aliases=("articleCount",),
+            option_key="signal_candidate_count",
+            aliases=("signalCandidateCount",),
         )
         self._validate_optional_positive_int(
             options,
@@ -114,8 +114,8 @@ class ContentSamplerPlugin(ContextTaskPlugin):
         return {
             "sources_field": "Context field containing feed or source URLs.",
             "source_urls": "Explicit list of source URLs.",
-            "article_count": "Number of articles to sample per source.",
-            "max_chars": "Maximum content length to keep per sampled article.",
+            "signal_candidate_count": "Number of signal_candidates to sample per source.",
+            "max_chars": "Maximum content length to keep per sampled signal_candidate.",
         }
 
     def describe_outputs(self) -> dict[str, str]:

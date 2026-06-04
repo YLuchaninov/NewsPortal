@@ -74,7 +74,7 @@ function asStringList(value: unknown): string[] {
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
       <h1 class="mt-2 text-2xl font-semibold tracking-tight">Event Clusters</h1>
       <p class="mt-2 text-sm leading-6 text-muted-foreground">
-        Review cluster density, geography, and verification posture from one table, then inspect one cluster at a time in the side preview before deciding to open deeper article detail.
+        Review cluster density, geography, and verification posture from one table, then inspect one cluster at a time in the side preview before deciding to open deeper signal_candidate detail.
       </p>
       <p class="mt-3 text-sm text-muted-foreground">
         {clusters.total} cluster{clusters.total !== 1 ? "s" : ""} total
@@ -96,7 +96,7 @@ function asStringList(value: unknown): string[] {
         {clusters.total === 0 ? (
           <div class="flex flex-col items-center justify-center py-16 text-center">
             <p class="font-medium text-sm">No clusters yet</p>
-            <p class="text-xs text-muted-foreground mt-1">Clusters appear automatically as articles are processed.</p>
+            <p class="text-xs text-muted-foreground mt-1">Clusters appear automatically as signal_candidates are processed.</p>
           </div>
         ) : clusters.items.length === 0 ? (
           <div class="flex flex-col items-center justify-center py-16 text-center">
@@ -143,7 +143,7 @@ function asStringList(value: unknown): string[] {
                       </td>
                       <td class="px-4 py-3 text-xs text-muted-foreground">
                         <div class="admin-table-meta">
-                          <p>{String(cluster.article_count ?? 0)} article{Number(cluster.article_count ?? 0) === 1 ? "" : "s"}</p>
+                          <p>{String(cluster.signal_candidate_count ?? 0)} signal_candidate{Number(cluster.signal_candidate_count ?? 0) === 1 ? "" : "s"}</p>
                           <p>Updated {formatTimestamp(cluster.updated_at ?? cluster.created_at)}</p>
                         </div>
                       </td>
@@ -192,7 +192,7 @@ function asStringList(value: unknown): string[] {
                     {String(selectedCluster.primary_title ?? selectedCluster.cluster_id ?? "Unnamed cluster")}
                   </h2>
                   <p class="mt-2 text-sm text-muted-foreground">
-                    Clusters group multiple article observations into one event-level operator surface so moderation and notification reasoning do not fragment across duplicates.
+                    Clusters group multiple signal_candidate observations into one event-level operator surface so moderation and notification reasoning do not fragment across duplicates.
                   </p>
                 </div>
 
@@ -200,7 +200,7 @@ function asStringList(value: unknown): string[] {
                   <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Volume</p>
                     <p class="mt-2 text-sm font-semibold">
-                      {String(selectedCluster.article_count ?? 0)} article{Number(selectedCluster.article_count ?? 0) === 1 ? "" : "s"}
+                      {String(selectedCluster.signal_candidate_count ?? 0)} signal_candidate{Number(selectedCluster.signal_candidate_count ?? 0) === 1 ? "" : "s"}
                     </p>
                     <p class="mt-1 text-xs text-muted-foreground">cluster:{String(selectedCluster.cluster_id ?? "").slice(0, 8) || "—"}</p>
                   </div>

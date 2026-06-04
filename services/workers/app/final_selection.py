@@ -448,7 +448,7 @@ def build_downstream_selection_diagnostics(
         )[0]
 
     if total == 0:
-        downstream_loss_bucket = "articles_missing_interest_filter_results"
+        downstream_loss_bucket = "signal_candidates_missing_interest_filter_results"
         blocker_stage = "interest_filtering"
         blocker_reason = "missing_interest_filter_results"
     elif selection_decision == "selected":

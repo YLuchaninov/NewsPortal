@@ -49,7 +49,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_criterion_meta_score_and_decision_thresholds(self) -> None:
         score, components = compute_criterion_meta_score(
-            article_features={
+            signal_candidate_features={
                 "short_tokens": ["EU", "AI"],
                 "numbers": ["42"],
                 "places": ["Warsaw", "Brussels"],
@@ -82,7 +82,7 @@ class ScoringTests(unittest.TestCase):
 
     def test_interest_scoring_respects_novelty_and_priority(self) -> None:
         score, components = compute_interest_meta_score(
-            article_features={
+            signal_candidate_features={
                 "short_tokens": ["AI"],
                 "places": ["Warsaw"],
                 "entities": ["European Union"],

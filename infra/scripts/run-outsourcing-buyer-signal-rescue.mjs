@@ -24,10 +24,10 @@ const EXCLUDED_GEO_CONSTRAINTS = {
 const COMMON_NEGATIVES = [
   "Russia-centered or China-centered source unless the page is explicitly about non-Russia/non-China buyer demand",
   "outsourcing agency service page without buyer-authored project evidence",
-  "top software companies, best agencies, top developers, review/ranking article",
+  "top software companies, best agencies, top developers, review/ranking signal_candidate",
   "vendor marketing page, service landing page, demo page, privacy/security page, case study without active buyer ask",
   "category, tag, search, profile, homepage, or listing wrapper without project details",
-  "generic how-to article, RFP response guide, procurement advice, tutorial, market report, or SEO page",
+  "generic how-to signal_candidate, RFP response guide, procurement advice, tutorial, market report, or SEO page",
   "jobs-only page without vendor, contractor, RFP, proposal, or external delivery ask",
 ];
 
@@ -674,8 +674,8 @@ async function preflight(client, token, report) {
     "operator.funnel.audit",
     "operator.funnel.autoplan",
     "operator.funnel.iteration.recommend",
-    "articles.residuals.summary",
-    "articles.holds.summary",
+    "signal_candidates.residuals.summary",
+    "signal_candidates.holds.summary",
     "content_items.list",
     "system_interests.create",
     "system_interests.read",
@@ -694,7 +694,7 @@ async function preflight(client, token, report) {
   const requiredResources = [
     "signalops://guide/scenarios/funnel-calibration",
     "signalops://guide/scenarios/discovery-live-gap-hunting",
-    "signalops://articles/residuals-summary",
+    "signalops://signal-candidates/residuals-summary",
   ];
   const failures = [];
   if (String(initialize?.result?.serverInfo?.name ?? "") !== "signalops-mcp") failures.push("MCP initialize did not return signalops-mcp.");
@@ -728,8 +728,8 @@ async function readBaseline(client, token, report) {
     objective: "Recover selected outsourcing buyer signals",
     includeSamples: true,
   });
-  report.baseline.residuals = await mcp(report, client, token, "articles.residuals.summary", {});
-  report.baseline.holds = await mcp(report, client, token, "articles.holds.summary", {});
+  report.baseline.residuals = await mcp(report, client, token, "signal_candidates.residuals.summary", {});
+  report.baseline.holds = await mcp(report, client, token, "signal_candidates.holds.summary", {});
   report.baseline.contentItems = await mcp(report, client, token, "content_items.list", { page: 1, pageSize: 10 });
 }
 
@@ -937,21 +937,21 @@ async function routeCandidate(client, token, report, pack, packReport, candidate
 
 async function inspectContent(client, token, report, pack, packReport, channelId = null) {
   const listArgs = channelId ? { channelId, page: 1, pageSize: 20 } : { page: 1, pageSize: 20 };
-  const [resourcesPage, articlesPage, contentPage] = await Promise.all([
+  const [resourcesPage, signalCandidatesPage, contentPage] = await Promise.all([
     safeMcp(report, client, token, "web_resources.list", listArgs),
-    safeMcp(report, client, token, "articles.list", listArgs),
+    safeMcp(report, client, token, "signal_candidates.list", listArgs),
     channelId ? safeMcp(report, client, token, "content_items.list", listArgs) : Promise.resolve(null),
   ]);
   packReport.webResources = rows(resourcesPage);
-  packReport.articles = rows(articlesPage);
+  packReport.signal_candidates = rows(signalCandidatesPage);
   if (channelId) packReport.contentItems = rows(contentPage);
   if (!channelId) return;
-  for (const article of packReport.articles.slice(0, 5)) {
-    const docId = idFrom(article, ["doc_id", "docId"]);
+  for (const signal_candidate of packReport.signal_candidates.slice(0, 5)) {
+    const docId = idFrom(signal_candidate, ["doc_id", "docId"]);
     if (!docId) continue;
-    const explain = await safeMcp(report, client, token, "articles.explain", { docId });
-    const classification = classifySelectedItem(pack, article, explain);
-    packReport.explainedArticles.push({ docId, title: article.title ?? null, url: article.url ?? null, classification });
+    const explain = await safeMcp(report, client, token, "signal_candidates.explain", { docId });
+    const classification = classifySelectedItem(pack, signal_candidate, explain);
+    packReport.explainedSignalCandidates.push({ docId, title: signal_candidate.title ?? null, url: signal_candidate.url ?? null, classification });
     if (classification === "useful") report.docIds.add(docId);
   }
   for (const item of packReport.contentItems.slice(0, 10)) {
@@ -1020,9 +1020,9 @@ async function runPack(client, token, report, pack, args) {
     routingAttempts: [],
     fetchGaps: [],
     webResources: [],
-    articles: [],
+    signal_candidates: [],
     contentItems: [],
-    explainedArticles: [],
+    explainedSignalCandidates: [],
     explainedContentItems: [],
   };
   report.packs.push(packReport);
@@ -1064,7 +1064,7 @@ async function runReindexAndVerify(client, token, report) {
       indexName: "interest_centroids",
       jobKind: "backfill",
       options: {
-        ...(docIds.length ? { docIds } : { replayExistingArticles: true, batchSize: 100 }),
+        ...(docIds.length ? { docIds } : { replayExistingSignalCandidates: true, batchSize: 100 }),
         includeEnrichment: false,
         forceEnrichment: false,
         retroNotifications: "skip",
@@ -1142,7 +1142,7 @@ function summarize(report, args) {
     report.failureClassification = {
       badHypothesisOrQueryDesign: report.packs.filter((pack) => pack.candidates.length === 0 && pack.queryAttempts.length > 0).map((pack) => pack.key),
       adapterOrAccessGap: report.packs.filter((pack) => pack.adapterBacklog.length > 0 || pack.fetchGaps.length > 0).map((pack) => pack.key),
-      selectionPolicyTooStrict: selected === 0 && report.packs.some((pack) => pack.explainedArticles.some((item) => item.classification === "useful")),
+      selectionPolicyTooStrict: selected === 0 && report.packs.some((pack) => pack.explainedSignalCandidates.some((item) => item.classification === "useful")),
       possibleSystemBug: false,
       note:
         "Do not relax public selected semantics. Continue MCP feedback/tuning/reindex loops unless evidence proves a system bug.",

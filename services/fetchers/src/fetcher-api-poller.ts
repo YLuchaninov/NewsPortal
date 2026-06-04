@@ -14,7 +14,7 @@ import {
 import type {
   ChannelPollCompletion,
   CursorMap,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow
 } from "./fetcher-persistence";
 import { validateAcquisitionUrl } from "./probe-url-guard";
@@ -27,7 +27,7 @@ interface ApiChannelPollerDependencies {
   loadCursorMap: (channelId: string) => Promise<CursorMap>;
   persistInputsWithPreflight: (
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ) => Promise<{ ingestedCount: number; duplicateCount: number }>;
   markChannelSuccess: (
     channel: SourceChannelRow,
@@ -90,7 +90,7 @@ async function fetchApiPage(input: {
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -131,7 +131,7 @@ async function fetchApiPage(input: {
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -144,7 +144,7 @@ async function fetchApiPage(input: {
       httpStatus: response.status,
       retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after")),
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -159,7 +159,7 @@ async function fetchApiPage(input: {
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -173,7 +173,7 @@ async function fetchApiPage(input: {
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -203,7 +203,7 @@ async function fetchApiText(input: {
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -239,7 +239,7 @@ async function fetchApiText(input: {
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -252,7 +252,7 @@ async function fetchApiText(input: {
       httpStatus: response.status,
       retryAfterSeconds: parseRetryAfterSeconds(response.headers.get("retry-after")),
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -267,7 +267,7 @@ async function fetchApiText(input: {
       httpStatus: response.status,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message
@@ -293,7 +293,7 @@ export async function pollApiProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: `API channel ${channel.channelId} is missing fetchUrl.`
@@ -340,9 +340,9 @@ export async function pollApiProviderChannel(
         return { text: page.text, finalUrl: page.finalUrl, status: page.status };
       }
     });
-    const inputs: PersistArticleInput[] = adapterItems.slice(0, apiConfig.maxItemsPerPoll).map((item) => ({
+    const inputs: PersistSignalCandidateInput[] = adapterItems.slice(0, apiConfig.maxItemsPerPoll).map((item) => ({
       channel,
-      externalArticleId: item.externalArticleId,
+      externalSignalCandidateId: item.externalSignalCandidateId,
       url: normalizeExternalUrl(item.url),
       publishedAt: item.publishedAt,
       title: item.title,
@@ -370,7 +370,7 @@ export async function pollApiProviderChannel(
       httpStatus: lastStatus,
       retryAfterSeconds: lastRetryAfterSeconds,
       fetchedItemCount: inputs.length,
-      newArticleCount: ingestedCount,
+      newSignalCandidateCount: ingestedCount,
       duplicateSuppressedCount: duplicateCount,
       cursorChanged: latestPublishedAt !== (cursors.timestamp?.cursorValue ?? null),
       errorMessage: null,
@@ -413,9 +413,9 @@ export async function pollApiProviderChannel(
       return guardedNextUrl.url ?? null;
     }
   });
-  const inputs: PersistArticleInput[] = runtimeResult.items.map((item) => ({
+  const inputs: PersistSignalCandidateInput[] = runtimeResult.items.map((item) => ({
     channel,
-    externalArticleId: item.externalArticleId,
+    externalSignalCandidateId: item.externalSignalCandidateId,
     url: item.url,
     publishedAt: item.publishedAt,
     title: item.title,
@@ -437,7 +437,7 @@ export async function pollApiProviderChannel(
     httpStatus: runtimeResult.lastStatus,
     retryAfterSeconds: runtimeResult.lastRetryAfterSeconds,
     fetchedItemCount: runtimeResult.fetchedItemCount,
-    newArticleCount: ingestedCount,
+    newSignalCandidateCount: ingestedCount,
     duplicateSuppressedCount: duplicateCount,
     cursorChanged:
       runtimeResult.latestPublishedAt !== (cursors.timestamp?.cursorValue ?? null) ||

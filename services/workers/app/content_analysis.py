@@ -959,9 +959,9 @@ def persist_cluster_summary_analysis(story_cluster_id: str) -> dict[str, Any]:
 
 
 def project_system_interest_labels(doc_id: str) -> dict[str, Any]:
-    subject = load_content_subject("article", doc_id)
+    subject = load_content_subject("signal_candidate", doc_id)
     if subject is None:
-        raise ValueError(f"Article {doc_id} was not found.")
+        raise ValueError(f"SignalCandidate {doc_id} was not found.")
     policy_candidate = _resolve_policy_for_module("system_interest_label", subject)
     if isinstance(policy_candidate, dict):
         return policy_candidate
@@ -1016,7 +1016,7 @@ def project_system_interest_labels(doc_id: str) -> dict[str, Any]:
             connection.execute(
                 """
                 delete from content_labels
-                where subject_type = 'article'
+                where subject_type = 'signal_candidate'
                   and subject_id = %s
                   and label_type = 'system_interest'
                 """,
@@ -1043,7 +1043,7 @@ def project_system_interest_labels(doc_id: str) -> dict[str, Any]:
                       explain_json,
                       analysis_id
                     )
-                    values ('article', %s, %s, %s, 'system_interest', %s, %s, %s, %s, %s, %s, %s)
+                    values ('signal_candidate', %s, %s, %s, 'system_interest', %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         subject.subject_id,

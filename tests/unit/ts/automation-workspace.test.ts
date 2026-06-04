@@ -32,7 +32,7 @@ test("sequenceToEditorGraph and editorGraphToTaskGraph preserve task metadata or
       task_graph: [
         {
           key: "normalize",
-          module: "article.normalize",
+          module: "signal_candidate.normalize",
           label: "Normalize",
           notes: "Prepare content",
           options: {},
@@ -42,7 +42,7 @@ test("sequenceToEditorGraph and editorGraphToTaskGraph preserve task metadata or
         },
         {
           key: "notify",
-          module: "article.notify",
+          module: "signal_candidate.notify",
           label: "Notify",
           notes: "Fan out to users",
           options: { channel: "email" },
@@ -51,7 +51,7 @@ test("sequenceToEditorGraph and editorGraphToTaskGraph preserve task metadata or
           timeout_ms: 60000,
         },
       ],
-      trigger_event: "article.ingest.requested",
+      trigger_event: "signal_candidate.ingest.requested",
       editor_state: {
         viewport: { x: 10, y: 20, zoom: 1 },
       },
@@ -73,7 +73,7 @@ test("sequenceToEditorGraph and editorGraphToTaskGraph preserve task metadata or
   assert.deepEqual(restored, [
     {
       key: "normalize",
-      module: "article.normalize",
+      module: "signal_candidate.normalize",
       label: "Normalize",
       notes: "Prepare content",
       options: {},
@@ -83,7 +83,7 @@ test("sequenceToEditorGraph and editorGraphToTaskGraph preserve task metadata or
     },
     {
       key: "notify",
-      module: "article.notify",
+      module: "signal_candidate.notify",
       label: "Notify",
       notes: "Fan out to users",
       options: { channel: "email" },

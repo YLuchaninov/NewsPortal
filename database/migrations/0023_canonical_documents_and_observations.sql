@@ -1,7 +1,7 @@
 create table if not exists canonical_documents (
-  canonical_document_id uuid primary key references articles (doc_id) on delete cascade,
+  canonical_document_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   content_kind text not null default 'editorial',
-  content_format text not null default 'article',
+  content_format text not null default 'signal_candidate',
   canonical_url text not null,
   title text not null default '',
   lead text not null default '',
@@ -21,7 +21,7 @@ create table if not exists canonical_documents (
   constraint canonical_documents_content_kind_check
     check (content_kind in ('editorial')),
   constraint canonical_documents_content_format_check
-    check (content_format in ('article', 'video_news', 'gallery', 'mixed')),
+    check (content_format in ('signal_candidate', 'video_news', 'gallery', 'mixed')),
   constraint canonical_documents_observation_count_check
     check (observation_count >= 0)
 );
@@ -34,8 +34,8 @@ create index if not exists canonical_documents_last_observed_at_idx
 
 create table if not exists document_observations (
   observation_id uuid primary key default gen_random_uuid(),
-  origin_type text not null default 'article',
-  origin_id uuid not null references articles (doc_id) on delete cascade,
+  origin_type text not null default 'signal_candidate',
+  origin_id uuid not null references signal_candidates (doc_id) on delete cascade,
   channel_id uuid not null references source_channels (channel_id) on delete cascade,
   source_record_id text,
   observed_url text not null,
@@ -47,7 +47,7 @@ create table if not exists document_observations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint document_observations_origin_type_check
-    check (origin_type in ('article')),
+    check (origin_type in ('signal_candidate')),
   constraint document_observations_duplicate_kind_check
     check (duplicate_kind in ('pending', 'canonical', 'exact_duplicate', 'near_duplicate')),
   constraint document_observations_state_check
@@ -102,14 +102,14 @@ select
   coalesce(stats.first_observed_at, root.ingested_at, now()) as first_observed_at,
   coalesce(stats.last_observed_at, root.updated_at, root.ingested_at, now()) as last_observed_at,
   coalesce(stats.observation_count, 0) as observation_count
-from articles root
+from signal_candidates root
 join source_channels sc on sc.channel_id = root.channel_id
 left join lateral (
   select
     min(a.ingested_at) as first_observed_at,
     max(a.ingested_at) as last_observed_at,
     count(*)::int as observation_count
-  from articles a
+  from signal_candidates a
   where coalesce(a.canonical_doc_id, a.doc_id) = root.doc_id
     and (
       a.deduped_at is not null
@@ -120,7 +120,7 @@ left join lateral (
 ) stats on true
 where exists (
   select 1
-  from articles a
+  from signal_candidates a
   where coalesce(a.canonical_doc_id, a.doc_id) = root.doc_id
     and (
       a.deduped_at is not null
@@ -162,10 +162,10 @@ insert into document_observations (
   observation_state
 )
 select
-  'article' as origin_type,
+  'signal_candidate' as origin_type,
   a.doc_id as origin_id,
   a.channel_id,
-  a.source_article_id as source_record_id,
+  a.source_signal_candidate_id as source_record_id,
   a.url as observed_url,
   a.published_at,
   a.ingested_at,
@@ -211,7 +211,7 @@ select
     then 'canonicalized'
     else 'pending_canonicalization'
   end as observation_state
-from articles a
+from signal_candidates a
 on conflict (origin_type, origin_id) do update
 set
   channel_id = excluded.channel_id,

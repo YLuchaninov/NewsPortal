@@ -11,50 +11,50 @@ insert into sequences (
 values
   (
     '5cc77217-7a2f-4318-9fef-c6734e0f22f1',
-    'Default Article Normalize',
-    'Draft default sequence for article ingest normalization.',
+    'Default SignalCandidate Normalize',
+    'Draft default sequence for signal_candidate ingest normalization.',
     jsonb_build_array(
       jsonb_build_object(
         'key', 'normalize',
-        'module', 'article.normalize',
+        'module', 'signal_candidate.normalize',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.ingest.requested',
-    array['default', 'article', 'core'],
+    'signal_candidate.ingest.requested',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
     '29550f32-8e68-4ad0-8b50-1cad53b0995b',
-    'Default Article Dedup',
-    'Draft default sequence for article deduplication after normalization.',
+    'Default SignalCandidate Dedup',
+    'Draft default sequence for signal_candidate deduplication after normalization.',
     jsonb_build_array(
       jsonb_build_object(
         'key', 'dedup',
-        'module', 'article.dedup',
+        'module', 'signal_candidate.dedup',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.normalized',
-    array['default', 'article', 'core'],
+    'signal_candidate.normalized',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
     '1272c6ef-c795-444c-a561-0c793eb90bb8',
-    'Default Article Embed',
-    'Draft default sequence for article embedding after normalization.',
+    'Default SignalCandidate Embed',
+    'Draft default sequence for signal_candidate embedding after normalization.',
     jsonb_build_array(
       jsonb_build_object(
         'key', 'embed',
-        'module', 'article.embed',
+        'module', 'signal_candidate.embed',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.normalized',
-    array['default', 'article', 'core'],
+    'signal_candidate.normalized',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
@@ -64,29 +64,29 @@ values
     jsonb_build_array(
       jsonb_build_object(
         'key', 'match_criteria',
-        'module', 'article.match_criteria',
+        'module', 'signal_candidate.match_criteria',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.embedded',
-    array['default', 'article', 'core'],
+    'signal_candidate.embedded',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
     '66e2d74d-c46e-4cd9-80b3-c8f58a6c032e',
-    'Default Article Cluster',
-    'Draft default sequence for clustering eligible articles.',
+    'Default SignalCandidate Cluster',
+    'Draft default sequence for clustering eligible signal_candidates.',
     jsonb_build_array(
       jsonb_build_object(
         'key', 'cluster',
-        'module', 'article.cluster',
+        'module', 'signal_candidate.cluster',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.criteria.matched',
-    array['default', 'article', 'core'],
+    'signal_candidate.criteria.matched',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
@@ -96,13 +96,13 @@ values
     jsonb_build_array(
       jsonb_build_object(
         'key', 'match_interests',
-        'module', 'article.match_interests',
+        'module', 'signal_candidate.match_interests',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.clustered',
-    array['default', 'article', 'core'],
+    'signal_candidate.clustered',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
@@ -112,13 +112,13 @@ values
     jsonb_build_array(
       jsonb_build_object(
         'key', 'notify',
-        'module', 'article.notify',
+        'module', 'signal_candidate.notify',
         'options', jsonb_build_object()
       )
     ),
     'draft',
-    'article.interests.matched',
-    array['default', 'article', 'core'],
+    'signal_candidate.interests.matched',
+    array['default', 'signal_candidate', 'core'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (
@@ -128,13 +128,13 @@ values
     jsonb_build_array(
       jsonb_build_object(
         'key', 'llm_review',
-        'module', 'article.llm_review',
+        'module', 'signal_candidate.llm_review',
         'options', jsonb_build_object()
       )
     ),
     'draft',
     'llm.review.requested',
-    array['default', 'article', 'maintenance'],
+    array['default', 'signal_candidate', 'maintenance'],
     'migration:0011_sequence_engine_default_sequences'
   ),
   (

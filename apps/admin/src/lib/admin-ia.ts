@@ -38,11 +38,11 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
     description: "Content review and editorial triage.",
     items: [
       {
-        href: "/articles",
-        label: "Articles",
-        key: "articles",
+        href: "/signal-candidates",
+        label: "Signal Candidates",
+        key: "signal_candidates",
         icon: "newspaper",
-        summary: "Review article state, moderation, and downstream selection context.",
+        summary: "Review signal_candidate state, moderation, and downstream selection context.",
       },
       {
         href: "/clusters",
@@ -177,8 +177,8 @@ export const ADMIN_CONTINUE_ACTIONS: readonly AdminDashboardAction[] = [
     section: "Sources",
   },
   {
-    href: "/articles",
-    label: "Triage article outcomes",
+    href: "/signal-candidates",
+    label: "Triage signal_candidate outcomes",
     summary: "Moderate blocked content and inspect selected or held rows.",
     section: "Operations",
   },

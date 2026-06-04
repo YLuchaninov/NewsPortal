@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
     fetchImpl: fetch,
   });
   const subjectTypes = [
-    ...(readBooleanField(payload.subjectArticle) ? ["article"] : []),
+    ...(readBooleanField(payload.subjectSignalCandidate) ? ["signal_candidate"] : []),
     ...(readBooleanField(payload.subjectWebResource) ? ["web_resource"] : []),
     ...(readBooleanField(payload.subjectStoryCluster) ? ["story_cluster"] : []),
   ];
@@ -52,7 +52,7 @@ export const POST: APIRoute = async ({ request }) => {
     ...(readBooleanField(payload.moduleLabels) ? ["system_interest_labels"] : []),
     ...(readBooleanField(payload.moduleGate) ? ["content_filter"] : []),
   ];
-  const defaultSubjectTypes = ["article", "web_resource", "story_cluster"];
+  const defaultSubjectTypes = ["signal_candidate", "web_resource", "story_cluster"];
   const defaultModules = [
     "ner",
     "sentiment",

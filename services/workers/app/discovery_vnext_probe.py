@@ -358,7 +358,7 @@ def _observed_artifacts(feed_results: list[dict[str, Any]], website_results: lis
         if bool(item.get("is_valid_rss")) and entries:
             artifacts.append(
                 {
-                    "artifactType": "article",
+                    "artifactType": "signal_candidate",
                     "countEstimate": len(entries),
                     "evidence": ["valid feed probe", "sample entries"],
                     "sampleUrls": [str(entry.get("url") or entry.get("link")) for entry in entries if isinstance(entry, dict) and (entry.get("url") or entry.get("link"))][:5],

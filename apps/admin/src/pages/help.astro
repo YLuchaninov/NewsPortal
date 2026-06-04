@@ -29,7 +29,7 @@ const pagePaths = {
   channels: appPath("/channels"),
   llmTemplates: appPath("/templates/llm"),
   interestTemplates: appPath("/templates/interests"),
-  articles: appPath("/articles"),
+  signal_candidates: appPath("/signal-candidates"),
   clusters: appPath("/clusters"),
   reindex: appPath("/reindex"),
   observability: appPath("/observability"),
@@ -59,10 +59,10 @@ const pagePaths = {
           <p class="mt-2 text-base font-semibold">Find and fix a source issue</p>
           <p class="mt-2 text-sm text-muted-foreground">Start in Channels or Observability when fetches fail, cadence looks stale, or onboarding needs a safe path.</p>
         </a>
-        <a href={pagePaths.articles} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
+        <a href={pagePaths.signal_candidates} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Operations</p>
           <p class="mt-2 text-base font-semibold">Triage content and decisions</p>
-          <p class="mt-2 text-sm text-muted-foreground">Use Articles and Clusters when an operator needs to inspect canonical state, moderation, or verification context.</p>
+          <p class="mt-2 text-sm text-muted-foreground">Use Signal Candidates and Clusters when an operator needs to inspect canonical state, moderation, or verification context.</p>
         </a>
         <a href={pagePaths.reindex} class="rounded-2xl border border-border bg-background/70 p-4 transition hover:border-primary/40 hover:bg-muted/40">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Maintenance</p>
@@ -97,7 +97,7 @@ const pagePaths = {
         </article>
         <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Decide</p>
-          <p class="mt-2 text-sm font-medium">Articles, Clusters, Rules</p>
+          <p class="mt-2 text-sm font-medium">Signal Candidates, Clusters, Rules</p>
           <p class="mt-2 text-xs text-muted-foreground">Inspect canonical evidence, verification strength, moderation state, and the rules that shape system or user matching.</p>
         </article>
         <article class={ADMIN_SMALL_CARD_CLASS}>
@@ -147,10 +147,10 @@ const pagePaths = {
             <li>Use Observability to confirm whether the problem is fetch health before editing source rules.</li>
           </ul>
         </article>
-        <article id="articles" class={ADMIN_SMALL_CARD_CLASS}>
+        <article id="signal_candidates" class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Content &amp; Moderation</p>
           <p class="mt-2 text-xs text-muted-foreground">
-            <a href={pagePaths.articles} class="text-primary hover:underline">Articles</a> is the main triage surface for editorial observations, canonical document ownership, verification, and final-selection read model state.
+            <a href={pagePaths.signal_candidates} class="text-primary hover:underline">Signal Candidates</a> is the main triage surface for editorial observations, canonical document ownership, verification, and final-selection read model state.
           </p>
           <ul class="mt-3 space-y-2 text-xs text-muted-foreground">
             <li>Use block/unblock when the collection decision is wrong.</li>
@@ -248,7 +248,7 @@ const pagePaths = {
         </article>
         <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">LLM Reviews</p>
-          <p class="mt-2 text-xs text-muted-foreground">Each row is one gray-zone review with decision, tokens, cost, and latency. Use it to watch review pressure rather than article correctness.</p>
+          <p class="mt-2 text-xs text-muted-foreground">Each row is one gray-zone review with decision, tokens, cost, and latency. Use it to watch review pressure rather than signal candidate correctness.</p>
         </article>
         <article class={ADMIN_SMALL_CARD_CLASS}>
           <p class="text-sm font-medium">Budget state</p>

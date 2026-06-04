@@ -10,17 +10,17 @@ import {
 
 test("parseSelectedDigestItemIds keeps order and removes duplicates", () => {
   const params = new URLSearchParams();
-  params.append("item", "editorial:1");
-  params.append("item", "editorial:1");
+  params.append("item", "signal_candidate:1");
+  params.append("item", "signal_candidate:1");
   params.append("item", "resource:2");
 
-  assert.deepEqual(parseSelectedDigestItemIds(params), ["editorial:1", "resource:2"]);
+  assert.deepEqual(parseSelectedDigestItemIds(params), ["signal_candidate:1", "resource:2"]);
 });
 
 test("saved digest renderers include titles and source links", () => {
   const items = [
     {
-      content_item_id: "editorial:1",
+      content_item_id: "signal_candidate:1",
       title: "AI policy update",
       summary: "A concise summary",
       source_name: "Example News",
@@ -46,18 +46,18 @@ test("resolveSavedDigestItemIds falls back to all saved items when no explicit s
       calls.push({ sql, params });
       if (sql.includes("with requested_editorial as")) {
         return {
-          rows: [{ requested_content_item_id: "editorial:2", content_item_id: "editorial:9" }],
+          rows: [{ requested_content_item_id: "signal_candidate:2", content_item_id: "signal_candidate:9" }],
         };
       }
       return {
-        rows: [{ content_item_id: "editorial:2" }, { content_item_id: "resource:3" }],
+        rows: [{ content_item_id: "signal_candidate:2" }, { content_item_id: "resource:3" }],
       };
     },
   };
 
   const itemIds = await resolveSavedDigestItemIds(pool as any, "user-1", []);
 
-  assert.deepEqual(itemIds, ["editorial:9", "resource:3"]);
+  assert.deepEqual(itemIds, ["signal_candidate:9", "resource:3"]);
   assert.equal(calls.length, 2);
   assert.match(calls[0]!.sql, /saved_state = 'saved'/);
   assert.deepEqual(calls[0]!.params, ["user-1"]);
@@ -69,27 +69,27 @@ test("resolveSavedDigestItemIds preserves explicit selection order while droppin
       if (sql.includes("with requested_editorial as")) {
         return {
           rows: [
-            { requested_content_item_id: "editorial:2", content_item_id: "editorial:9" },
-            { requested_content_item_id: "editorial:7", content_item_id: "editorial:9" },
+            { requested_content_item_id: "signal_candidate:2", content_item_id: "signal_candidate:9" },
+            { requested_content_item_id: "signal_candidate:7", content_item_id: "signal_candidate:9" },
           ],
         };
       }
       return {
         rows: [
           { content_item_id: "resource:3" },
-          { content_item_id: "editorial:2" },
-          { content_item_id: "editorial:7" },
+          { content_item_id: "signal_candidate:2" },
+          { content_item_id: "signal_candidate:7" },
         ],
       };
     },
   };
 
   const itemIds = await resolveSavedDigestItemIds(pool as any, "user-1", [
-    "editorial:2",
-    "editorial:7",
+    "signal_candidate:2",
+    "signal_candidate:7",
     "missing:1",
     "resource:3",
   ]);
 
-  assert.deepEqual(itemIds, ["editorial:9", "resource:3"]);
+  assert.deepEqual(itemIds, ["signal_candidate:9", "resource:3"]);
 });

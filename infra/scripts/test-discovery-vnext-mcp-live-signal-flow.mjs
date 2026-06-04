@@ -64,7 +64,7 @@ const SIGNAL_PACKS = [
       "primary_changelog: release notes, version, breaking change, deprecated API, migration guide",
       "operator_signal: deadline, removal, upgrade requirement, compatibility impact",
     ],
-    candidateNegativeSignals: ["marketing_only: feature announcement", "tutorial_only: how-to article"],
+    candidateNegativeSignals: ["marketing_only: feature announcement", "tutorial_only: how-to signal_candidate"],
     evidenceTerms: ["release notes", "changelog", "deprecation", "deprecated", "breaking change", "migration", "upgrade", "api"],
   },
 ];
@@ -91,8 +91,8 @@ const REQUIRED_TOOLS = [
   "outbox.events.list",
   "fetch_runs.list",
   "web_resources.list",
-  "articles.list",
-  "articles.explain",
+  "signal_candidates.list",
+  "signal_candidates.explain",
   "content_items.list",
   "content_items.explain",
   "maintenance.reindex.request",
@@ -175,7 +175,7 @@ function fetchRunSummary(fetchRun) {
     adapterKey: valueFrom(fetchRun, ["adapter_key", "adapterKey"]) ?? null,
     status: valueFrom(fetchRun, ["status", "run_status", "runStatus"]) ?? null,
     fetchedItemCount: Number(valueFrom(fetchRun, ["fetched_item_count", "fetchedItemCount"]) ?? 0),
-    newArticleCount: Number(valueFrom(fetchRun, ["new_article_count", "newArticleCount"]) ?? 0),
+    newSignalCandidateCount: Number(valueFrom(fetchRun, ["new_signal_candidate_count", "newSignalCandidateCount"]) ?? 0),
     errorMessage: valueFrom(fetchRun, ["error_message", "errorMessage"]) ?? null,
   };
 }
@@ -223,22 +223,22 @@ function isFeedBackedFetchRun(fetchRun) {
 }
 
 function downstreamFailureKind(packReport) {
-  if ((packReport.fetchRuns ?? []).some(isFeedBackedFetchRun) && (packReport.articles ?? []).length === 0) {
+  if ((packReport.fetchRuns ?? []).some(isFeedBackedFetchRun) && (packReport.signal_candidates ?? []).length === 0) {
     return "rss_feed_not_productive";
   }
   return "no_fetched_content";
 }
 
 async function readDownstreamEvidence(report, harness, token, channelId) {
-  const [resourcesPage, articlesPage] = await Promise.all([
+  const [resourcesPage, signalCandidatesPage] = await Promise.all([
     mcp(report, harness, token, "web_resources.list", { channelId, page: 1, pageSize: 20 }, { optional: true }),
-    mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 20 }, { optional: true }),
+    mcp(report, harness, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 }, { optional: true }),
   ]);
   return {
     resourcesPage,
-    articlesPage,
+    signalCandidatesPage,
     resources: rows(resourcesPage),
-    articles: rows(articlesPage),
+    signal_candidates: rows(signalCandidatesPage),
   };
 }
 
@@ -580,13 +580,13 @@ async function proveContentTail(harness, token, report, pack, packReport, routed
   const feedBacked = packReport.fetchRuns.some(isFeedBackedFetchRun);
   const downstreamEvidence = await waitFor(`downstream evidence for ${channelId}`, async () => {
     const evidence = await readDownstreamEvidence(report, harness, token, channelId);
-    if (feedBacked) return evidence.articles.length > 0 ? evidence : null;
-    return evidence.resources.length > 0 || evidence.articles.length > 0 ? evidence : null;
+    if (feedBacked) return evidence.signal_candidates.length > 0 ? evidence : null;
+    return evidence.resources.length > 0 || evidence.signal_candidates.length > 0 ? evidence : null;
   }, { timeoutMs: 5 * 60 * 1000, intervalMs: 10000 });
   packReport.webResources = downstreamEvidence.resources;
-  packReport.articles = downstreamEvidence.articles;
+  packReport.signal_candidates = downstreamEvidence.signal_candidates;
 
-  const docIds = packReport.articles.map((article) => idFrom(article, ["doc_id", "docId"])).filter(Boolean).slice(0, 20);
+  const docIds = packReport.signal_candidates.map((signal_candidate) => idFrom(signal_candidate, ["doc_id", "docId"])).filter(Boolean).slice(0, 20);
   if (docIds.length > 0) {
     await mcp(report, harness, token, "maintenance.reindex.request", {
       payload: {
@@ -602,14 +602,14 @@ async function proveContentTail(harness, token, report, pack, packReport, routed
     await mcp(report, harness, token, "maintenance.reindex_jobs.list", { page: 1, pageSize: 20 });
   }
 
-  const refreshedArticles = await mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 20 }, { optional: true });
-  packReport.articles = rows(refreshedArticles);
-  for (const article of packReport.articles.slice(0, 5)) {
-    const docId = idFrom(article, ["doc_id", "docId"]);
+  const refreshedSignalCandidates = await mcp(report, harness, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 }, { optional: true });
+  packReport.signal_candidates = rows(refreshedSignalCandidates);
+  for (const signal_candidate of packReport.signal_candidates.slice(0, 5)) {
+    const docId = idFrom(signal_candidate, ["doc_id", "docId"]);
     if (!docId) continue;
-    const explain = await mcp(report, harness, token, "articles.explain", { docId }, { optional: true });
-    if (explain && hasSignalEvidence(pack, article, explain)) {
-      packReport.explainableItems.push({ kind: "article", id: docId, title: article.title ?? null, url: article.url ?? null, explain });
+    const explain = await mcp(report, harness, token, "signal_candidates.explain", { docId }, { optional: true });
+    if (explain && hasSignalEvidence(pack, signal_candidate, explain)) {
+      packReport.explainableItems.push({ kind: "signal_candidate", id: docId, title: signal_candidate.title ?? null, url: signal_candidate.url ?? null, explain });
     }
   }
 
@@ -638,7 +638,7 @@ async function runPack(harness, token, report, pack) {
     fetchRuns: [],
     fetchRunSummaries: [],
     webResources: [],
-    articles: [],
+    signal_candidates: [],
     contentItems: [],
     explainableItems: [],
   };
@@ -669,7 +669,7 @@ async function runPack(harness, token, report, pack) {
     packReport.fetchRuns = [];
     packReport.fetchRunSummaries = [];
     packReport.webResources = [];
-    packReport.articles = [];
+    packReport.signal_candidates = [];
     packReport.contentItems = [];
     packReport.explainableItems = [];
     try {
@@ -681,7 +681,7 @@ async function runPack(harness, token, report, pack) {
       continue;
     }
     if (
-      (packReport.webResources.length > 0 || packReport.articles.length > 0 || packReport.contentItems.length > 0) &&
+      (packReport.webResources.length > 0 || packReport.signal_candidates.length > 0 || packReport.contentItems.length > 0) &&
       packReport.explainableItems.length > 0
     ) {
       packReport.status = "signal_content_fetched";
@@ -703,7 +703,7 @@ function summarizeStatus(report) {
   const selectedCount = report.packs.reduce(
     (count, pack) =>
       count +
-      pack.articles.filter((article) => article.final_selection_selected === true).length +
+      pack.signal_candidates.filter((signal_candidate) => signal_candidate.final_selection_selected === true).length +
       (pack.status === "signal_content_fetched" ? pack.contentItems.length : 0),
     0
   );
@@ -732,7 +732,7 @@ function summarizeStatus(report) {
     report.gaps.push({ category: "runtime_gap", message: "Fewer than 2 signal families produced real fetched content." });
   }
   if (explainableCount < 3) {
-    report.gaps.push({ category: "diagnostic_gap", message: "Fewer than 3 fetched articles/content items have explainable evidence." });
+    report.gaps.push({ category: "diagnostic_gap", message: "Fewer than 3 fetched signal_candidates/content items have explainable evidence." });
   }
   if (selectedCount < 1) {
     report.gaps.push({ category: "downstream_selection_gap", message: "No item reached final_selection_results.selected or content_items.list." });
@@ -774,7 +774,7 @@ function markdown(report) {
       `- fetchRuns: ${pack.fetchRuns.length}`,
       `- fetchRunSummaries: ${JSON.stringify(pack.fetchRunSummaries ?? [])}`,
       `- webResources: ${pack.webResources.length}`,
-      `- articles: ${pack.articles.length}`,
+      `- signal_candidates: ${pack.signal_candidates.length}`,
       `- contentItems: ${pack.contentItems.length}`,
       `- explainableItems: ${pack.explainableItems.length}`,
       "",

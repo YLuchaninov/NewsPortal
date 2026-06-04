@@ -131,7 +131,7 @@ export function renderSavedDigestText(items: ContentItemDetail[]): string {
   const lines = [
     `Saved digest (${items.length} item${items.length === 1 ? "" : "s"})`,
     "",
-    "Articles and resources you saved to review later.",
+    "Signal candidates and resources you saved to review later.",
     "",
   ];
 
@@ -248,7 +248,7 @@ export function renderSavedDigestHtml(items: ContentItemDetail[]): string {
     <main>
       <header>
         <h1>Saved digest</h1>
-        <p class="intro">Articles and resources you saved to review later.</p>
+        <p class="intro">Signal candidates and resources you saved to review later.</p>
       </header>
       ${renderedItems}
     </main>

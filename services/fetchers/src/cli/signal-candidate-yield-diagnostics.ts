@@ -1,17 +1,17 @@
 import path from "node:path";
 
 import {
-  collectArticleYieldSnapshot,
-  createArticleYieldPackRoot,
+  collectSignalCandidateYieldSnapshot,
+  createSignalCandidateYieldPackRoot,
   createConfiguredPoolFromLocalEnv,
   writeSnapshotPack
-} from "./article-yield-shared";
+} from "./signal-candidate-yield-shared";
 
 async function main(): Promise<void> {
   const pool = await createConfiguredPoolFromLocalEnv();
   try {
-    const snapshot = await collectArticleYieldSnapshot(pool);
-    const packRoot = await createArticleYieldPackRoot();
+    const snapshot = await collectSignalCandidateYieldSnapshot(pool);
+    const packRoot = await createSignalCandidateYieldPackRoot();
     await writeSnapshotPack(snapshot, packRoot);
 
     console.log(
@@ -21,11 +21,11 @@ async function main(): Promise<void> {
           summary: {
             activeRssChannels: snapshot.baseline.activeRssChannels,
             fetchRuns: snapshot.baseline.fetchRuns,
-            articleRows: snapshot.baseline.articleRows,
+            signalCandidateRows: snapshot.baseline.signalCandidateRows,
             distinctUrls: snapshot.baseline.distinctUrls,
             eligibleRows: snapshot.baseline.eligibleRows,
             filteredRows: snapshot.baseline.filteredRows,
-            pendingArticleIngestRuns: snapshot.baseline.pendingArticleIngestRuns,
+            pendingSignalCandidateIngestRuns: snapshot.baseline.pendingSignalCandidateIngestRuns,
             transientFetchFailures: snapshot.baseline.transientFetchFailures
           },
           files: {

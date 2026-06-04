@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ..discovery_runtime import DiscoveryRuntime
-from .article_enricher import PostgresArticleEnricherAdapter
-from .article_loader import PostgresArticleLoaderAdapter
+from .signal_candidate_enricher import PostgresSignalCandidateEnricherAdapter
+from .signal_candidate_loader import PostgresSignalCandidateLoaderAdapter
 from .content_sampler import FetchersContentSamplerAdapter
 from .db_store import PostgresDbStoreAdapter
 from .fetchers_rss_probe import FetchersRssProbeAdapter
@@ -69,8 +69,8 @@ def build_live_discovery_runtime() -> DiscoveryRuntime:
         llm_analyzer=GeminiLlmAnalyzerAdapter(),
         source_registrar=PostgresSourceRegistrarAdapter(),
         db_store=PostgresDbStoreAdapter(),
-        article_loader=PostgresArticleLoaderAdapter(),
-        article_enricher=PostgresArticleEnricherAdapter(),
+        signal_candidate_loader=PostgresSignalCandidateLoaderAdapter(),
+        signal_candidate_enricher=PostgresSignalCandidateEnricherAdapter(),
         website_probe=FetchersWebsiteProbeAdapter(),
     )
 

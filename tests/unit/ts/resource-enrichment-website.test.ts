@@ -139,10 +139,10 @@ test("buildWebsiteResourceClassificationJson preserves discovery truth and recor
     enrichmentClassification: {
       kind: "editorial",
       confidence: 0.88,
-      reasons: ["structured:Article"],
+      reasons: ["structured:SignalCandidate"],
     },
     resolvedKind: "editorial",
-    structuredTypes: ["Article"],
+    structuredTypes: ["SignalCandidate"],
     hintedKinds: ["editorial"],
     reasonSource: "enrichment",
   });
@@ -164,13 +164,13 @@ test("buildWebsiteResourceClassificationJson preserves discovery truth and recor
   assert.deepEqual(classification.enrichment, {
     kind: "editorial",
     confidence: 0.88,
-    reasons: ["structured:Article"],
+    reasons: ["structured:SignalCandidate"],
     hintedKinds: ["editorial"],
-    structuredTypes: ["Article"],
+    structuredTypes: ["SignalCandidate"],
   });
 });
 
-test("shouldRetainDiscoveryEditorialKind keeps strong article-like detail pages editorial despite listing-biased layout noise", () => {
+test("shouldRetainDiscoveryEditorialKind keeps strong signal_candidate-like detail pages editorial despite listing-biased layout noise", () => {
   assert.equal(
     shouldRetainDiscoveryEditorialKind({
       discoveryKind: "editorial",
@@ -181,7 +181,7 @@ test("shouldRetainDiscoveryEditorialKind keeps strong article-like detail pages 
       title: "EU policy package reaches final approval",
       summary:
         "The final package includes implementation guidance, deadlines, and a summary of the last negotiation round.",
-      bodyText: "Detailed article body ".repeat(40),
+      bodyText: "Detailed signal_candidate body ".repeat(40),
       hasRepeatedCards: true,
       hasPagination: true,
     }),

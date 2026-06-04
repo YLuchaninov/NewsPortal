@@ -1,4 +1,4 @@
-export * from "./article";
+export * from "./signal-candidate";
 export * from "./content";
 export * from "./content-analysis";
 export * from "./discovery-vnext";

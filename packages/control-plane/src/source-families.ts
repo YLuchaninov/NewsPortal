@@ -50,7 +50,7 @@ export interface SourceFamilyChannelLike {
   runCount7d?: number | string | null;
   failureCount7d?: number | string | null;
   newItemCount7d?: number | string | null;
-  articleCount?: number | string | null;
+  signalCandidateCount?: number | string | null;
   webResourceCount?: number | string | null;
   selectedRows?: number | string | null;
   grayRows?: number | string | null;
@@ -78,7 +78,7 @@ interface RawSourceFamilyChannelRow {
   runCount7d: number;
   failureCount7d: number;
   newItemCount7d: number;
-  articleCount: number;
+  signalCandidateCount: number;
   webResourceCount: number;
   selectedRows: number;
   grayRows: number;
@@ -344,7 +344,7 @@ export function classifySourceLifecycleLabel(input: SourceFamilyChannelLike): So
   const selected = toNumber(input.selectedRows);
   const gray = toNumber(input.grayRows);
   const rejected = toNumber(input.rejectedRows);
-  const articles = toNumber(input.articleCount);
+  const signal_candidates = toNumber(input.signalCandidateCount);
   const resources = toNumber(input.webResourceCount);
   const newItems = toNumber(input.newItemCount7d);
   const hasSuccess = Boolean(input.lastSuccessAt) || toNumber(input.runCount7d) > toNumber(input.failureCount7d);
@@ -356,7 +356,7 @@ export function classifySourceLifecycleLabel(input: SourceFamilyChannelLike): So
   if (selected > 0) {
     return "working_high_signal";
   }
-  if (semanticMatch && hasSuccess && gray + rejected + articles + resources + newItems > 0) {
+  if (semanticMatch && hasSuccess && gray + rejected + signal_candidates + resources + newItems > 0) {
     return "working_noisy_semantic_match";
   }
   return "working_low_yield";
@@ -471,10 +471,10 @@ export async function getSourceFamilyCoverageWithPool(
       coalesce(runs.run_count_7d, 0)::int as "runCount7d",
       coalesce(runs.failure_count_7d, 0)::int as "failureCount7d",
       coalesce(runs.new_item_count_7d, 0)::int as "newItemCount7d",
-      coalesce(article_stats.article_count, 0)::int as "articleCount",
-      coalesce(article_stats.selected_rows, 0)::int as "selectedRows",
-      coalesce(article_stats.gray_rows, 0)::int as "grayRows",
-      coalesce(article_stats.rejected_rows, 0)::int as "rejectedRows",
+      coalesce(signal_candidate_stats.signal_candidate_count, 0)::int as "signalCandidateCount",
+      coalesce(signal_candidate_stats.selected_rows, 0)::int as "selectedRows",
+      coalesce(signal_candidate_stats.gray_rows, 0)::int as "grayRows",
+      coalesce(signal_candidate_stats.rejected_rows, 0)::int as "rejectedRows",
       coalesce(web_stats.web_resource_count, 0)::int as "webResourceCount",
       sc.config_json as "configJson"
     from source_channels sc
@@ -494,21 +494,21 @@ export async function getSourceFamilyCoverageWithPool(
           where cfr.started_at >= now() - interval '7 days'
             and cfr.outcome_kind in ('rate_limited', 'transient_failure', 'hard_failure')
         )::int as failure_count_7d,
-        coalesce(sum(cfr.new_article_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as new_item_count_7d
+        coalesce(sum(cfr.new_signal_candidate_count) filter (where cfr.started_at >= now() - interval '7 days'), 0)::int as new_item_count_7d
       from channel_fetch_runs cfr
       where cfr.channel_id = sc.channel_id
         and cfr.started_at >= now() - interval '7 days'
     ) runs on true
     left join lateral (
       select
-        count(*)::int as article_count,
+        count(*)::int as signal_candidate_count,
         count(*) filter (where fsr.final_decision = 'selected')::int as selected_rows,
         count(*) filter (where fsr.final_decision = 'gray_zone')::int as gray_rows,
         count(*) filter (where fsr.final_decision = 'rejected')::int as rejected_rows
-      from articles a
+      from signal_candidates a
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
       where a.channel_id = sc.channel_id
-    ) article_stats on true
+    ) signal_candidate_stats on true
     left join lateral (
       select count(*)::int as web_resource_count
       from web_resources wr
@@ -751,7 +751,7 @@ export function buildCoverageFirstIterationRecommendation(input: {
             ]
           : [
               "operator.selection.precision_audit",
-              "articles.holds.summary/list/explain",
+              "signal_candidates.holds.summary/list/explain",
               "maintenance.reindex.request bounded docIds only when justified",
             ],
     nextReadBack: input.coverage.nextReadBack,

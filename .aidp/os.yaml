@@ -15,7 +15,7 @@ core:
   - .aidp/history.md
   - .aidp/os.yaml
   - .aidp/routes.md
-  - .aidp/contracts/article-pipeline-core.md
+  - .aidp/contracts/signal_candidate-pipeline-core.md
   - .aidp/contracts/auth-session-boundary.md
   - .aidp/contracts/browser-assisted-websites.md
   - .aidp/contracts/content-analysis-and-gating.md
@@ -245,8 +245,8 @@ commands:
   web_viewports: pnpm test:web:viewports
   web_ui_audit: pnpm test:web:ui-audit
   db_migrate: pnpm db:migrate
-  article_yield_diagnostics: pnpm article:yield:diagnostics
-  article_yield_remediate: pnpm article:yield:remediate
+  signal_candidate_yield_diagnostics: pnpm signal-candidate:yield:diagnostics
+  signal_candidate_yield_remediate: pnpm signal-candidate:yield:remediate
   feed_ingress_adapters_smoke: pnpm test:feed-ingress-adapters:smoke
   channel_auth_compose: pnpm test:channel-auth:compose
   providers_compose: pnpm test:providers:compose
@@ -547,7 +547,7 @@ deep_contract_docs:
   - .aidp/contracts/
   templates_included: true
   active_contracts:
-  - .aidp/contracts/article-pipeline-core.md
+  - .aidp/contracts/signal_candidate-pipeline-core.md
   - .aidp/contracts/auth-session-boundary.md
   - .aidp/contracts/browser-assisted-websites.md
   - .aidp/contracts/content-analysis-and-gating.md

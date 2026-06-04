@@ -19,7 +19,7 @@ interface BrowserResourceRow {
   url: string;
   discoverySource: string;
   extractionState: string;
-  projectedArticleId: string | null;
+  projectedSignalCandidateId: string | null;
   rawPayloadJson: Record<string, unknown>;
 }
 
@@ -36,7 +36,7 @@ interface SmokeLogger {
 
 const HARD_SITE_FIXTURE_HOST = "127.0.0.1";
 const RESOURCE_INGEST_TRIGGER_EVENT = "resource.ingest.requested";
-const ARTICLE_INGEST_TRIGGER_EVENT = "article.ingest.requested";
+const SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT = "signal_candidate.ingest.requested";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -109,7 +109,7 @@ function jsHeavyHardSiteHtml(dataUrl: string): string {
         .then((payload) => {
           const root = document.getElementById("app");
           payload.items.forEach((item) => {
-            const card = document.createElement("article");
+            const card = document.createElement("signal_candidate");
             const link = document.createElement("a");
             link.href = item.url;
             link.textContent = item.title;
@@ -334,7 +334,7 @@ async function fetchBrowserResources(pool: Pool, channelId: string): Promise<Bro
         url,
         discovery_source as "discoverySource",
         extraction_state as "extractionState",
-        projected_article_id::text as "projectedArticleId",
+        projected_signal_candidate_id::text as "projectedSignalCandidateId",
         raw_payload_json as "rawPayloadJson"
       from web_resources
       where channel_id = $1
@@ -373,11 +373,11 @@ async function fetchLastChannelError(pool: Pool, channelId: string): Promise<str
   return result.rows[0]?.lastErrorMessage ?? null;
 }
 
-async function fetchArticleIds(pool: Pool, channelId: string): Promise<string[]> {
+async function fetchSignalCandidateIds(pool: Pool, channelId: string): Promise<string[]> {
   const result = await pool.query<{ docId: string }>(
     `
       select doc_id::text as "docId"
-      from articles
+      from signal_candidates
       where channel_id = $1
       order by doc_id asc
     `,
@@ -430,8 +430,8 @@ async function countResourceSequenceRuns(pool: Pool, resourceIds: string[]): Pro
   return Number(result.rows[0]?.count ?? "0");
 }
 
-async function countArticleSequenceRuns(pool: Pool, articleIds: string[]): Promise<number> {
-  if (articleIds.length === 0) {
+async function countSignalCandidateSequenceRuns(pool: Pool, signalCandidateIds: string[]): Promise<number> {
+  if (signalCandidateIds.length === 0) {
     return 0;
   }
 
@@ -444,7 +444,7 @@ async function countArticleSequenceRuns(pool: Pool, articleIds: string[]): Promi
         s.trigger_event = $1
         and sr.context_json ->> 'doc_id' = any($2::text[])
     `,
-    [ARTICLE_INGEST_TRIGGER_EVENT, articleIds]
+    [SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT, signalCandidateIds]
   );
 
   return Number(result.rows[0]?.count ?? "0");
@@ -455,11 +455,11 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
     return;
   }
 
-  const articleIds = (
+  const signalCandidateIds = (
     await pool.query<{ docId: string }>(
       `
         select doc_id::text as "docId"
-        from articles
+        from signal_candidates
         where channel_id = any($1::uuid[])
       `,
       [channelIds]
@@ -475,7 +475,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
       [channelIds]
     )
   ).rows.map((row) => row.resourceId);
-  const sequenceContextIds = [...articleIds, ...resourceIds];
+  const sequenceContextIds = [...signalCandidateIds, ...resourceIds];
 
   if (sequenceContextIds.length > 0) {
     await pool.query(
@@ -518,7 +518,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
   );
   await pool.query(
     `
-      delete from articles
+      delete from signal_candidates
       where channel_id = any($1::uuid[])
     `,
     [channelIds]
@@ -594,26 +594,26 @@ async function assertBrowserIngest(
     async () => {
       const rows = await fetchBrowserResources(pool, channelId);
       const resourceIds = rows.map((row) => row.resourceId);
-      const articleIds = await fetchArticleIds(pool, channelId);
+      const signalCandidateIds = await fetchSignalCandidateIds(pool, channelId);
       const [
         publishedResourceEvents,
-        publishedArticleEvents,
+        publishedSignalCandidateEvents,
         resourceSequenceRuns,
-        articleSequenceRuns,
+        signalCandidateSequenceRuns,
       ] = await Promise.all([
         countPublishedOutboxEvents(pool, RESOURCE_INGEST_TRIGGER_EVENT, resourceIds),
-        countPublishedOutboxEvents(pool, ARTICLE_INGEST_TRIGGER_EVENT, articleIds),
+        countPublishedOutboxEvents(pool, SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT, signalCandidateIds),
         countResourceSequenceRuns(pool, resourceIds),
-        countArticleSequenceRuns(pool, articleIds),
+        countSignalCandidateSequenceRuns(pool, signalCandidateIds),
       ]);
       return (
         rows.length >= 2 &&
         rows.every((row) => row.extractionState === "enriched") &&
-        rows.every((row) => row.projectedArticleId) &&
+        rows.every((row) => row.projectedSignalCandidateId) &&
         publishedResourceEvents >= 2 &&
-        publishedArticleEvents >= 2 &&
+        publishedSignalCandidateEvents >= 2 &&
         resourceSequenceRuns >= 2 &&
-        articleSequenceRuns >= 2
+        signalCandidateSequenceRuns >= 2
       );
     },
     {
@@ -626,8 +626,8 @@ async function assertBrowserIngest(
   const byUrl = new Map(rows.map((row) => [row.url, row]));
   const story = byUrl.get(storyUrl);
   const entity = byUrl.get(entityUrl);
-  if (!story || !story.projectedArticleId) {
-    throw new Error("Expected the browser-discovered editorial story to project into articles.");
+  if (!story || !story.projectedSignalCandidateId) {
+    throw new Error("Expected the browser-discovered editorial story to project into signal candidates.");
   }
   if (!story.discoverySource.startsWith("browser_assisted")) {
     throw new Error("Expected the browser-discovered editorial story to retain browser-assisted provenance.");
@@ -636,8 +636,8 @@ async function assertBrowserIngest(
   if (storySignals.browserAssisted !== true) {
     throw new Error("Expected raw discovery signals to retain browserAssisted=true for the editorial story.");
   }
-  if (!entity || !entity.projectedArticleId) {
-    throw new Error("Expected the browser-discovered entity to project into the common article pipeline.");
+  if (!entity || !entity.projectedSignalCandidateId) {
+    throw new Error("Expected the browser-discovered entity to project into the common signal_candidate pipeline.");
   }
   if (!entity.discoverySource.startsWith("browser_assisted")) {
     throw new Error("Expected the browser-discovered entity to retain browser-assisted provenance.");

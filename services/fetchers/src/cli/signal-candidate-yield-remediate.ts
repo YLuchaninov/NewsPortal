@@ -8,12 +8,12 @@ import type { PoolClient } from "pg";
 
 import {
   buildComparison,
-  collectArticleYieldSnapshot,
-  createArticleYieldPackRoot,
+  collectSignalCandidateYieldSnapshot,
+  createSignalCandidateYieldPackRoot,
   createConfiguredPoolFromLocalEnv,
   writeComparisonPack,
   writeSnapshotPack
-} from "./article-yield-shared";
+} from "./signal-candidate-yield-shared";
 
 interface HnChannelRow {
   channelId: string;
@@ -76,7 +76,7 @@ async function deprioritizeGoogleRssChannels(client: PoolClient): Promise<number
         nextPollIntervalSeconds,
         row.runtimeMaxPollIntervalSeconds
       ),
-      reason: "article_yield_google_deprioritized"
+      reason: "signal_candidate_yield_google_deprioritized"
     });
     updatedCount += 1;
   }
@@ -216,7 +216,7 @@ async function tuneHnChannels(client: PoolClient): Promise<{
           nextPollIntervalSeconds,
           row.runtimeMaxPollIntervalSeconds
         ),
-        reason: "article_yield_hn_deprioritized"
+        reason: "signal_candidate_yield_hn_deprioritized"
       });
     }
   }
@@ -244,10 +244,10 @@ async function applyRemediation(client: PoolClient): Promise<Record<string, unkn
 async function main(): Promise<void> {
   const apply = hasFlag("--apply");
   const pool = await createConfiguredPoolFromLocalEnv();
-  const packRoot = await createArticleYieldPackRoot();
+  const packRoot = await createSignalCandidateYieldPackRoot();
 
   try {
-    const before = await collectArticleYieldSnapshot(pool);
+    const before = await collectSignalCandidateYieldSnapshot(pool);
     await writeSnapshotPack(before, path.join(packRoot, "before"));
 
     let remediationSummary: Record<string, unknown> = {
@@ -271,7 +271,7 @@ async function main(): Promise<void> {
       }
     }
 
-    const after = await collectArticleYieldSnapshot(pool);
+    const after = await collectSignalCandidateYieldSnapshot(pool);
     await writeSnapshotPack(after, path.join(packRoot, "after"));
 
     const comparison = buildComparison(before, after);

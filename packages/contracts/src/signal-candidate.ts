@@ -1,4 +1,4 @@
-export type ArticleProcessingState =
+export type SignalCandidateProcessingState =
   | "raw"
   | "normalized"
   | "deduped"
@@ -7,15 +7,15 @@ export type ArticleProcessingState =
   | "matched"
   | "notified";
 
-export type ArticleEnrichmentState = "pending" | "skipped" | "enriched" | "failed";
-export type ArticleMediaKind = "image" | "video" | "embed";
-export type ArticleMediaStorageKind = "external_url" | "youtube" | "object_storage";
+export type SignalCandidateEnrichmentState = "pending" | "skipped" | "enriched" | "failed";
+export type SignalCandidateMediaKind = "image" | "video" | "embed";
+export type SignalCandidateMediaStorageKind = "external_url" | "youtube" | "object_storage";
 
-export interface ArticleMediaAsset {
+export interface SignalCandidateMediaAsset {
   asset_id?: string;
   doc_id?: string;
-  media_kind?: ArticleMediaKind;
-  storage_kind?: ArticleMediaStorageKind;
+  media_kind?: SignalCandidateMediaKind;
+  storage_kind?: SignalCandidateMediaStorageKind;
   source_url?: string;
   canonical_url?: string | null;
   thumbnail_url?: string | null;
@@ -32,7 +32,7 @@ export interface ArticleMediaAsset {
   updated_at?: string;
 }
 
-export interface ArticlePreview {
+export interface SignalCandidatePreview {
   doc_id: string;
   url?: string;
   title?: string;
@@ -40,7 +40,7 @@ export interface ArticlePreview {
   lang?: string | null;
   published_at?: string | null;
   ingested_at?: string | null;
-  processing_state?: ArticleProcessingState | string;
+  processing_state?: SignalCandidateProcessingState | string;
   visibility_state?: string;
   event_cluster_id?: string | null;
   final_selection_decision?: string | null;
@@ -79,13 +79,13 @@ export interface ArticlePreview {
   verification_target_type?: string | null;
   verification_target_id?: string | null;
   has_media?: boolean;
-  enrichment_state?: ArticleEnrichmentState | string;
+  enrichment_state?: SignalCandidateEnrichmentState | string;
   source_name?: string | null;
   author_name?: string | null;
   read_time_seconds?: number | null;
   primary_media_asset_id?: string | null;
-  primary_media_kind?: ArticleMediaKind | null;
-  primary_media_storage_kind?: ArticleMediaStorageKind | null;
+  primary_media_kind?: SignalCandidateMediaKind | null;
+  primary_media_storage_kind?: SignalCandidateMediaStorageKind | null;
   primary_media_url?: string | null;
   primary_media_thumbnail_url?: string | null;
   primary_media_source_url?: string | null;
@@ -99,7 +99,7 @@ export interface ArticlePreview {
   interest_match_decision?: string | null;
 }
 
-export interface ArticleDetail extends ArticlePreview {
+export interface SignalCandidateDetail extends SignalCandidatePreview {
   channel_id?: string;
   channel_name?: string | null;
   ingested_at?: string;
@@ -116,19 +116,19 @@ export interface ArticleDetail extends ArticlePreview {
   extracted_source_name?: string | null;
   enrichment_debug?: Record<string, unknown> | null;
   selection_diagnostics?: Record<string, unknown> | null;
-  media_assets?: ArticleMediaAsset[];
+  media_assets?: SignalCandidateMediaAsset[];
   analysis_summary?: Record<string, unknown> | null;
 }
 
-export interface ArticleEnrichmentResult {
+export interface SignalCandidateEnrichmentResult {
   status: "skipped" | "enriched" | "failed";
   doc_id: string;
-  enrichment_state: ArticleEnrichmentState | string;
+  enrichment_state: SignalCandidateEnrichmentState | string;
   body_replaced: boolean;
   media_asset_count: number;
   error?: string | null;
 }
 
-export interface ArticleEnrichmentRetryRequest {
+export interface SignalCandidateEnrichmentRetryRequest {
   requestedBy?: string;
 }

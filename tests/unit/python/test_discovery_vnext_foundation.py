@@ -129,7 +129,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "negativeSignals": [{"description": "noise"}],
-                "artifactExpectations": ["changelog", "article"],
+                "artifactExpectations": ["changelog", "signal_candidate"],
                 "freshnessNeed": "normal",
                 "constraints": {"publicOnly": True},
                 "keywordHints": ["procurement"],
@@ -146,7 +146,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "official_update",
                 "signalProductionMode": "official_update",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -179,7 +179,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "official_update",
                 "signalProductionMode": "official_update",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -218,7 +218,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "recurring_feed",
                 "signalProductionMode": "direct_event_feed",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -296,7 +296,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             "sourceVoice": "owner_or_operator",
             "artifactFreshnessKind": "official_update",
             "signalProductionMode": "official_update",
-            "observedArtifactTypes": ["article"],
+            "observedArtifactTypes": ["signal_candidate"],
             "canProduceSignals": [
                 {
                     "signalDescription": "Public update",
@@ -737,7 +737,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "https://blog.example.org/guide/changelog",
                 {"secondaryExplainerLikely": True, "staticEvergreenLikely": True},
                 [{"kind": "website_static_probe"}],
-                ("third_party_commentary", "evergreen_article", "secondary_context", "inventory_context"),
+                ("third_party_commentary", "evergreen_signal_candidate", "secondary_context", "inventory_context"),
             ),
         ]
 
@@ -787,7 +787,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     "sourceVoice": "owner_or_operator",
                     "artifactFreshnessKind": "recurring_feed",
                     "signalProductionMode": "direct_event_feed",
-                    "observedArtifactTypes": ["article"],
+                    "observedArtifactTypes": ["signal_candidate"],
                     "canProduceSignals": [
                         {
                             "signalDescription": "Public update",
@@ -832,7 +832,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     "sourceVoice": "owner_or_operator",
                     "artifactFreshnessKind": "recurring_feed",
                     "signalProductionMode": "direct_event_feed",
-                    "observedArtifactTypes": ["article"],
+                    "observedArtifactTypes": ["signal_candidate"],
                     "canProduceSignals": [
                         {
                             "signalDescription": "Public update",
@@ -1099,7 +1099,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "artifactProducingBehavior": "valid feed entries",
                 "artifactFreshnessKind": "recurring_feed",
                 "signalProductionMode": "direct_event_feed",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -1177,7 +1177,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "public_authority",
                 "artifactFreshnessKind": "official_update",
                 "signalProductionMode": "official_update",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -1509,7 +1509,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                     }
                 ],
                 "negativeSignals": [{"description": "noise"}],
-                "artifactExpectations": ["article"],
+                "artifactExpectations": ["signal_candidate"],
                 "freshnessNeed": "normal",
                 "constraints": {"publicOnly": True},
             },
@@ -1648,7 +1648,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "recurring_feed",
                 "signalProductionMode": "direct_event_feed",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",
@@ -1740,7 +1740,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
                 "sourceVoice": "owner_or_operator",
                 "artifactFreshnessKind": "official_update",
                 "signalProductionMode": "official_update",
-                "observedArtifactTypes": ["article"],
+                "observedArtifactTypes": ["signal_candidate"],
                 "canProduceSignals": [
                     {
                         "signalDescription": "Public update",

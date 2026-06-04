@@ -150,7 +150,7 @@ export function InterestTemplateEditorForm({
               name="description"
               rows={3}
               defaultValue={value.description}
-              placeholder="News about AI regulation, governance, and public-sector oversight."
+              placeholder="Signals about AI regulation, governance, and public-sector oversight."
               className="text-sm"
             />
           </FormField>
@@ -337,7 +337,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Must-have terms"
             name="interest-template-must-have"
-            helpText="One term per line. Articles must contain at least one of these terms."
+            helpText="One term per line. Signal candidates must contain at least one of these terms."
             helpWide
           >
             <Textarea
@@ -352,7 +352,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Must-not-have terms"
             name="interest-template-must-not-have"
-            helpText="One term per line. Articles containing these terms will be filtered out."
+            helpText="One term per line. Signal candidates containing these terms will be filtered out."
             helpWide
           >
             <Textarea
@@ -474,7 +474,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Time window (hours)"
             name="interest-template-time-window"
-            helpText="Articles older than this window fail the hard filter before scoring. Leave blank to accept content from any time period."
+            helpText="Signal candidates older than this window fail the hard filter before scoring. Leave blank to accept content from any time period."
             helpWide
           >
             <Input

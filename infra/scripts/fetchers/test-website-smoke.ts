@@ -23,17 +23,17 @@ interface WebResourceRow {
   discoverySource: string;
   extractionState: string;
   extractionError: string | null;
-  projectedArticleId: string | null;
+  projectedSignalCandidateId: string | null;
   documentsCount: number;
   mediaCount: number;
   title: string;
   attributesJson: Record<string, unknown>;
 }
 
-interface ArticleRow {
+interface SignalCandidateRow {
   docId: string;
   contentKind: string;
-  sourceArticleId: string | null;
+  sourceSignalCandidateId: string | null;
   url: string;
   title: string;
   body: string;
@@ -64,7 +64,7 @@ interface SmokeLogger {
 
 const WEBSITE_FIXTURE_HOST = "127.0.0.1";
 const RESOURCE_INGEST_TRIGGER_EVENT = "resource.ingest.requested";
-const ARTICLE_INGEST_TRIGGER_EVENT = "article.ingest.requested";
+const SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT = "signal_candidate.ingest.requested";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -496,7 +496,7 @@ async function fetchResourceRows(pool: Pool, channelId: string): Promise<WebReso
         discovery_source as "discoverySource",
         extraction_state as "extractionState",
         extraction_error as "extractionError",
-        projected_article_id::text as "projectedArticleId",
+        projected_signal_candidate_id::text as "projectedSignalCandidateId",
         jsonb_array_length(documents_json)::int as "documentsCount",
         jsonb_array_length(media_json)::int as "mediaCount",
         title,
@@ -511,20 +511,20 @@ async function fetchResourceRows(pool: Pool, channelId: string): Promise<WebReso
   return result.rows;
 }
 
-async function fetchArticleRows(pool: Pool, channelId: string): Promise<ArticleRow[]> {
-  const result = await pool.query<ArticleRow>(
+async function fetchSignalCandidateRows(pool: Pool, channelId: string): Promise<SignalCandidateRow[]> {
+  const result = await pool.query<SignalCandidateRow>(
     `
       select
         doc_id::text as "docId",
         content_kind as "contentKind",
-        source_article_id as "sourceArticleId",
+        source_signal_candidate_id as "sourceSignalCandidateId",
         url,
         title,
         body,
         full_content_html as "fullContentHtml",
         enrichment_state as "enrichmentState",
         processing_state as "processingState"
-      from articles
+      from signal_candidates
       where channel_id = $1
       order by url asc
     `,
@@ -618,8 +618,8 @@ async function countResourceSequenceRuns(pool: Pool, resourceIds: string[]): Pro
   return Number(result.rows[0]?.count ?? "0");
 }
 
-async function countArticleSequenceRuns(pool: Pool, articleIds: string[]): Promise<number> {
-  if (articleIds.length === 0) {
+async function countSignalCandidateSequenceRuns(pool: Pool, signalCandidateIds: string[]): Promise<number> {
+  if (signalCandidateIds.length === 0) {
     return 0;
   }
 
@@ -632,7 +632,7 @@ async function countArticleSequenceRuns(pool: Pool, articleIds: string[]): Promi
         s.trigger_event = $1
         and sr.context_json ->> 'doc_id' = any($2::text[])
     `,
-    [ARTICLE_INGEST_TRIGGER_EVENT, articleIds]
+    [SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT, signalCandidateIds]
   );
 
   return Number(result.rows[0]?.count ?? "0");
@@ -666,11 +666,11 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
     return;
   }
 
-  const articleIds = (
+  const signalCandidateIds = (
     await pool.query<{ docId: string }>(
       `
         select doc_id::text as "docId"
-        from articles
+        from signal_candidates
         where channel_id = any($1::uuid[])
       `,
       [channelIds]
@@ -686,7 +686,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
       [channelIds]
     )
   ).rows.map((row) => row.resourceId);
-  const sequenceContextIds = [...articleIds, ...resourceIds];
+  const sequenceContextIds = [...signalCandidateIds, ...resourceIds];
 
   if (sequenceContextIds.length > 0) {
     await pool.query(
@@ -729,7 +729,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
   );
   await pool.query(
     `
-      delete from articles
+      delete from signal_candidates
       where channel_id = any($1::uuid[])
     `,
     [channelIds]
@@ -761,23 +761,23 @@ async function assertWebsiteRows(
   await waitForCondition(
     async () => {
       await enrichDiscoveredResources(pool, resourceEnrichmentService, channelId, 4);
-      const [resources, articles] =
+      const [resources, signal_candidates] =
         await Promise.all([
           fetchResourceRows(pool, channelId),
-          fetchArticleRows(pool, channelId),
+          fetchSignalCandidateRows(pool, channelId),
         ]);
       const resourceIds = resources.map((resource) => resource.resourceId);
-      const articleIds = articles.map((article) => article.docId);
+      const signalCandidateIds = signal_candidates.map((signal_candidate) => signal_candidate.docId);
       const [
         publishedResourceEvents,
-        publishedArticleEvents,
+        publishedSignalCandidateEvents,
         resourceSequenceRuns,
-        articleSequenceRuns,
+        signalCandidateSequenceRuns,
       ] = await Promise.all([
         countPublishedOutboxEvents(pool, RESOURCE_INGEST_TRIGGER_EVENT, resourceIds),
-        countPublishedOutboxEvents(pool, ARTICLE_INGEST_TRIGGER_EVENT, articleIds),
+        countPublishedOutboxEvents(pool, SIGNAL_CANDIDATE_INGEST_TRIGGER_EVENT, signalCandidateIds),
         countResourceSequenceRuns(pool, resourceIds),
-        countArticleSequenceRuns(pool, articleIds),
+        countSignalCandidateSequenceRuns(pool, signalCandidateIds),
       ]);
       lastObservedState = JSON.stringify({
         resources: resources.map((resource) => ({
@@ -786,29 +786,29 @@ async function assertWebsiteRows(
           source: resource.discoverySource,
           state: resource.extractionState,
           error: resource.extractionError,
-          projected: Boolean(resource.projectedArticleId),
+          projected: Boolean(resource.projectedSignalCandidateId),
         })),
-        articles: articles.map((article) => ({
-          url: article.url,
-          kind: article.contentKind,
-          enrichmentState: article.enrichmentState,
-          processingState: article.processingState,
+        signal_candidates: signal_candidates.map((signal_candidate) => ({
+          url: signal_candidate.url,
+          kind: signal_candidate.contentKind,
+          enrichmentState: signal_candidate.enrichmentState,
+          processingState: signal_candidate.processingState,
         })),
         publishedResourceEvents,
-        publishedArticleEvents,
+        publishedSignalCandidateEvents,
         resourceSequenceRuns,
-        articleSequenceRuns,
+        signalCandidateSequenceRuns,
       });
 
       return (
         resources.length === 4 &&
         resources.every((resource) => resource.extractionState === "enriched") &&
-        resources.filter((resource) => resource.projectedArticleId).length === 4 &&
-        articles.length === 4 &&
+        resources.filter((resource) => resource.projectedSignalCandidateId).length === 4 &&
+        signal_candidates.length === 4 &&
         publishedResourceEvents >= 4 &&
-        publishedArticleEvents >= 4 &&
+        publishedSignalCandidateEvents >= 4 &&
         resourceSequenceRuns >= 4 &&
-        articleSequenceRuns >= 4
+        signalCandidateSequenceRuns >= 4
       );
     },
     {
@@ -818,7 +818,7 @@ async function assertWebsiteRows(
     }
   );
 
-  const [channelRow, rssShadowChannels, policyRow, cursorTypes, resources, articles] = await Promise.all([
+  const [channelRow, rssShadowChannels, policyRow, cursorTypes, resources, signal_candidates] = await Promise.all([
     pool.query<{ providerType: string }>(
       `
         select provider_type as "providerType"
@@ -847,7 +847,7 @@ async function assertWebsiteRows(
       [channelId]
     ),
     fetchResourceRows(pool, channelId),
-    fetchArticleRows(pool, channelId),
+    fetchSignalCandidateRows(pool, channelId),
   ]);
 
   if (channelRow.rows[0]?.providerType !== "website") {
@@ -896,22 +896,22 @@ async function assertWebsiteRows(
   if (!sitemapEditorial || sitemapEditorial.discoverySource !== "sitemap") {
     throw new Error("Expected the sitemap editorial resource to be discovered from sitemap mode.");
   }
-  if (sitemapEditorial.resourceKind !== "editorial" || !sitemapEditorial.projectedArticleId) {
-    throw new Error("Expected the sitemap editorial resource to enrich as editorial and project into articles.");
+  if (sitemapEditorial.resourceKind !== "editorial" || !sitemapEditorial.projectedSignalCandidateId) {
+    throw new Error("Expected the sitemap editorial resource to enrich as editorial and project into signal candidates.");
   }
 
   if (!feedEditorial || feedEditorial.discoverySource !== "feed") {
     throw new Error("Expected the feed-only editorial resource to be discovered from feed mode.");
   }
-  if (feedEditorial.resourceKind !== "editorial" || !feedEditorial.projectedArticleId) {
-    throw new Error("Expected the feed editorial resource to enrich as editorial and project into articles.");
+  if (feedEditorial.resourceKind !== "editorial" || !feedEditorial.projectedSignalCandidateId) {
+    throw new Error("Expected the feed editorial resource to enrich as editorial and project into signal candidates.");
   }
 
   if (!entityResource || entityResource.discoverySource !== "collection_page") {
     throw new Error("Expected the entity resource to be discovered from collection_page mode.");
   }
-  if (entityResource.resourceKind !== "entity" || !entityResource.projectedArticleId) {
-    throw new Error("Expected the entity resource to project into the common article pipeline.");
+  if (entityResource.resourceKind !== "entity" || !entityResource.projectedSignalCandidateId) {
+    throw new Error("Expected the entity resource to project into the common signal_candidate pipeline.");
   }
   if (String(entityResource.attributesJson.Region ?? "") !== "Europe") {
     throw new Error("Expected entity extraction to preserve structured attributes.");
@@ -920,31 +920,31 @@ async function assertWebsiteRows(
   if (!documentResource || documentResource.discoverySource !== "download") {
     throw new Error("Expected the document resource to be discovered from download mode.");
   }
-  if (documentResource.resourceKind !== "document" || !documentResource.projectedArticleId) {
-    throw new Error("Expected the document resource to project into the common article pipeline.");
+  if (documentResource.resourceKind !== "document" || !documentResource.projectedSignalCandidateId) {
+    throw new Error("Expected the document resource to project into the common signal_candidate pipeline.");
   }
   if (documentResource.documentsCount < 1) {
     throw new Error("Expected the document resource to persist at least one document reference.");
   }
 
-  const articleBySource = new Map(
-    articles.map((article) => [article.sourceArticleId ?? article.url, article])
+  const signalCandidateBySource = new Map(
+    signal_candidates.map((signal_candidate) => [signal_candidate.sourceSignalCandidateId ?? signal_candidate.url, signal_candidate])
   );
-  const sitemapArticle = articleBySource.get(fixture.sitemapEditorialUrl);
-  const feedArticle = articleBySource.get(fixture.feedEditorialUrl);
-  const entityArticle = articleBySource.get(fixture.entityUrl);
-  const documentArticle = articleBySource.get(fixture.documentUrl);
+  const sitemapSignalCandidate = signalCandidateBySource.get(fixture.sitemapEditorialUrl);
+  const feedSignalCandidate = signalCandidateBySource.get(fixture.feedEditorialUrl);
+  const entitySignalCandidate = signalCandidateBySource.get(fixture.entityUrl);
+  const documentSignalCandidate = signalCandidateBySource.get(fixture.documentUrl);
 
-  if (!sitemapArticle || !sitemapArticle.body.includes(`Sitemap editorial sentinel ${runId}`)) {
-    throw new Error("Expected the sitemap editorial article projection to retain the extracted body.");
+  if (!sitemapSignalCandidate || !sitemapSignalCandidate.body.includes(`Sitemap editorial sentinel ${runId}`)) {
+    throw new Error("Expected the sitemap editorial signal_candidate projection to retain the extracted body.");
   }
-  if (!feedArticle || !feedArticle.body.includes(`Feed editorial sentinel ${runId}`)) {
-    throw new Error("Expected the feed editorial article projection to retain the extracted body.");
+  if (!feedSignalCandidate || !feedSignalCandidate.body.includes(`Feed editorial sentinel ${runId}`)) {
+    throw new Error("Expected the feed editorial signal_candidate projection to retain the extracted body.");
   }
-  if (!entityArticle || entityArticle.contentKind !== "entity") {
+  if (!entitySignalCandidate || entitySignalCandidate.contentKind !== "entity") {
     throw new Error("Expected the entity resource projection to persist content_kind=entity.");
   }
-  if (!documentArticle || documentArticle.contentKind !== "document") {
+  if (!documentSignalCandidate || documentSignalCandidate.contentKind !== "document") {
     throw new Error("Expected the document resource projection to persist content_kind=document.");
   }
 }

@@ -76,7 +76,7 @@ What these prove:
 - token issuance, expiry, and revoke behavior
 - `GET /mcp` and JSON-RPC discovery
 - built-in resources and prompts
-- article/content diagnostics and residual-analysis reads
+- signal_candidate/content diagnostics and residual-analysis reads
 - sequence, discovery, channel, template, and system-interest flows
 - destructive-policy and scope failures
 - audit and request-log evidence
@@ -133,10 +133,10 @@ For discovery in shared environments:
 - prefer read-only summary and list checks first;
 - only run bounded discovery writes if the environment is intended for that and the downstream side effects are understood.
 
-For article/content diagnostics in shared environments:
+For signal_candidate/content diagnostics in shared environments:
 
 - stay read-only unless you have an explicit bounded tuning task;
-- start with `articles.residuals.summary` and only then inspect `articles.residuals.list`, `articles.explain`, and `content_items.explain`;
+- start with `signal_candidates.residuals.summary` and only then inspect `signal_candidates.residuals.list`, `signal_candidates.explain`, and `content_items.explain`;
 - use `system_interest.polish`, `llm_template.tune`, or `discovery.policy.tune` as recommendation prompts, not as an excuse to skip read-after-write verification on the actual entity.
 
 ### Remote smoke checklist
@@ -144,7 +144,7 @@ For article/content diagnostics in shared environments:
 - token accepted by `GET /mcp`
 - JSON-RPC discovery methods succeed
 - built-in SignalOps guide resources read successfully
-- article/content diagnostics and residual buckets can be read successfully
+- signal_candidate/content diagnostics and residual buckets can be read successfully
 - at least one safe read-only tool succeeds
 - any bounded write is read back and verified
 - any disposable artifact is archived or deleted before closeout

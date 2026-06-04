@@ -152,7 +152,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Calibrate a SignalOps product funnel for objective "${objective}" using reference evidence "${referenceEvidence}" and current gap "${currentGap}". ` +
-                `Read signalops://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, articles.residuals.summary, content_items.list, discovery.runs.list, discovery.artifacts.list, discovery.source_inventory.list, discovery.policies.list, and operator.report.verify before proposing writes. ` +
+                `Read signalops://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, signal_candidates.residuals.summary, content_items.list, discovery.runs.list, discovery.artifacts.list, discovery.source_inventory.list, discovery.policies.list, and operator.report.verify before proposing writes. ` +
                 `Extract reusable patterns from the reference into a portable funnel spec: objective, actor/buyer model, signal families, source capability mix, positive cues, near-miss negative cues, allowed content kinds, strictness/review policy, LLM review scope, provider/adapter requirements, observation budget, and expected read-back proof. ` +
                 `Separate recommendations by layer: source acquisition breadth, source-family balance, source technical health/repair, candidate or gray-zone recovery, final selected-content precision, and reporting/proof. Retain working noisy, low-yield, and negative-control useful channels unless the operator explicitly disables them; recommend labeling, measurement, cadence changes, or repair instead of auto-disabling semantically plausible working sources. ` +
                 `If the operator asks only to improve the system or generalize the approach, return rules, prompts, and product-flow recommendations without mutating domain configuration. If the operator asks to run a domain product test, then return a bounded MCP-only mutation plan: which interests/templates/channels and Discovery vNext artifacts or policies should be updated or created, which source classes need adapters rather than fake RSS/website rows, what reindex/backfill is needed, and how to verify precision and web-visible selected counts. ` +
@@ -375,7 +375,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "selection.tuning.plan",
-    description: "Plan a safe selection fine-tuning session from residual/article evidence.",
+    description: "Plan a safe selection fine-tuning session from residual/signal_candidate evidence.",
     arguments: [
       { name: "objective", description: "increase_recall or increase_precision.", required: true },
       { name: "residualBucket", description: "Observed residual/downstream-loss bucket." },
@@ -392,7 +392,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Prepare a read-first selection tuning plan for objective "${objective}" and residual pattern "${residualBucket}". ` +
-                `Read signalops://guide/tuning/selection, articles.residuals.summary, representative articles.explain rows, and operator.tuning.recommend. ` +
+                `Read signalops://guide/tuning/selection, signal_candidates.residuals.summary, representative signal_candidates.explain rows, and operator.tuning.recommend. ` +
                 `Return suggested guarded MCP writes only as proposals, then require operator.effect.verify after any applied change.`,
             },
           },
@@ -427,7 +427,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "website.pipeline.review",
-    description: "Explain website resources, projection, and downstream article selection outcomes.",
+    description: "Explain website resources, projection, and downstream signal_candidate selection outcomes.",
     arguments: [
       { name: "channelId", description: "Optional website channel id to focus on." },
     ],
@@ -467,7 +467,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Review ${question}. ` +
-                `Read signalops://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and article explains for representative gray-zone holds. ` +
+                `Read signalops://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and signal_candidate explains for representative gray-zone holds. ` +
                 `Recommend cost tuning only through operator.tuning.recommend; do not edit templates or interests from one example alone.`,
             },
           },
@@ -531,7 +531,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "system_interest.polish",
-    description: "Turn article residual evidence into a bounded system-interest tuning recommendation.",
+    description: "Turn signal_candidate residual evidence into a bounded system-interest tuning recommendation.",
     arguments: [
       { name: "interestName", description: "Interest or topic being tuned.", required: true },
       { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
@@ -547,7 +547,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use signalops://guide/scenarios/article-diagnostics and the current article/content diagnostics to tune the system interest "${interestName}". ` +
+                `Use signalops://guide/scenarios/signal_candidate-diagnostics and the current signal_candidate/content diagnostics to tune the system interest "${interestName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
                 `Return a bounded recommendation covering: what evidence suggests the current scope is too narrow or too broad, which positive/negative signals and candidate cue groups should change, whether short-form buyer/project evidence should recover items into gray/LLM/hold despite weak semantic similarity, whether hard gates such as must-have terms or time windows would harm recall for rare signals, what should stay unchanged, and what follow-up read-after-write checks an operator should perform. Do not auto-write changes.`,
             },
@@ -558,7 +558,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "llm_template.tune",
-    description: "Turn article residual evidence into a bounded LLM template tuning recommendation.",
+    description: "Turn signal_candidate residual evidence into a bounded LLM template tuning recommendation.",
     arguments: [
       { name: "templateName", description: "Template being tuned.", required: true },
       { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
@@ -574,7 +574,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use signalops://guide/scenarios/article-diagnostics and current article/content residual evidence to tune the LLM template "${templateName}". ` +
+                `Use signalops://guide/scenarios/signal_candidate-diagnostics and current signal_candidate/content residual evidence to tune the LLM template "${templateName}". ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
                 `Return a bounded recommendation describing which prompt instructions, output expectations, or review thresholds should change, which reference-bundle guardrails should be preserved, which parts should remain stable, and how to verify the change through SignalOps MCP after an operator applies it. Do not auto-write changes.`,
             },
@@ -585,7 +585,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
   },
   {
     name: "discovery.policy.tune",
-    description: "Turn article residual evidence into a bounded Discovery vNext policy/artifact tuning recommendation.",
+    description: "Turn signal_candidate residual evidence into a bounded Discovery vNext policy/artifact tuning recommendation.",
     arguments: [
       { name: "targetTitle", description: "Discovery vNext run, artifact, or policy being tuned.", required: true },
       { name: "residualPattern", description: "Observed blocker bucket or repeated evidence pattern.", required: true },
@@ -601,7 +601,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
             content: {
               type: "text",
               text:
-                `Use signalops://guide/scenarios/article-diagnostics and the relevant Discovery vNext run, artifact, candidate, source inventory, policy, replay, and rollback reads to tune "${targetTitle}" from downstream evidence. ` +
+                `Use signalops://guide/scenarios/signal_candidate-diagnostics and the relevant Discovery vNext run, artifact, candidate, source inventory, policy, replay, and rollback reads to tune "${targetTitle}" from downstream evidence. ` +
                 `The repeated residual pattern is "${residualPattern}". ` +
                 `Return a bounded recommendation covering brief constraints, mega-loop budget, probe policy, source understanding evidence, routing policy, adapter backlog criteria, and what replay eval or follow-up checks should confirm the change. Preserve the invariant that downstream diagnostics inform operators but do not become direct auto-approval inputs. Do not auto-write changes.`,
             },

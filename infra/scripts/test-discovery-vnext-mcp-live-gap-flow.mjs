@@ -23,7 +23,7 @@ const SCENARIO_PACKS = [
     ],
     negativeTexts: [
       "vendor marketing page without a buyer notice",
-      "generic procurement advice article",
+      "generic procurement advice signal_candidate",
       "job advertisement without contract or buyer evidence",
     ],
     candidatePositiveSignals: [
@@ -31,7 +31,7 @@ const SCENARIO_PACKS = [
       "contract_evidence: buyer organization, deadline, scope, budget, procurement portal",
     ],
     candidateNegativeSignals: [
-      "vendor_promo: agency services page, SEO article, generic market report",
+      "vendor_promo: agency services page, SEO signal_candidate, generic market report",
       "employment_only: job opening without buying or project evidence",
     ],
   },
@@ -136,7 +136,7 @@ const SCENARIO_PACKS = [
     ],
     candidateNegativeSignals: [
       "marketing_only: feature announcement without operator action",
-      "tutorial_only: how-to article without source release note",
+      "tutorial_only: how-to signal_candidate without source release note",
     ],
   },
 ];

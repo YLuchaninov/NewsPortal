@@ -42,7 +42,7 @@ const REINDEX_JOB_KINDS = ["rebuild", "backfill"] as const;
 const REINDEX_BACKFILL_DEFAULT_OPTIONS = {
   batchSize: 100,
   retroNotifications: "skip",
-  replayExistingArticles: true,
+  replayExistingSignalCandidates: true,
   includeEnrichment: false,
   forceEnrichment: false,
 } as const;
@@ -55,7 +55,7 @@ const REINDEX_BACKFILL_OPTION_KEYS = new Set([
   "interestId",
   "parentReindexJobId",
   "reason",
-  "replayExistingArticles",
+  "replayExistingSignalCandidates",
   "requestedBy",
   "retroNotifications",
   "systemFeedOnly",
@@ -341,7 +341,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "maintenance.reindex.request",
-    "Queue a valid reindex.requested event for the system Default Reindex sequence. Use jobKind=backfill for existing, historical, or old articles; rerunning content against current system interests, criteria, templates, interest_filter_results, final_selection_results, selected/pass_through noise, or after Example C/templates/criteria changes. For enlarged retained DBs or a failed full replay, run bounded chunks by passing payload.options.docIds and parentReindexJobId/reason, then verify every chunk with maintenance.reindex_jobs.list and operator.report.verify. Use jobKind=rebuild only when the operator asks to refresh centroid/vector indexes. Prefer this over calling sequences.run on migration-owned reindex sequences.",
+    "Queue a valid reindex.requested event for the system Default Reindex sequence. Use jobKind=backfill for existing, historical, or old signal_candidates; rerunning content against current system interests, criteria, templates, interest_filter_results, final_selection_results, selected/pass_through noise, or after Example C/templates/criteria changes. For enlarged retained DBs or a failed full replay, run bounded chunks by passing payload.options.docIds and parentReindexJobId/reason, then verify every chunk with maintenance.reindex_jobs.list and operator.report.verify. Use jobKind=rebuild only when the operator asks to refresh centroid/vector indexes. Prefer this over calling sequences.run on migration-owned reindex sequences.",
     "write.sequences",
     {
       type: "object",
@@ -362,7 +362,7 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
                 interestId: { type: "string" },
                 parentReindexJobId: { type: "string" },
                 reason: { type: "string" },
-                replayExistingArticles: { type: "boolean" },
+                replayExistingSignalCandidates: { type: "boolean" },
                 requestedBy: { type: "string" },
                 retroNotifications: { type: "string", enum: ["skip"] },
                 systemFeedOnly: { type: "boolean" },

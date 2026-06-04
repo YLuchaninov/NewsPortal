@@ -47,7 +47,7 @@ test("admin channel schema registry gates control-plane channel payload shape", 
   assertAdminChannelPayload({
     providerType: "api",
     name: "Example API",
-    fetchUrl: "https://example.test/api/articles",
+    fetchUrl: "https://example.test/api/signal-candidates",
     requestMethod: "POST",
     requestHeaders: {
       accept: "application/json",

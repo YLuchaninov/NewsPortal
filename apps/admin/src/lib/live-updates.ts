@@ -21,7 +21,7 @@ export interface AdminLlmBudgetSnapshot {
 }
 
 export interface AdminDashboardSummarySnapshot {
-  activeNews: number;
+  activeSignals: number;
   processedToday: number;
   totalUsers: number;
   overdueChannels: number;
@@ -57,8 +57,8 @@ export interface AdminReindexJobSnapshot {
   cancellable: boolean;
   createdAt: string | null;
   createdAtLabel: string | null;
-  processedArticles: number | null;
-  totalArticles: number | null;
+  processedSignalCandidates: number | null;
+  totalSignalCandidates: number | null;
   progressLabel: string | null;
   selectionProfileSnapshot: {
     activeProfiles: number;

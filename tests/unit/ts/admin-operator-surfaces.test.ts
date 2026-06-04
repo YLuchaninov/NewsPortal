@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  resolveArticleOperatorGuidance,
-  resolveArticleOperatorState,
-  resolveArticleSelectionDiagnostics,
+  resolveSignalCandidateOperatorGuidance,
+  resolveSignalCandidateOperatorState,
+  resolveSignalCandidateSelectionDiagnostics,
 } from "../../../apps/admin/src/lib/server/operator-surfaces.ts";
 
-test("resolveArticleOperatorState prefers final-selection truth over compatibility badges", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState prefers final-selection truth over compatibility badges", () => {
+  const state = resolveSignalCandidateOperatorState({
     final_selection_decision: "selected",
     final_selection_mode: "selected",
     final_selection_summary: "Selected by final-selection policy",
@@ -27,7 +27,7 @@ test("resolveArticleOperatorState prefers final-selection truth over compatibili
 
   assert.deepEqual(state, {
     selectionSource: "final_selection_results",
-    selectionReuseSource: "article_level",
+    selectionReuseSource: "signal_candidate_level",
     reviewSource: null,
     selectionDecision: "selected",
     compatDecision: "eligible",
@@ -43,7 +43,7 @@ test("resolveArticleOperatorState prefers final-selection truth over compatibili
     canonicalReviewReused: false,
     canonicalReviewReusedCount: 0,
     canonicalSelectionReused: false,
-    duplicateArticleCountForCanonical: 0,
+    duplicateSignalCandidateCountForCanonical: 0,
     observationState: "canonicalized",
     duplicateKind: "canonical",
     canonicalDocumentId: "canonical-1",
@@ -54,14 +54,14 @@ test("resolveArticleOperatorState prefers final-selection truth over compatibili
   });
 });
 
-test("resolveArticleOperatorState falls back to compatibility truth when final selection is missing", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState falls back to compatibility truth when final selection is missing", () => {
+  const state = resolveSignalCandidateOperatorState({
     system_feed_decision: "pending_llm",
     story_cluster_verification_state: "weak",
   });
 
   assert.equal(state.selectionSource, "system_feed_results");
-  assert.equal(state.selectionReuseSource, "article_level");
+  assert.equal(state.selectionReuseSource, "signal_candidate_level");
   assert.equal(state.reviewSource, null);
   assert.equal(state.selectionDecision, "pending_llm");
   assert.equal(state.compatDecision, "pending_llm");
@@ -72,8 +72,8 @@ test("resolveArticleOperatorState falls back to compatibility truth when final s
   assert.equal(state.candidateRecoveryState, "absent");
 });
 
-test("resolveArticleOperatorState prefers generic server-owned selection payload when present", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState prefers generic server-owned selection payload when present", () => {
+  const state = resolveSignalCandidateOperatorState({
     selection_source: "system_feed_results",
     selection_decision: "eligible",
     selection_mode: "compatibility_only",
@@ -85,7 +85,7 @@ test("resolveArticleOperatorState prefers generic server-owned selection payload
   });
 
   assert.equal(state.selectionSource, "system_feed_results");
-  assert.equal(state.selectionReuseSource, "article_level");
+  assert.equal(state.selectionReuseSource, "signal_candidate_level");
   assert.equal(state.selectionDecision, "eligible");
   assert.equal(state.selectionMode, "compatibility_only");
   assert.equal(state.selectionSummary, "Compatibility projection: eligible");
@@ -93,8 +93,8 @@ test("resolveArticleOperatorState prefers generic server-owned selection payload
   assert.equal(state.candidateRecoveryState, "absent");
 });
 
-test("resolveArticleOperatorState distinguishes cheap hold from review-pending gray zone", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState distinguishes cheap hold from review-pending gray zone", () => {
+  const state = resolveSignalCandidateOperatorState({
     final_selection_decision: "gray_zone",
     final_selection_mode: "hold",
     final_selection_summary: "Gray zone held by profile policy",
@@ -105,7 +105,7 @@ test("resolveArticleOperatorState distinguishes cheap hold from review-pending g
   });
 
   assert.equal(state.selectionSource, "final_selection_results");
-  assert.equal(state.selectionReuseSource, "article_level");
+  assert.equal(state.selectionReuseSource, "signal_candidate_level");
   assert.equal(state.selectionMode, "hold");
   assert.equal(state.selectionSummary, "Gray zone held by profile policy");
   assert.equal(state.selectionReason, "semantic_hold");
@@ -115,8 +115,8 @@ test("resolveArticleOperatorState distinguishes cheap hold from review-pending g
   assert.equal(state.candidateRecoveryState, "absent");
 });
 
-test("resolveArticleOperatorState trusts precomputed API selection summary when present", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState trusts precomputed API selection summary when present", () => {
+  const state = resolveSignalCandidateOperatorState({
     final_selection_decision: "gray_zone",
     final_selection_mode: "llm_review_pending",
     final_selection_summary: "Recovered candidate waiting for LLM review",
@@ -134,8 +134,8 @@ test("resolveArticleOperatorState trusts precomputed API selection summary when 
   assert.equal(state.candidateRecoveryState, "review_pending");
 });
 
-test("resolveArticleOperatorState surfaces canonical review reuse metadata", () => {
-  const state = resolveArticleOperatorState({
+test("resolveSignalCandidateOperatorState surfaces canonical review reuse metadata", () => {
+  const state = resolveSignalCandidateOperatorState({
     final_selection_decision: "selected",
     final_selection_mode: "selected",
     final_selection_summary: "Selected by final-selection policy",
@@ -145,7 +145,7 @@ test("resolveArticleOperatorState surfaces canonical review reuse metadata", () 
     selection_canonical_review_reused: true,
     selection_canonical_review_reused_count: 2,
     selection_canonical_reused: true,
-    selection_duplicate_article_count_for_canonical: 5,
+    selection_duplicate_signal_candidate_count_for_canonical: 5,
     selection_reuse_source: "canonical_reused",
     selection_review_source: "reused_canonical_llm_review",
   });
@@ -155,11 +155,11 @@ test("resolveArticleOperatorState surfaces canonical review reuse metadata", () 
   assert.equal(state.canonicalReviewReused, true);
   assert.equal(state.canonicalReviewReusedCount, 2);
   assert.equal(state.canonicalSelectionReused, true);
-  assert.equal(state.duplicateArticleCountForCanonical, 5);
+  assert.equal(state.duplicateSignalCandidateCountForCanonical, 5);
 });
 
-test("resolveArticleSelectionDiagnostics summarizes explain payload rows generically", () => {
-  const diagnostics = resolveArticleSelectionDiagnostics({
+test("resolveSignalCandidateSelectionDiagnostics summarizes explain payload rows generically", () => {
+  const diagnostics = resolveSignalCandidateSelectionDiagnostics({
     selection_explain: {
       source: "final_selection_results",
       decision: "gray_zone",
@@ -223,8 +223,8 @@ test("resolveArticleSelectionDiagnostics summarizes explain payload rows generic
   });
 });
 
-test("resolveArticleSelectionDiagnostics prefers precomputed API diagnostics when present", () => {
-  const diagnostics = resolveArticleSelectionDiagnostics({
+test("resolveSignalCandidateSelectionDiagnostics prefers precomputed API diagnostics when present", () => {
+  const diagnostics = resolveSignalCandidateSelectionDiagnostics({
     selection_diagnostics: {
       source: "final_selection_results",
       decision: "selected",
@@ -274,8 +274,8 @@ test("resolveArticleSelectionDiagnostics prefers precomputed API diagnostics whe
   assert.equal(diagnostics.candidateRecoveryState, "present");
 });
 
-test("resolveArticleSelectionDiagnostics falls back to article read-model selection truth", () => {
-  const diagnostics = resolveArticleSelectionDiagnostics(null, {
+test("resolveSignalCandidateSelectionDiagnostics falls back to signal_candidate read-model selection truth", () => {
+  const diagnostics = resolveSignalCandidateSelectionDiagnostics(null, {
     final_selection_decision: "gray_zone",
     final_selection_mode: "hold",
     final_selection_summary: "Gray zone held by profile policy",
@@ -314,9 +314,9 @@ test("resolveArticleSelectionDiagnostics falls back to article read-model select
   });
 });
 
-test("resolveArticleOperatorGuidance distinguishes hold from optional review", () => {
+test("resolveSignalCandidateOperatorGuidance distinguishes hold from optional review", () => {
   assert.deepEqual(
-    resolveArticleOperatorGuidance({
+    resolveSignalCandidateOperatorGuidance({
       selectionMode: "hold",
       selectionSummary: "Gray zone held by profile policy",
       selectionSource: "final_selection_results",
@@ -329,7 +329,7 @@ test("resolveArticleOperatorGuidance distinguishes hold from optional review", (
   );
 
   assert.deepEqual(
-    resolveArticleOperatorGuidance({
+    resolveSignalCandidateOperatorGuidance({
       selectionMode: "llm_review_pending",
       selectionSummary: "Gray zone pending LLM review",
       selectionSource: "final_selection_results",
@@ -342,7 +342,7 @@ test("resolveArticleOperatorGuidance distinguishes hold from optional review", (
   );
 
   assert.deepEqual(
-    resolveArticleOperatorGuidance({
+    resolveSignalCandidateOperatorGuidance({
       selectionMode: "llm_review_pending",
       selectionSummary: "Recovered candidate waiting for LLM review",
       selectionSource: "final_selection_results",
@@ -356,9 +356,9 @@ test("resolveArticleOperatorGuidance distinguishes hold from optional review", (
   );
 });
 
-test("resolveArticleOperatorGuidance prefers server-provided guidance when present", () => {
+test("resolveSignalCandidateOperatorGuidance prefers server-provided guidance when present", () => {
   assert.deepEqual(
-    resolveArticleOperatorGuidance({
+    resolveSignalCandidateOperatorGuidance({
       selection_guidance: {
         tone: "warning",
         summary: "Server-owned operator guidance",

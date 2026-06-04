@@ -76,15 +76,15 @@ export function resolveInterestRepairState(
 
   if (job.status === "queued" || job.status === "running") {
     const hasNumericProgress =
-      Number.isFinite(job.processedArticles ?? NaN) &&
-      Number.isFinite(job.totalArticles ?? NaN) &&
-      (job.totalArticles ?? 0) > 0;
+      Number.isFinite(job.processedSignalCandidates ?? NaN) &&
+      Number.isFinite(job.totalSignalCandidates ?? NaN) &&
+      (job.totalSignalCandidates ?? 0) > 0;
 
     return {
       tone: "warning",
       label: "Syncing matches",
       detail: hasNumericProgress
-        ? `${job.processedArticles}/${job.totalArticles} historical content items`
+        ? `${job.processedSignalCandidates}/${job.totalSignalCandidates} historical content items`
         : "Replaying prior system-selected content",
     };
   }

@@ -10,7 +10,7 @@ import psycopg
 from .runtime_json import coerce_text_list
 from .scoring import parse_datetime
 
-FetchArticleVectors = Callable[[Any, Any], Awaitable[dict[str, list[float]]]]
+FetchSignalCandidateVectors = Callable[[Any, Any], Awaitable[dict[str, list[float]]]]
 RebuildClusterState = Callable[..., Awaitable[bool]]
 ComputeContentHash = Callable[[Mapping[str, Any]], str]
 MixWeightedVectors = Callable[[list[tuple[float, Sequence[float]]]], list[float]]
@@ -56,7 +56,7 @@ async def load_recent_cluster_candidates(
         """
         select
           cluster_id,
-          article_count,
+          signal_candidate_count,
           primary_title,
           top_entities,
           top_places,
@@ -77,7 +77,7 @@ async def rebuild_cluster_state(
     *,
     cluster_id: uuid.UUID,
     vector_version: int,
-    fetch_article_vectors_func: FetchArticleVectors | None = None,
+    fetch_signal_candidate_vectors_func: FetchSignalCandidateVectors | None = None,
     upsert_embedding_registry_func: UpsertEmbeddingRegistry | None = None,
     upsert_event_vector_registry_func: UpsertEventVectorRegistry | None = None,
     compute_content_hash_func: ComputeContentHash | None = None,
@@ -85,7 +85,7 @@ async def rebuild_cluster_state(
     embedding_model_key: str | None = None,
 ) -> bool:
     if (
-        fetch_article_vectors_func is None
+        fetch_signal_candidate_vectors_func is None
         or upsert_embedding_registry_func is None
         or upsert_event_vector_registry_func is None
         or compute_content_hash_func is None
@@ -93,8 +93,8 @@ async def rebuild_cluster_state(
         or embedding_model_key is None
     ):
         legacy_main = _legacy_worker_main()
-        fetch_article_vectors_func = (
-            fetch_article_vectors_func or legacy_main.fetch_article_vectors
+        fetch_signal_candidate_vectors_func = (
+            fetch_signal_candidate_vectors_func or legacy_main.fetch_signal_candidate_vectors
         )
         upsert_embedding_registry_func = (
             upsert_embedding_registry_func or legacy_main.upsert_embedding_registry
@@ -121,8 +121,8 @@ async def rebuild_cluster_state(
           af.entities,
           af.places
         from event_cluster_members ecm
-        join articles a on a.doc_id = ecm.doc_id
-        left join article_features af on af.doc_id = a.doc_id
+        join signal_candidates a on a.doc_id = ecm.doc_id
+        left join signal_candidate_features af on af.doc_id = a.doc_id
         where ecm.cluster_id = %s
         order by a.published_at desc nulls last, ecm.created_at desc
         """,
@@ -177,8 +177,8 @@ async def rebuild_cluster_state(
         merged_entities.extend(coerce_text_list(member_row.get("entities")))
         merged_places.extend(coerce_text_list(member_row.get("places")))
 
-        article_vectors = await fetch_article_vectors_func(cursor, member_doc_id)
-        event_vector = article_vectors.get("e_event")
+        signal_candidate_vectors = await fetch_signal_candidate_vectors_func(cursor, member_doc_id)
+        event_vector = signal_candidate_vectors.get("e_event")
         if event_vector:
             weighted_vectors.append((1.0, event_vector))
 
@@ -226,7 +226,7 @@ async def rebuild_cluster_state(
         update event_clusters
         set
           centroid_embedding_id = %s,
-          article_count = %s,
+          signal_candidate_count = %s,
           primary_title = %s,
           top_entities = %s,
           top_places = %s,
@@ -252,7 +252,7 @@ async def rebuild_cluster_state(
 async def create_or_update_cluster(
     cursor: psycopg.AsyncCursor[Any],
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     vector_version: int,
     cluster_row: Mapping[str, Any] | None,
     rebuild_cluster_state_func: RebuildClusterState | None = None,
@@ -260,7 +260,7 @@ async def create_or_update_cluster(
     if rebuild_cluster_state_func is None:
         rebuild_cluster_state_func = _legacy_worker_main().rebuild_cluster_state
 
-    article_doc_id = article["doc_id"]
+    signal_candidate_doc_id = signal_candidate["doc_id"]
     cluster_id = uuid.uuid4() if cluster_row is None else cluster_row["cluster_id"]
     is_new_cluster = cluster_row is None
 
@@ -271,7 +271,7 @@ async def create_or_update_cluster(
         where doc_id = %s
         limit 1
         """,
-        (article_doc_id,),
+        (signal_candidate_doc_id,),
     )
     previous_membership = await cursor.fetchone()
     previous_cluster_id = (
@@ -285,7 +285,7 @@ async def create_or_update_cluster(
             """
             insert into event_clusters (
               cluster_id,
-              article_count,
+              signal_candidate_count,
               created_at,
               updated_at
             )
@@ -302,7 +302,7 @@ async def create_or_update_cluster(
         on conflict (doc_id) do update
         set cluster_id = excluded.cluster_id
         """,
-        (cluster_id, article_doc_id),
+        (cluster_id, signal_candidate_doc_id),
     )
     await rebuild_cluster_state_func(
         cursor,

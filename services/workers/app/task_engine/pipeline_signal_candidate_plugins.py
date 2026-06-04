@@ -8,8 +8,8 @@ from .pipeline_legacy import (
 )
 
 
-class NormalizeArticlePlugin(LegacyHandlerTaskPlugin):
-    name = "article.normalize"
+class NormalizeSignalCandidatePlugin(LegacyHandlerTaskPlugin):
+    name = "signal_candidate.normalize"
     description = "Wrap the legacy normalize handler behind a task-engine plugin."
     handler_name = "process_normalize"
 
@@ -35,8 +35,8 @@ class NormalizeArticlePlugin(LegacyHandlerTaskPlugin):
         }
 
 
-class DedupArticlePlugin(LegacyHandlerTaskPlugin):
-    name = "article.dedup"
+class DedupSignalCandidatePlugin(LegacyHandlerTaskPlugin):
+    name = "signal_candidate.dedup"
     description = "Wrap the legacy dedup handler behind a task-engine plugin."
     handler_name = "process_dedup"
 
@@ -62,8 +62,8 @@ class DedupArticlePlugin(LegacyHandlerTaskPlugin):
         }
 
 
-class EmbedArticlePlugin(LegacyHandlerTaskPlugin):
-    name = "article.embed"
+class EmbedSignalCandidatePlugin(LegacyHandlerTaskPlugin):
+    name = "signal_candidate.embed"
     description = "Wrap the legacy embed handler behind a task-engine plugin."
     handler_name = "process_embed"
     input_descriptions = {
@@ -109,7 +109,7 @@ class EmbedArticlePlugin(LegacyHandlerTaskPlugin):
 
 
 class MatchCriteriaPlugin(LegacyHandlerTaskPlugin):
-    name = "article.match_criteria"
+    name = "signal_candidate.match_criteria"
     description = "Wrap the legacy system-criteria matching handler behind a task plugin."
     handler_name = "process_match_criteria"
     input_descriptions = {
@@ -156,8 +156,8 @@ class MatchCriteriaPlugin(LegacyHandlerTaskPlugin):
         }
 
 
-class ClusterArticlePlugin(LegacyHandlerTaskPlugin):
-    name = "article.cluster"
+class ClusterSignalCandidatePlugin(LegacyHandlerTaskPlugin):
+    name = "signal_candidate.cluster"
     description = "Wrap the legacy event-clustering handler behind a task-engine plugin."
     handler_name = "process_cluster"
     input_descriptions = {
@@ -203,7 +203,7 @@ class ClusterArticlePlugin(LegacyHandlerTaskPlugin):
 
 
 class MatchInterestsPlugin(LegacyHandlerTaskPlugin):
-    name = "article.match_interests"
+    name = "signal_candidate.match_interests"
     description = "Wrap the legacy user-interest matching handler behind a task plugin."
     handler_name = "process_match_interests"
     input_descriptions = {
@@ -282,7 +282,7 @@ class MatchInterestsPlugin(LegacyHandlerTaskPlugin):
 
 
 class NotifyUsersPlugin(LegacyHandlerTaskPlugin):
-    name = "article.notify"
+    name = "signal_candidate.notify"
     description = "Wrap the legacy notification dispatch handler behind a task-engine plugin."
     handler_name = "process_notify"
 
@@ -309,7 +309,7 @@ class NotifyUsersPlugin(LegacyHandlerTaskPlugin):
 
 
 class LlmReviewPlugin(LegacyHandlerTaskPlugin):
-    name = "article.llm_review"
+    name = "signal_candidate.llm_review"
     description = "Wrap the legacy LLM review handler behind a task-engine plugin."
     handler_name = "process_llm_review"
     input_descriptions = {
@@ -408,12 +408,12 @@ class LlmReviewPlugin(LegacyHandlerTaskPlugin):
         return job_data
 
 
-ARTICLE_PIPELINE_PLUGIN_CLASSES = (
-    NormalizeArticlePlugin,
-    DedupArticlePlugin,
-    EmbedArticlePlugin,
+SIGNAL_CANDIDATE_PIPELINE_PLUGIN_CLASSES = (
+    NormalizeSignalCandidatePlugin,
+    DedupSignalCandidatePlugin,
+    EmbedSignalCandidatePlugin,
     MatchCriteriaPlugin,
-    ClusterArticlePlugin,
+    ClusterSignalCandidatePlugin,
     MatchInterestsPlugin,
     NotifyUsersPlugin,
     LlmReviewPlugin,

@@ -3,19 +3,19 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
-def summarize_article_selection_counts(
+def summarize_signal_candidate_selection_counts(
     *,
     query_all_func: Callable[[str, tuple[Any, ...]], list[dict[str, Any]]],
     query_count_func: Callable[[str, tuple[Any, ...]], int],
 ) -> dict[str, Any]:
-    raw_article_observations = query_count_func(
-        "select count(*)::int as total from articles",
+    raw_signal_candidate_observations = query_count_func(
+        "select count(*)::int as total from signal_candidates",
         (),
     )
-    blocked_article_observations = query_count_func(
+    blocked_signal_candidate_observations = query_count_func(
         """
         select count(*)::int as total
-        from articles
+        from signal_candidates
         where visibility_state = 'blocked'
         """,
         (),
@@ -23,7 +23,7 @@ def summarize_article_selection_counts(
     pending_selection_rows = query_count_func(
         """
         select count(*)::int as total
-        from articles a
+        from signal_candidates a
         left join final_selection_results fsr on fsr.doc_id = a.doc_id
         where fsr.doc_id is null
         """,
@@ -52,7 +52,7 @@ def summarize_article_selection_counts(
         str(row.get("decision") or "unknown"): int(row.get("count") or 0)
         for row in decision_rows
     }
-    selected_article_signals = sum(
+    selected_signal_candidate_signals = sum(
         int(row.get("selected_count") or 0) for row in decision_rows
     )
     hold_rows = sum(int(row.get("hold_count") or 0) for row in decision_rows)
@@ -64,34 +64,34 @@ def summarize_article_selection_counts(
     gray_zone_rows = by_decision.get("gray_zone", 0)
     return {
         "sourceOfTruth": {
-            "rawArticleObservations": "articles",
-            "articleSelection": "final_selection_results",
+            "rawSignalCandidateObservations": "signal_candidates",
+            "signalCandidateSelection": "final_selection_results",
             "publicSelectedContent": "content_items",
         },
         "counts": {
-            "rawArticleObservations": raw_article_observations,
+            "rawSignalCandidateObservations": raw_signal_candidate_observations,
             "materializedSelectionRows": materialized_selection_rows,
             "pendingSelectionRows": pending_selection_rows,
-            "selectedArticleSignals": selected_article_signals,
+            "selectedSignalCandidateSignals": selected_signal_candidate_signals,
             "rejectedRows": rejected_rows,
             "grayZoneRows": gray_zone_rows,
             "holdRows": hold_rows,
             "llmReviewPendingRows": llm_review_pending_rows,
-            "blockedArticleObservations": blocked_article_observations,
+            "blockedSignalCandidateObservations": blocked_signal_candidate_observations,
         },
         "byDecision": [
             {"decision": decision, "count": count}
             for decision, count in sorted(by_decision.items())
         ],
         "interpretation": (
-            "Raw article observations are the ingested corpus. Selected lead signals are "
+            "Raw signal_candidate observations are the ingested corpus. Selected lead signals are "
             "materialized separately by final_selection_results/content_items, so a high "
-            "article count can coexist with zero selected signals after strict calibration."
+            "signal_candidate count can coexist with zero selected signals after strict calibration."
         ),
     }
 
 
-def list_articles(
+def list_signal_candidates(
     *,
     limit: int,
     entity_type: str | None,
@@ -110,8 +110,8 @@ def list_articles(
     page_size: int | None,
     build_content_analysis_filter_clause_func: Callable[..., tuple[list[str], list[Any]]],
     normalize_content_filter_decision_func: Callable[[str | None], str | None],
-    article_preview_projection_func: Callable[[str, str, str], str],
-    article_observation_join_clause_func: Callable[[str, str], str],
+    signal_candidate_preview_projection_func: Callable[[str, str, str], str],
+    signal_candidate_observation_join_clause_func: Callable[[str, str], str],
     final_selection_join_clause_func: Callable[[str, str], str],
     system_feed_join_clause_func: Callable[[str, str], str],
     primary_media_join_clause_func: Callable[[str, str], str],
@@ -123,11 +123,11 @@ def list_articles(
     build_paginated_response_func: Callable[
         [list[dict[str, Any]], int, int, int], dict[str, Any]
     ],
-    apply_article_selection_payload_func: Callable[[dict[str, Any]], dict[str, Any]],
+    apply_signal_candidate_selection_payload_func: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> dict[str, Any] | list[dict[str, Any]]:
     filters, params = build_content_analysis_filter_clause_func(
         subject_alias="a.doc_id",
-        subject_type="article",
+        subject_type="signal_candidate",
         entity_type=entity_type,
         entity_text=entity_text,
         entity_normalized_key=entity_normalized_key,
@@ -162,7 +162,7 @@ def list_articles(
         )
         params.append(f"%{escaped_query}%")
     where_clause = f"where {' and '.join(filters)}" if filters else ""
-    article_select = f"""
+    signal_candidate_select = f"""
         select
           a.doc_id,
           a.url,
@@ -192,24 +192,24 @@ def list_articles(
             as final_selection_canonical_review_reused_count,
           coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
             as final_selection_canonical_selection_reused,
-          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
-            as final_selection_duplicate_article_count_for_canonical,
+          coalesce((fsr.explain_json ->> 'duplicateSignalCandidateCountForCanonical')::int, 0)
+            as final_selection_duplicate_signal_candidate_count_for_canonical,
           fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           fsr.story_cluster_id::text as story_cluster_id,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
           sfr.decision as system_feed_decision,
           coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
-          {article_preview_projection_func("a", "sc", "pma")},
+          {signal_candidate_preview_projection_func("a", "sc", "pma")},
           coalesce(ars.like_count, 0) as like_count,
           coalesce(ars.dislike_count, 0) as dislike_count
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
-        {article_observation_join_clause_func("a", "obs")}
+        {signal_candidate_observation_join_clause_func("a", "obs")}
         {final_selection_join_clause_func("a", "fsr")}
         {system_feed_join_clause_func("a", "sfr")}
         {primary_media_join_clause_func("a", "pma")}
-        left join article_reaction_stats ars on ars.doc_id = a.doc_id
+        left join signal_candidate_reaction_stats ars on ars.doc_id = a.doc_id
         {where_clause}
         order by a.published_at desc nulls last, a.ingested_at desc
     """
@@ -217,28 +217,28 @@ def list_articles(
         page, page_size, limit
     )
 
-    def with_article_selection_payload(
+    def with_signal_candidate_selection_payload(
         rows: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        return [apply_article_selection_payload_func(row) for row in rows]
+        return [apply_signal_candidate_selection_payload_func(row) for row in rows]
 
     if not paginate:
-        return with_article_selection_payload(
-            query_all_func(f"{article_select}\nlimit %s", tuple([*params, limit]))
+        return with_signal_candidate_selection_payload(
+            query_all_func(f"{signal_candidate_select}\nlimit %s", tuple([*params, limit]))
         )
 
     total = query_count_func(
         f"""
         select count(*)::int as total
-        from articles a
+        from signal_candidates a
         {final_selection_join_clause_func("a", "fsr")}
         {where_clause}
         """,
         tuple(params),
     )
-    items = with_article_selection_payload(
+    items = with_signal_candidate_selection_payload(
         query_all_func(
-            f"{article_select}\nlimit %s\noffset %s",
+            f"{signal_candidate_select}\nlimit %s\noffset %s",
             tuple([*params, resolved_page_size, offset]),
         )
     )

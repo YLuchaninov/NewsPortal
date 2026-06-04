@@ -31,9 +31,9 @@ function asString(value: unknown): string | null {
   return normalized ? normalized : null;
 }
 
-export interface ArticleOperatorState {
+export interface SignalCandidateOperatorState {
   selectionSource: "final_selection_results" | "system_feed_results" | "pending";
-  selectionReuseSource: "article_level" | "canonical_reused";
+  selectionReuseSource: "signal_candidate_level" | "canonical_reused";
   reviewSource: "fresh_llm_review" | "reused_canonical_llm_review" | null;
   selectionDecision: string | null;
   compatDecision: string | null;
@@ -55,7 +55,7 @@ export interface ArticleOperatorState {
   canonicalReviewReused: boolean;
   canonicalReviewReusedCount: number;
   canonicalSelectionReused: boolean;
-  duplicateArticleCountForCanonical: number;
+  duplicateSignalCandidateCountForCanonical: number;
   observationState: string | null;
   duplicateKind: string | null;
   canonicalDocumentId: string | null;
@@ -65,7 +65,7 @@ export interface ArticleOperatorState {
   enrichmentState: string | null;
 }
 
-export interface ArticleSelectionDiagnostics {
+export interface SignalCandidateSelectionDiagnostics {
   source: string;
   decision: string | null;
   selectionMode: string;
@@ -92,50 +92,50 @@ export interface ArticleSelectionDiagnostics {
   notificationRows: number;
 }
 
-export interface ArticleOperatorGuidance {
+export interface SignalCandidateOperatorGuidance {
   tone: "positive" | "warning" | "neutral";
   summary: string;
 }
 
-export function resolveArticleOperatorState(articleLike: unknown): ArticleOperatorState {
-  const article = asRecord(articleLike);
-  const genericSelectionSource = asString(article.selection_source);
-  const genericSelectionDecision = asString(article.selection_decision);
-  const genericSelectionMode = asString(article.selection_mode);
-  const genericSelectionSummary = asString(article.selection_summary);
-  const genericSelectionReason = asString(article.selection_reason);
-  const finalDecision = asString(article.final_selection_decision);
-  const compatDecision = asString(article.system_feed_decision);
-  const selectionReason = genericSelectionReason ?? asString(article.final_selection_reason);
-  const precomputedSelectionMode = asString(article.final_selection_mode);
-  const precomputedSelectionSummary = asString(article.final_selection_summary);
+export function resolveSignalCandidateOperatorState(signalCandidateLike: unknown): SignalCandidateOperatorState {
+  const signal_candidate = asRecord(signalCandidateLike);
+  const genericSelectionSource = asString(signal_candidate.selection_source);
+  const genericSelectionDecision = asString(signal_candidate.selection_decision);
+  const genericSelectionMode = asString(signal_candidate.selection_mode);
+  const genericSelectionSummary = asString(signal_candidate.selection_summary);
+  const genericSelectionReason = asString(signal_candidate.selection_reason);
+  const finalDecision = asString(signal_candidate.final_selection_decision);
+  const compatDecision = asString(signal_candidate.system_feed_decision);
+  const selectionReason = genericSelectionReason ?? asString(signal_candidate.final_selection_reason);
+  const precomputedSelectionMode = asString(signal_candidate.final_selection_mode);
+  const precomputedSelectionSummary = asString(signal_candidate.final_selection_summary);
   const llmReviewPendingCount =
-    asInteger(article.selection_llm_review_pending_count) ??
-    asInteger(article.final_selection_llm_review_pending_count) ??
+    asInteger(signal_candidate.selection_llm_review_pending_count) ??
+    asInteger(signal_candidate.final_selection_llm_review_pending_count) ??
     0;
   const holdCount =
-    asInteger(article.selection_hold_count) ?? asInteger(article.final_selection_hold_count) ?? 0;
+    asInteger(signal_candidate.selection_hold_count) ?? asInteger(signal_candidate.final_selection_hold_count) ?? 0;
   const candidateSignalUpliftCount =
-    asInteger(article.selection_candidate_signal_uplift_count) ?? 0;
-  const canonicalReviewReused = asBoolean(article.selection_canonical_review_reused);
+    asInteger(signal_candidate.selection_candidate_signal_uplift_count) ?? 0;
+  const canonicalReviewReused = asBoolean(signal_candidate.selection_canonical_review_reused);
   const canonicalReviewReusedCount =
-    asInteger(article.selection_canonical_review_reused_count) ?? 0;
-  const canonicalSelectionReused = asBoolean(article.selection_canonical_reused);
-  const duplicateArticleCountForCanonical =
-    asInteger(article.selection_duplicate_article_count_for_canonical) ?? 0;
+    asInteger(signal_candidate.selection_canonical_review_reused_count) ?? 0;
+  const canonicalSelectionReused = asBoolean(signal_candidate.selection_canonical_reused);
+  const duplicateSignalCandidateCountForCanonical =
+    asInteger(signal_candidate.selection_duplicate_signal_candidate_count_for_canonical) ?? 0;
   const selectionReuseSource =
-    (asString(article.selection_reuse_source) as
-      | ArticleOperatorState["selectionReuseSource"]
-      | null) ?? "article_level";
+    (asString(signal_candidate.selection_reuse_source) as
+      | SignalCandidateOperatorState["selectionReuseSource"]
+      | null) ?? "signal_candidate_level";
   const reviewSource =
-    (asString(article.selection_review_source) as
-      | ArticleOperatorState["reviewSource"]
+    (asString(signal_candidate.selection_review_source) as
+      | SignalCandidateOperatorState["reviewSource"]
       | null) ??
     (canonicalReviewReused ? "reused_canonical_llm_review" : null);
 
-  let selectionMode: ArticleOperatorState["selectionMode"] =
-    (genericSelectionMode as ArticleOperatorState["selectionMode"] | null) ??
-    (precomputedSelectionMode as ArticleOperatorState["selectionMode"] | null) ??
+  let selectionMode: SignalCandidateOperatorState["selectionMode"] =
+    (genericSelectionMode as SignalCandidateOperatorState["selectionMode"] | null) ??
+    (precomputedSelectionMode as SignalCandidateOperatorState["selectionMode"] | null) ??
     "pending";
   let selectionSummary =
     genericSelectionSummary ?? precomputedSelectionSummary ?? "Selection not materialized yet";
@@ -207,7 +207,7 @@ export function resolveArticleOperatorState(articleLike: unknown): ArticleOperat
 
   return {
     selectionSource:
-      (genericSelectionSource as ArticleOperatorState["selectionSource"] | null) ??
+      (genericSelectionSource as SignalCandidateOperatorState["selectionSource"] | null) ??
       (finalDecision
         ? "final_selection_results"
         : compatDecision
@@ -226,32 +226,32 @@ export function resolveArticleOperatorState(articleLike: unknown): ArticleOperat
     canonicalReviewReused,
     canonicalReviewReusedCount,
     canonicalSelectionReused,
-    duplicateArticleCountForCanonical,
+    duplicateSignalCandidateCountForCanonical,
     selectionReuseSource,
     reviewSource,
-    observationState: asString(article.observation_state),
-    duplicateKind: asString(article.duplicate_kind),
-    canonicalDocumentId: asString(article.canonical_document_id),
-    storyClusterId: asString(article.story_cluster_id),
+    observationState: asString(signal_candidate.observation_state),
+    duplicateKind: asString(signal_candidate.duplicate_kind),
+    canonicalDocumentId: asString(signal_candidate.canonical_document_id),
+    storyClusterId: asString(signal_candidate.story_cluster_id),
     verificationState:
-      asString(article.final_selection_verification_state) ??
-      asString(article.story_cluster_verification_state) ??
-      asString(article.canonical_verification_state),
-    processingState: asString(article.processing_state),
-    enrichmentState: asString(article.enrichment_state),
+      asString(signal_candidate.final_selection_verification_state) ??
+      asString(signal_candidate.story_cluster_verification_state) ??
+      asString(signal_candidate.canonical_verification_state),
+    processingState: asString(signal_candidate.processing_state),
+    enrichmentState: asString(signal_candidate.enrichment_state),
   };
 }
 
-export function resolveArticleOperatorGuidance(
-  stateLike: ArticleOperatorState | unknown
-): ArticleOperatorGuidance {
+export function resolveSignalCandidateOperatorGuidance(
+  stateLike: SignalCandidateOperatorState | unknown
+): SignalCandidateOperatorGuidance {
   const precomputed = asRecord(
     asRecord(stateLike).selection_guidance ?? asRecord(stateLike).selectionGuidance
   );
   if (Object.keys(precomputed).length > 0) {
     return {
       tone:
-        (asString(precomputed.tone) as ArticleOperatorGuidance["tone"] | null) ??
+        (asString(precomputed.tone) as SignalCandidateOperatorGuidance["tone"] | null) ??
         "neutral",
       summary:
         asString(precomputed.summary) ??
@@ -261,8 +261,8 @@ export function resolveArticleOperatorGuidance(
 
   const state =
     stateLike && typeof stateLike === "object" && "selectionMode" in (stateLike as object)
-      ? (stateLike as ArticleOperatorState)
-      : resolveArticleOperatorState(stateLike);
+      ? (stateLike as SignalCandidateOperatorState)
+      : resolveSignalCandidateOperatorState(stateLike);
 
   if (state.selectionMode === "selected") {
     return {
@@ -334,13 +334,13 @@ export function resolveArticleOperatorGuidance(
   };
 }
 
-export function resolveArticleSelectionDiagnostics(
+export function resolveSignalCandidateSelectionDiagnostics(
   explainLike: unknown,
-  articleLike: unknown = null
-): ArticleSelectionDiagnostics {
+  signalCandidateLike: unknown = null
+): SignalCandidateSelectionDiagnostics {
   const explain = asRecord(explainLike);
   const precomputed = asRecord(explain.selection_diagnostics);
-  const articleState = resolveArticleOperatorState(articleLike);
+  const signalCandidateState = resolveSignalCandidateOperatorState(signalCandidateLike);
   if (Object.keys(precomputed).length > 0) {
     return {
       source: asString(precomputed.source) ?? "pending",
@@ -413,29 +413,29 @@ export function resolveArticleSelectionDiagnostics(
   return {
     source:
       asString(selection.source) ??
-      (articleState.selectionSource === "pending" ? "pending" : articleState.selectionSource),
-    decision: asString(selection.decision) ?? articleState.selectionDecision,
-    selectionMode: asString(selection.selectionMode) ?? articleState.selectionMode,
+      (signalCandidateState.selectionSource === "pending" ? "pending" : signalCandidateState.selectionSource),
+    decision: asString(selection.decision) ?? signalCandidateState.selectionDecision,
+    selectionMode: asString(selection.selectionMode) ?? signalCandidateState.selectionMode,
     selectionSummary:
-      asString(selection.selectionSummary) ?? articleState.selectionSummary,
-    selectionReason: asString(selection.selectionReason) ?? articleState.selectionReason,
+      asString(selection.selectionSummary) ?? signalCandidateState.selectionSummary,
+    selectionReason: asString(selection.selectionReason) ?? signalCandidateState.selectionReason,
     downstreamLossBucket: asString(selection.downstreamLossBucket),
     selectionBlockerStage: asString(selection.selectionBlockerStage),
     selectionBlockerReason: asString(selection.selectionBlockerReason),
     holdReason: asString(selection.holdReason),
     semanticSignalSummary: asRecord(selection.semanticSignalSummary),
     verificationSignalSummary: asRecord(selection.verificationSignalSummary),
-    holdCount: asInteger(selection.holdCount) ?? articleState.holdCount,
+    holdCount: asInteger(selection.holdCount) ?? signalCandidateState.holdCount,
     llmReviewPendingCount:
-      asInteger(selection.llmReviewPendingCount) ?? articleState.llmReviewPendingCount,
+      asInteger(selection.llmReviewPendingCount) ?? signalCandidateState.llmReviewPendingCount,
     candidateSignalUpliftCount:
       asInteger(selection.candidateSignalUpliftCount)
-      ?? articleState.candidateSignalUpliftCount,
+      ?? signalCandidateState.candidateSignalUpliftCount,
     candidateRecoveryState:
-      asString(selection.candidateRecoveryState) ?? articleState.candidateRecoveryState,
+      asString(selection.candidateRecoveryState) ?? signalCandidateState.candidateRecoveryState,
     candidateRecoverySummary:
       asString(selection.candidateRecoverySummary)
-      ?? articleState.candidateRecoverySummary,
+      ?? signalCandidateState.candidateRecoverySummary,
     systemCriterionRows,
     userInterestRows,
     matchedRows,

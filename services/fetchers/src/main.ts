@@ -2,7 +2,7 @@ import Fastify from "fastify";
 
 import { loadFetchersConfig } from "./config";
 import { checkPostgres, createPgPool } from "./db";
-import { ArticleEnrichmentService } from "./enrichment";
+import { SignalCandidateEnrichmentService } from "./enrichment";
 import { planFeedAlternativesForDiscovery } from "./feed-alternatives";
 import { probeFeedsForDiscovery } from "./feed-probe";
 import { dryRunIngressAdapter } from "./ingress-adapters/dry-run";
@@ -19,7 +19,7 @@ const service = new RssFetcherService(pool, config);
 const app = Fastify({
   logger: true
 });
-const enrichmentService = new ArticleEnrichmentService(pool, config, app.log);
+const enrichmentService = new SignalCandidateEnrichmentService(pool, config, app.log);
 const resourceEnrichmentService = new ResourceEnrichmentService(pool, config, app.log);
 
 let pollInterval: NodeJS.Timeout | undefined;
@@ -30,13 +30,13 @@ app.get("/health", async () => {
 });
 
 app.post<{ Params: { docId: string }; Body: { force?: boolean } }>(
-  "/internal/enrichment/articles/:docId",
+  "/internal/enrichment/signal-candidates/:docId",
   async (request, reply) => {
     try {
-      const result = await enrichmentService.enrichArticle(request.params.docId, request.body ?? {});
+      const result = await enrichmentService.enrichSignalCandidate(request.params.docId, request.body ?? {});
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Article enrichment failed.";
+      const message = error instanceof Error ? error.message : "SignalCandidate enrichment failed.";
       app.log.error({ error, docId: request.params.docId }, "Fetchers enrichment route failed.");
       if (/was not found/.test(message)) {
         reply.code(404);

@@ -65,7 +65,7 @@ class DigestRenderingTests(unittest.TestCase):
     def test_digest_renderers_include_titles_and_links(self) -> None:
         items = [
             DigestItem(
-                content_item_id="editorial:1",
+                content_item_id="signal_candidate:1",
                 title="Policy update",
                 url="https://example.test/policy-update",
                 summary="Summary",

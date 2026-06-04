@@ -108,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
       ? {
           batchSize: 100,
           retroNotifications: "skip",
-          replayExistingArticles: true,
+          replayExistingSignalCandidates: true,
           includeEnrichment,
           forceEnrichment,
         }

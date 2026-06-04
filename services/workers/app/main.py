@@ -13,19 +13,19 @@ if str(SERVICES_ROOT) not in sys.path:
 
 from bullmq import Job
 
-from .article_processors import (
-    ArticleEmbedProcessorDependencies,
-    ArticleProcessorDependencies,
+from .signal_candidate_processors import (
+    SignalCandidateEmbedProcessorDependencies,
+    SignalCandidateProcessorDependencies,
     process_dedup_with_dependencies,
     process_embed_with_dependencies,
     process_normalize_with_dependencies,
 )
-from .article_repository import fetch_article_for_update
-from .article_extraction_processor import (
-    process_article_extract as process_article_extract_with_plugin,
+from .signal_candidate_repository import fetch_signal_candidate_for_update
+from .signal_candidate_extraction_processor import (
+    process_signal_candidate_extract as process_signal_candidate_extract_with_plugin,
 )
 from .cluster_processor import (
-    ArticleClusterProcessorDependencies,
+    SignalCandidateClusterProcessorDependencies,
     process_cluster_with_dependencies,
 )
 from .cluster_repository import (
@@ -50,7 +50,7 @@ from .selection_gate_repository import (
     fetch_final_selection_result_row,
     fetch_selection_gate_result_row,
     fetch_system_feed_result_row,
-    is_article_eligible_for_personalization,
+    is_signal_candidate_eligible_for_personalization,
 )
 from .selection_write_repository import (
     find_reusable_criterion_llm_review,
@@ -77,7 +77,7 @@ from .llm_review_processor import (
     process_llm_review_with_dependencies,
 )
 from .notification_processor import (
-    ArticleNotifyProcessorDependencies,
+    SignalCandidateNotifyProcessorDependencies,
     process_notify_with_dependencies,
 )
 from .reindex_processor import (
@@ -104,20 +104,20 @@ from .reindex_backfill_runtime import (
     replay_content_analysis,
     replay_content_analysis_subject,
     replay_gray_zone_reviews_for_doc,
-    replay_historical_articles,
+    replay_historical_signal_candidates,
     update_reindex_job_options,
 )
 from .delivery import dispatch_channel_message
 from indexer.app import InterestCentroidIndexer, load_indexer_config
 from ml.app import (
     CriterionBaselineCompiler,
-    HeuristicArticleFeatureExtractor,
+    HeuristicSignalCandidateFeatureExtractor,
     InterestBaselineCompiler,
     load_embedding_provider,
     mix_weighted_vectors,
     truncate_text_for_embedding,
 )
-from .canonical_documents import sync_article_canonical_document
+from .canonical_documents import sync_signal_candidate_canonical_document
 from .final_selection import apply_document_candidate_signal_uplift
 from .interest_filters import (
     build_interest_filter_explain,
@@ -168,15 +168,15 @@ from .selection_runtime import (
 )
 from .vector_registry import (
     compute_lexical_score,
-    fetch_article_features_row,
-    fetch_article_vectors,
+    fetch_signal_candidate_features_row,
+    fetch_signal_candidate_vectors,
     fetch_embedding_vectors_by_ids,
     mark_interest_hnsw_dirty,
     resolve_interest_hnsw_label,
     update_criterion_compile_status,
     update_interest_compile_status,
-    upsert_article_features,
-    upsert_article_vector_registry,
+    upsert_signal_candidate_features,
+    upsert_signal_candidate_vector_registry,
     upsert_criterion_compiled_row,
     upsert_embedding_registry,
     upsert_event_vector_registry,
@@ -274,7 +274,7 @@ WORKER_MAIN_COMPAT_EXPORTS = (
     INTEREST_COMPILE_CONSUMER,
     INTEREST_CENTROIDS_INDEX_NAME,
     INTEREST_MATCH_QUEUE,
-    is_article_eligible_for_personalization,
+    is_signal_candidate_eligible_for_personalization,
     legacy_queue_consumers_enabled,
     list_content_analysis_backfill_targets,
     list_gray_zone_target_ids,
@@ -302,7 +302,7 @@ WORKER_MAIN_COMPAT_EXPORTS = (
     replay_content_analysis,
     replay_content_analysis_subject,
     replay_gray_zone_reviews_for_doc,
-    replay_historical_articles,
+    replay_historical_signal_candidates,
     SEQUENCE_QUEUE,
     SequenceCronScheduler,
     SequenceRunJobProcessor,
@@ -319,7 +319,7 @@ WORKER_MAIN_COMPAT_EXPORTS = (
 )
 
 EMBEDDING_PROVIDER = load_embedding_provider()
-FEATURE_EXTRACTOR = HeuristicArticleFeatureExtractor()
+FEATURE_EXTRACTOR = HeuristicSignalCandidateFeatureExtractor()
 INTEREST_COMPILER = InterestBaselineCompiler()
 CRITERION_COMPILER = CriterionBaselineCompiler()
 INTEREST_INDEXER = InterestCentroidIndexer(load_indexer_config())
@@ -329,26 +329,26 @@ async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_normalize_with_dependencies(
         job,
         _job_token,
-        ArticleProcessorDependencies(
+        SignalCandidateProcessorDependencies(
             open_connection=open_connection,
-            fetch_article_for_update=fetch_article_for_update,
-            sync_article_canonical_document=sync_article_canonical_document,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+            sync_signal_candidate_canonical_document=sync_signal_candidate_canonical_document,
         ),
     )
 
 
-async def process_article_extract(job: Job, _job_token: str) -> dict[str, Any]:
-    return await process_article_extract_with_plugin(job, _job_token)
+async def process_signal_candidate_extract(job: Job, _job_token: str) -> dict[str, Any]:
+    return await process_signal_candidate_extract_with_plugin(job, _job_token)
 
 
 async def process_dedup(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_dedup_with_dependencies(
         job,
         _job_token,
-        ArticleProcessorDependencies(
+        SignalCandidateProcessorDependencies(
             open_connection=open_connection,
-            fetch_article_for_update=fetch_article_for_update,
-            sync_article_canonical_document=sync_article_canonical_document,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+            sync_signal_candidate_canonical_document=sync_signal_candidate_canonical_document,
         ),
     )
 
@@ -357,16 +357,16 @@ async def process_embed(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_embed_with_dependencies(
         job,
         _job_token,
-        ArticleEmbedProcessorDependencies(
+        SignalCandidateEmbedProcessorDependencies(
             open_connection=open_connection,
-            fetch_article_for_update=fetch_article_for_update,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
             embedding_provider=EMBEDDING_PROVIDER,
             feature_extractor=FEATURE_EXTRACTOR,
             truncate_text_for_embedding=truncate_text_for_embedding,
             mix_weighted_vectors=mix_weighted_vectors,
-            upsert_article_features=upsert_article_features,
+            upsert_signal_candidate_features=upsert_signal_candidate_features,
             upsert_embedding_registry=upsert_embedding_registry,
-            upsert_article_vector_registry=upsert_article_vector_registry,
+            upsert_signal_candidate_vector_registry=upsert_signal_candidate_vector_registry,
             upsert_event_vector_registry=upsert_event_vector_registry,
         ),
     )
@@ -376,13 +376,13 @@ async def process_cluster(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_cluster_with_dependencies(
         job,
         _job_token,
-        ArticleClusterProcessorDependencies(
+        SignalCandidateClusterProcessorDependencies(
             open_connection=open_connection,
-            fetch_article_for_update=fetch_article_for_update,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
             sync_story_cluster_and_verification=sync_story_cluster_and_verification,
             upsert_system_feed_result=upsert_system_feed_result,
-            fetch_article_features_row=fetch_article_features_row,
-            fetch_article_vectors=fetch_article_vectors,
+            fetch_signal_candidate_features_row=fetch_signal_candidate_features_row,
+            fetch_signal_candidate_vectors=fetch_signal_candidate_vectors,
             fetch_cluster_event_vector=fetch_cluster_event_vector,
             load_recent_cluster_candidates=load_recent_cluster_candidates,
             create_or_update_cluster=create_or_update_cluster,
@@ -403,9 +403,9 @@ async def process_match_criteria(job: Job, _job_token: str) -> dict[str, Any]:
             open_connection=open_connection,
             suppress_downstream_outbox=suppress_downstream_outbox,
             is_event_processed=is_event_processed,
-            fetch_article_for_update=fetch_article_for_update,
-            fetch_article_features_row=fetch_article_features_row,
-            fetch_article_vectors=fetch_article_vectors,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+            fetch_signal_candidate_features_row=fetch_signal_candidate_features_row,
+            fetch_signal_candidate_vectors=fetch_signal_candidate_vectors,
             list_compiled_criteria=list_compiled_criteria,
             find_prompt_template=find_prompt_template,
             get_llm_review_monthly_quota_snapshot=get_llm_review_monthly_quota_snapshot,
@@ -447,11 +447,11 @@ async def process_match_interests(job: Job, _job_token: str) -> dict[str, Any]:
             open_connection=open_connection,
             suppress_downstream_outbox=suppress_downstream_outbox,
             is_event_processed=is_event_processed,
-            fetch_article_for_update=fetch_article_for_update,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
             fetch_selection_gate_result_row=fetch_selection_gate_result_row,
             record_processed_event=record_processed_event,
-            fetch_article_features_row=fetch_article_features_row,
-            fetch_article_vectors=fetch_article_vectors,
+            fetch_signal_candidate_features_row=fetch_signal_candidate_features_row,
+            fetch_signal_candidate_vectors=fetch_signal_candidate_vectors,
             resolve_interest_filter_context=resolve_interest_filter_context,
             list_compiled_interests=list_compiled_interests,
             passes_hard_filters=passes_hard_filters,
@@ -474,9 +474,9 @@ async def process_notify(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_notify_with_dependencies(
         job,
         _job_token,
-        ArticleNotifyProcessorDependencies(
+        SignalCandidateNotifyProcessorDependencies(
             open_connection=open_connection,
-            fetch_article_for_update=fetch_article_for_update,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
             fetch_recent_notification_history=fetch_recent_notification_history,
             fetch_user_notification_preferences=fetch_user_notification_preferences,
             fetch_user_notification_channels=fetch_user_notification_channels,
@@ -497,7 +497,7 @@ async def process_llm_review(job: Job, _job_token: str) -> dict[str, Any]:
             open_connection=open_connection,
             suppress_downstream_outbox=suppress_downstream_outbox,
             is_event_processed=is_event_processed,
-            fetch_article_for_update=fetch_article_for_update,
+            fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
             find_prompt_template=find_prompt_template,
             get_llm_review_monthly_quota_snapshot=get_llm_review_monthly_quota_snapshot,
             resolve_criterion_gray_zone_runtime_resolution=resolve_criterion_gray_zone_runtime_resolution,
@@ -540,7 +540,7 @@ async def process_reindex(job: Job, _job_token: str) -> dict[str, Any]:
             read_reindex_job_context=read_reindex_job_context,
             interest_indexer=INTEREST_INDEXER,
             read_active_selection_profile_snapshot=read_active_selection_profile_snapshot,
-            replay_historical_articles=replay_historical_articles,
+            replay_historical_signal_candidates=replay_historical_signal_candidates,
             normalize_content_analysis_backfill_modules=normalize_content_analysis_backfill_modules,
             normalize_content_analysis_backfill_subject_types=normalize_content_analysis_backfill_subject_types,
             replay_content_analysis=replay_content_analysis,

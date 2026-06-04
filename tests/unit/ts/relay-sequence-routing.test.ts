@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ARTICLE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
   FETCH_QUEUE,
   LLM_REVIEW_REQUESTED_EVENT,
   RESOURCE_INGEST_REQUESTED_EVENT,
@@ -181,8 +181,8 @@ test("relay routes active sequence triggers into q.sequence without legacy queue
   ) => Promise<void>;
   const row: PendingOutboxRow = {
     event_id: "event-1",
-    event_type: ARTICLE_INGEST_REQUESTED_EVENT,
-    aggregate_type: "article",
+    event_type: SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
+    aggregate_type: "signal_candidate",
     aggregate_id: "doc-1",
     payload_json: {
       docId: "doc-1",
@@ -197,7 +197,7 @@ test("relay routes active sequence triggers into q.sequence without legacy queue
     row
   );
 
-  assert.deepEqual(repository.triggerLookups, [ARTICLE_INGEST_REQUESTED_EVENT]);
+  assert.deepEqual(repository.triggerLookups, [SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT]);
   assert.equal(repository.createInputs.length, 2);
   assert.deepEqual(repository.createInputs[0]?.contextJson, {
     event_id: "event-1",
@@ -206,8 +206,8 @@ test("relay routes active sequence triggers into q.sequence without legacy queue
   });
   assert.deepEqual(repository.createInputs[0]?.triggerMeta, {
     eventId: "event-1",
-    eventType: ARTICLE_INGEST_REQUESTED_EVENT,
-    aggregateType: "article",
+    eventType: SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
+    aggregateType: "signal_candidate",
     aggregateId: "doc-1"
   });
 
@@ -248,7 +248,7 @@ test("relay keeps llm review sequence jobs on the default wait lane", async () =
     {
       event_id: "event-llm-1",
       event_type: LLM_REVIEW_REQUESTED_EVENT,
-      aggregate_type: "article",
+      aggregate_type: "signal_candidate",
       aggregate_id: "doc-llm-1",
       payload_json: {
         docId: "doc-llm-1",
@@ -267,9 +267,9 @@ test("relay keeps llm review sequence jobs on the default wait lane", async () =
   });
 });
 
-test("relay repairs already enqueued article-ingest sequence jobs into the prioritized set", async () => {
+test("relay repairs already enqueued signal_candidate-ingest sequence jobs into the prioritized set", async () => {
   const { pool, queries } = createPriorityRepairPool([
-    "run-article-a",
+    "run-signal_candidate-a",
     "run-already-prioritized",
     "run-missing"
   ]);
@@ -292,7 +292,7 @@ test("relay repairs already enqueued article-ingest sequence jobs into the prior
   const sequenceQueue = queues.get(SEQUENCE_QUEUE);
 
   assert.ok(sequenceQueue);
-  sequenceQueue?.seedJob("run-article-a", 0);
+  sequenceQueue?.seedJob("run-signal_candidate-a", 0);
   sequenceQueue?.seedJob("run-already-prioritized", 100);
 
   const summary = await relay.repairPendingSequenceQueuePriorities();
@@ -303,9 +303,9 @@ test("relay repairs already enqueued article-ingest sequence jobs into the prior
     alreadyPrioritizedRuns: 1,
     missingJobs: 1
   });
-  assert.equal(sequenceQueue?.getSeededJob("run-article-a")?.priority, 100);
+  assert.equal(sequenceQueue?.getSeededJob("run-signal_candidate-a")?.priority, 100);
   assert.deepEqual(
-    sequenceQueue?.getSeededJob("run-article-a")?.changePriorityCalls,
+    sequenceQueue?.getSeededJob("run-signal_candidate-a")?.changePriorityCalls,
     [{ priority: 100 }]
   );
   assert.equal(
@@ -318,7 +318,7 @@ test("relay repairs already enqueued article-ingest sequence jobs into the prior
   );
   assert.equal(queries.length, 1);
   assert.deepEqual(queries[0]?.values, [
-    ARTICLE_INGEST_REQUESTED_EVENT,
+    SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
     500,
     0
   ]);
@@ -415,8 +415,8 @@ test("relay fails managed events when no active sequence exists after cutover", 
       },
       {
         event_id: "event-3",
-        event_type: ARTICLE_INGEST_REQUESTED_EVENT,
-        aggregate_type: "article",
+        event_type: SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
+        aggregate_type: "signal_candidate",
         aggregate_id: "doc-3",
         payload_json: {
           docId: "doc-3",
@@ -427,7 +427,7 @@ test("relay fails managed events when no active sequence exists after cutover", 
     /No active sequence routing found/
   );
 
-  assert.deepEqual(repository.triggerLookups, [ARTICLE_INGEST_REQUESTED_EVENT]);
+  assert.deepEqual(repository.triggerLookups, [SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT]);
   assert.equal(repository.createInputs.length, 0);
   assert.equal(queues.get(SEQUENCE_QUEUE)?.added.length ?? 0, 0);
 });

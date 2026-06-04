@@ -158,13 +158,13 @@ class FeedbackIngestPlugin(LegacyMaintenanceTaskPlugin):
     handler_name = "process_feedback_ingest"
     input_descriptions = {
         "notification_id": "Notification identifier forwarded into the legacy handler.",
-        "doc_id": "Article identifier associated with the notification.",
+        "doc_id": "SignalCandidate identifier associated with the notification.",
         "user_id": "User identifier associated with the feedback.",
         "event_id": "Existing outbox event UUID forwarded into the legacy handler shim.",
     }
     output_descriptions = {
         "notification_id": "Resolved notification identifier.",
-        "doc_id": "Resolved article identifier.",
+        "doc_id": "Resolved signal_candidate identifier.",
         "user_id": "Resolved user identifier.",
         "status": "Feedback ingest status returned by the legacy handler.",
         "legacy_handler": "Legacy process_* handler invoked by this adapter.",

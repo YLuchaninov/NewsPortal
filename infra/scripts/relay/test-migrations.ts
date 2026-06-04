@@ -41,7 +41,7 @@ async function main(): Promise<void> {
         from information_schema.columns
         where table_schema = $1
           and (
-            (table_name = 'articles' and column_name in (
+            (table_name = 'signal_candidates' and column_name in (
               'enrichment_state',
               'enriched_at',
               'full_content_html',
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
               'resource_kind',
               'classification_json',
               'extraction_state',
-              'projected_article_id'
+              'projected_signal_candidate_id'
             ))
             or
             (table_name in (
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
       "source_channels",
       "fetch_cursors",
       "crawl_policy_cache",
-      "articles",
+      "signal_candidates",
       "discovery_artifacts",
       "discovery_candidates",
       "source_inventory",
@@ -243,7 +243,7 @@ async function main(): Promise<void> {
       "interest_filter_results",
       "final_selection_results",
       "web_resources",
-      "article_external_refs",
+      "signal_candidate_external_refs",
       "outbox_events",
       "inbox_processed_events"
     ];
@@ -251,8 +251,8 @@ async function main(): Promise<void> {
       "source_channels_provider_external_id_unique",
       "fetch_cursors_channel_cursor_type_unique",
       "crawl_policy_cache_expires_idx",
-      "articles_channel_source_article_id_unique",
-      "articles_processing_state_idx",
+      "signal_candidates_channel_source_signal_candidate_id_unique",
+      "signal_candidates_processing_state_idx",
       "discovery_artifacts_run_idx",
       "discovery_artifacts_interest_idx",
       "discovery_artifacts_candidate_idx",
@@ -299,20 +299,20 @@ async function main(): Promise<void> {
       "web_resources_channel_id_idx",
       "web_resources_resource_kind_idx",
       "web_resources_extraction_state_idx",
-      "web_resources_projected_article_id_idx",
+      "web_resources_projected_signal_candidate_id_idx",
       "outbox_events_status_created_at_idx"
     ];
     const expectedColumns = [
-      "articles.enrichment_state",
-      "articles.enriched_at",
-      "articles.full_content_html",
-      "articles.extracted_description",
-      "articles.extracted_author",
-      "articles.extracted_ttr_seconds",
-      "articles.extracted_image_url",
-      "articles.extracted_favicon_url",
-      "articles.extracted_published_at",
-      "articles.extracted_source_name",
+      "signal_candidates.enrichment_state",
+      "signal_candidates.enriched_at",
+      "signal_candidates.full_content_html",
+      "signal_candidates.extracted_description",
+      "signal_candidates.extracted_author",
+      "signal_candidates.extracted_ttr_seconds",
+      "signal_candidates.extracted_image_url",
+      "signal_candidates.extracted_favicon_url",
+      "signal_candidates.extracted_published_at",
+      "signal_candidates.extracted_source_name",
       "discovery_artifacts.artifact_id",
       "discovery_artifacts.artifact_type",
       "discovery_artifacts.payload_json",
@@ -375,7 +375,7 @@ async function main(): Promise<void> {
       "web_resources.resource_kind",
       "web_resources.classification_json",
       "web_resources.extraction_state",
-      "web_resources.projected_article_id",
+      "web_resources.projected_signal_candidate_id",
     ];
 
     for (const tableName of expectedTables) {
@@ -486,21 +486,21 @@ async function main(): Promise<void> {
     }
 
     const sequencesById = new Map(sequenceResult.rows.map((row) => [row.sequence_id, row]));
-    const articleSequence = sequencesById.get("5cc77217-7a2f-4318-9fef-c6734e0f22f1");
-    if (!articleSequence) {
+    const signalCandidateSequence = sequencesById.get("5cc77217-7a2f-4318-9fef-c6734e0f22f1");
+    if (!signalCandidateSequence) {
       throw new Error(
-        `Migration smoke expected active article sequence 5cc77217-7a2f-4318-9fef-c6734e0f22f1 in schema ${schemaName}.`
+        `Migration smoke expected active signal_candidate sequence 5cc77217-7a2f-4318-9fef-c6734e0f22f1 in schema ${schemaName}.`
       );
     }
-    if (articleSequence.active_trigger_count !== "1") {
+    if (signalCandidateSequence.active_trigger_count !== "1") {
       throw new Error(
-        `Migration smoke expected exactly one active article.ingest.requested sequence, got ${articleSequence.active_trigger_count}.`
+        `Migration smoke expected exactly one active signal_candidate.ingest.requested sequence, got ${signalCandidateSequence.active_trigger_count}.`
       );
     }
-    const firstTaskModule = articleSequence.task_graph?.[0]?.module ?? null;
-    if (firstTaskModule !== "enrichment.article_extract") {
+    const firstTaskModule = signalCandidateSequence.task_graph?.[0]?.module ?? null;
+    if (firstTaskModule !== "enrichment.signal_candidate_extract") {
       throw new Error(
-        `Migration smoke expected enrichment.article_extract as the first task in the active article sequence, got ${String(firstTaskModule)}.`
+        `Migration smoke expected enrichment.signal_candidate_extract as the first task in the active signal_candidate sequence, got ${String(firstTaskModule)}.`
       );
     }
     const resourceSequence = sequencesById.get("0f8e3894-86ef-4a29-b5dc-1a7ea708ba2d");
@@ -522,7 +522,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `Migration smoke passed in schema ${schemaName}: applied ${appliedMigrations.length} migrations and verified ${expectedTables.length} tables, ${expectedIndexes.length} indexes, ${expectedColumns.length} tracked columns, the cursor plus discovery constraints, and active article/resource sequence graphs.`
+      `Migration smoke passed in schema ${schemaName}: applied ${appliedMigrations.length} migrations and verified ${expectedTables.length} tables, ${expectedIndexes.length} indexes, ${expectedColumns.length} tracked columns, the cursor plus discovery constraints, and active signal_candidate/resource sequence graphs.`
     );
   } finally {
     await pool.query(`drop schema if exists ${quoteIdentifier(schemaName)} cascade`);

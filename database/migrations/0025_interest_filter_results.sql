@@ -2,7 +2,7 @@ create table if not exists interest_filter_results (
   interest_filter_result_id uuid primary key default gen_random_uuid(),
   filter_scope text not null,
   filter_key text not null,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   canonical_document_id uuid references canonical_documents (canonical_document_id) on delete set null,
   story_cluster_id uuid references story_clusters (story_cluster_id) on delete set null,
   user_id uuid references users (user_id) on delete cascade,

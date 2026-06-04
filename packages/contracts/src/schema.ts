@@ -195,7 +195,7 @@ export function assertWebBffActionPayload(
 }
 
 export const ADMIN_BFF_ACTION_PAYLOAD_SCHEMAS = {
-  "articles.enrichment-retry": JSON_OBJECT_SCHEMA,
+  "signal_candidates.enrichment-retry": JSON_OBJECT_SCHEMA,
   automation: JSON_OBJECT_SCHEMA,
   channels: JSON_OBJECT_SCHEMA,
   "channels.bulk": JSON_OBJECT_SCHEMA,

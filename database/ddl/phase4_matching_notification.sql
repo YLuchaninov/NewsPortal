@@ -36,9 +36,9 @@ where sc.provider_id is null
 create index if not exists source_channels_provider_id_idx
   on source_channels (provider_id);
 
-create table if not exists article_media_assets (
+create table if not exists signal_candidate_media_assets (
   asset_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   media_kind text not null default 'image',
   storage_kind text not null default 'external_url',
   source_url text not null,
@@ -55,50 +55,50 @@ create table if not exists article_media_assets (
   metadata_json jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint article_media_assets_media_kind_check
+  constraint signal_candidate_media_assets_media_kind_check
     check (media_kind in ('image', 'video', 'embed')),
-  constraint article_media_assets_storage_kind_check
+  constraint signal_candidate_media_assets_storage_kind_check
     check (storage_kind in ('external_url', 'youtube', 'object_storage')),
-  constraint article_media_assets_width_px_check
+  constraint signal_candidate_media_assets_width_px_check
     check (width_px is null or width_px > 0),
-  constraint article_media_assets_height_px_check
+  constraint signal_candidate_media_assets_height_px_check
     check (height_px is null or height_px > 0),
-  constraint article_media_assets_duration_seconds_check
+  constraint signal_candidate_media_assets_duration_seconds_check
     check (duration_seconds is null or duration_seconds >= 0)
 );
 
-create index if not exists article_media_assets_doc_id_sort_order_idx
-  on article_media_assets (doc_id, sort_order, created_at);
+create index if not exists signal_candidate_media_assets_doc_id_sort_order_idx
+  on signal_candidate_media_assets (doc_id, sort_order, created_at);
 
-create table if not exists user_article_reactions (
+create table if not exists user_signal_candidate_reactions (
   reaction_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   user_id uuid not null references users (user_id) on delete cascade,
   reaction_type text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint user_article_reactions_reaction_type_check
+  constraint user_signal_candidate_reactions_reaction_type_check
     check (reaction_type in ('like', 'dislike')),
-  constraint user_article_reactions_user_doc_unique
+  constraint user_signal_candidate_reactions_user_doc_unique
     unique (user_id, doc_id)
 );
 
-create index if not exists user_article_reactions_doc_id_idx
-  on user_article_reactions (doc_id, reaction_type);
+create index if not exists user_signal_candidate_reactions_doc_id_idx
+  on user_signal_candidate_reactions (doc_id, reaction_type);
 
-create table if not exists article_moderation_actions (
+create table if not exists signal_candidate_moderation_actions (
   moderation_action_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   admin_user_id uuid not null references users (user_id) on delete restrict,
   action_type text not null,
   reason text,
   created_at timestamptz not null default now(),
-  constraint article_moderation_actions_action_type_check
+  constraint signal_candidate_moderation_actions_action_type_check
     check (action_type in ('block', 'unblock'))
 );
 
-create index if not exists article_moderation_actions_doc_id_created_at_idx
-  on article_moderation_actions (doc_id, created_at desc);
+create index if not exists signal_candidate_moderation_actions_doc_id_created_at_idx
+  on signal_candidate_moderation_actions (doc_id, created_at desc);
 
 create table if not exists user_notification_channels (
   channel_binding_id uuid primary key default gen_random_uuid(),
@@ -192,7 +192,7 @@ create index if not exists llm_prompt_templates_scope_active_idx
 
 create table if not exists llm_review_log (
   review_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   scope text not null,
   target_id uuid not null,
   prompt_template_id uuid references llm_prompt_templates (prompt_template_id) on delete set null,
@@ -231,7 +231,7 @@ create index if not exists llm_review_log_doc_id_created_at_idx
 
 create table if not exists criterion_match_results (
   criterion_match_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   criterion_id uuid not null references criteria (criterion_id) on delete cascade,
   score_pos double precision not null default 0,
   score_neg double precision not null default 0,
@@ -255,7 +255,7 @@ create unique index if not exists criterion_match_results_doc_criterion_unique
   on criterion_match_results (doc_id, criterion_id);
 
 create table if not exists system_feed_results (
-  doc_id uuid primary key references articles (doc_id) on delete cascade,
+  doc_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   decision text not null,
   eligible_for_feed boolean not null default false,
   total_criteria_count integer not null default 0,
@@ -282,7 +282,7 @@ create index if not exists system_feed_results_eligible_idx
 
 create table if not exists interest_match_results (
   interest_match_id uuid primary key default gen_random_uuid(),
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   user_id uuid not null references users (user_id) on delete cascade,
   interest_id uuid not null references user_interests (interest_id) on delete cascade,
   event_cluster_id uuid references event_clusters (cluster_id) on delete set null,
@@ -312,7 +312,7 @@ create table if not exists interest_filter_results (
   interest_filter_result_id uuid primary key default gen_random_uuid(),
   filter_scope text not null,
   filter_key text not null,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   canonical_document_id uuid references canonical_documents (canonical_document_id) on delete set null,
   story_cluster_id uuid references story_clusters (story_cluster_id) on delete set null,
   user_id uuid references users (user_id) on delete cascade,
@@ -374,7 +374,7 @@ create index if not exists interest_filter_results_story_cluster_id_idx
   on interest_filter_results (story_cluster_id);
 
 create table if not exists final_selection_results (
-  doc_id uuid primary key references articles (doc_id) on delete cascade,
+  doc_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   canonical_document_id uuid references canonical_documents (canonical_document_id) on delete set null,
   story_cluster_id uuid references story_clusters (story_cluster_id) on delete set null,
   verification_target_type text,
@@ -433,7 +433,7 @@ create table if not exists notification_log (
   notification_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users (user_id) on delete cascade,
   interest_id uuid references user_interests (interest_id) on delete set null,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   event_cluster_id uuid references event_clusters (cluster_id) on delete set null,
   channel_type text not null,
   status text not null,
@@ -508,7 +508,7 @@ create table if not exists notification_feedback (
   feedback_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users (user_id) on delete cascade,
   notification_id uuid not null references notification_log (notification_id) on delete cascade,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   interest_id uuid references user_interests (interest_id) on delete set null,
   feedback_value text not null,
   created_at timestamptz not null default now(),
@@ -526,8 +526,8 @@ create table if not exists notification_suppression (
   user_id uuid not null references users (user_id) on delete cascade,
   interest_id uuid references user_interests (interest_id) on delete set null,
   notification_id uuid references notification_log (notification_id) on delete set null,
-  doc_id uuid references articles (doc_id) on delete set null,
-  family_id uuid references articles (doc_id) on delete set null,
+  doc_id uuid references signal_candidates (doc_id) on delete set null,
+  family_id uuid references signal_candidates (doc_id) on delete set null,
   event_cluster_id uuid references event_clusters (cluster_id) on delete set null,
   reason text not null,
   window_key text,
@@ -599,11 +599,11 @@ create table if not exists audit_log (
 create index if not exists audit_log_actor_created_at_idx
   on audit_log (actor_user_id, created_at desc);
 
-create or replace view article_reaction_stats as
+create or replace view signal_candidate_reaction_stats as
 select
   doc_id,
   count(*) filter (where reaction_type = 'like')::int as like_count,
   count(*) filter (where reaction_type = 'dislike')::int as dislike_count,
   max(updated_at) as updated_at
-from user_article_reactions
+from user_signal_candidate_reactions
 group by doc_id;

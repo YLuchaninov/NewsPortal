@@ -95,8 +95,8 @@ class ContentFilterPolicyUpdatePayload(BaseModel):
 class ContentAnalysisBackfillPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    subject_types: list[Literal["article", "web_resource", "story_cluster"]] = Field(
-        default_factory=lambda: ["article", "web_resource", "story_cluster"],
+    subject_types: list[Literal["signal_candidate", "web_resource", "story_cluster"]] = Field(
+        default_factory=lambda: ["signal_candidate", "web_resource", "story_cluster"],
         alias="subjectTypes",
     )
     modules: list[

@@ -19,7 +19,7 @@ test("buildSequenceCreateApiPayload normalizes create fields for the maintenance
       title: "  Sequence 1  ",
       description: "  Manual admin sequence  ",
       status: "active",
-      triggerEvent: " article.ingest.requested ",
+      triggerEvent: " signal_candidate.ingest.requested ",
       cron: " */15 * * * * ",
       maxRuns: "3",
       tags: "ops, admin\nmanual",
@@ -30,7 +30,7 @@ test("buildSequenceCreateApiPayload normalizes create fields for the maintenance
       taskGraph: JSON.stringify([
         {
           key: "normalize",
-          module: "article.normalize",
+          module: "signal_candidate.normalize",
           options: {},
         },
       ]),
@@ -44,12 +44,12 @@ test("buildSequenceCreateApiPayload normalizes create fields for the maintenance
     taskGraph: [
       {
         key: "normalize",
-        module: "article.normalize",
+        module: "signal_candidate.normalize",
         options: {},
       },
     ],
     status: "active",
-    triggerEvent: "article.ingest.requested",
+    triggerEvent: "signal_candidate.ingest.requested",
     cron: "*/15 * * * *",
     maxRuns: 3,
     tags: ["ops", "admin", "manual"],
@@ -74,7 +74,7 @@ test("buildSequenceUpdateApiPayload keeps nullable maintenance fields explicit",
     taskGraph: JSON.stringify([
       {
         key: "notify",
-        module: "article.notify",
+        module: "signal_candidate.notify",
         options: {},
       },
     ]),
@@ -86,7 +86,7 @@ test("buildSequenceUpdateApiPayload keeps nullable maintenance fields explicit",
     taskGraph: [
       {
         key: "notify",
-        module: "article.notify",
+        module: "signal_candidate.notify",
         options: {},
       },
     ],

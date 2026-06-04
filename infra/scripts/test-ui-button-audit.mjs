@@ -151,18 +151,18 @@ async function queryPostgresWithConcurrencyRetry(env, sql, label, { maxAttempts 
   throw lastError ?? new Error(`${label} failed without a captured error.`);
 }
 
-async function markArticleAsRecentFailure(env, docId, runId) {
+async function markSignalCandidateAsRecentFailure(env, docId, runId) {
   await queryPostgresWithConcurrencyRetry(
     env,
     `
-      update articles
+      update signal_candidates
       set
         enrichment_state = 'failed',
         visibility_state = 'visible',
         updated_at = now()
       where doc_id = ${sqlLiteral(docId)}::uuid;
     `,
-    `mark article ${docId} as recent failure for ${runId}`
+    `mark signal_candidate ${docId} as recent failure for ${runId}`
   );
 }
 
@@ -199,7 +199,7 @@ async function resolveCardByText(page, text) {
   const heading = page.getByText(text, { exact: true }).first();
   await heading.waitFor({ state: "visible", timeout: 10000 });
   return heading.locator(
-    'xpath=ancestor::*[self::article or self::div or self::details][contains(@class,"border")][1]'
+    'xpath=ancestor::*[self::signal_candidate or self::div or self::details][contains(@class,"border")][1]'
   );
 }
 
@@ -316,16 +316,16 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
   }
   log("Web seed: fetched two RSS channels.");
 
-  const articleRows = [];
+  const signalCandidateRows = [];
   for (const title of titles) {
     const row = await waitFor(
-      `article row for ${title}`,
+      `signal_candidate row for ${title}`,
       async () => {
         const raw = queryPostgres(
           env,
           `
             select doc_id::text, processing_state
-            from articles
+            from signal_candidates
             where title = ${sqlLiteral(title)}
             order by ingested_at desc
             limit 1;
@@ -335,21 +335,21 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
       },
       (value) => Array.isArray(value) && value.length === 2
     );
-    articleRows.push({ docId: row[0], title });
+    signalCandidateRows.push({ docId: row[0], title });
   }
-  log("Web seed: resolved article rows.");
+  log("Web seed: resolved signal_candidate rows.");
 
-  const primaryArticle = articleRows[0];
-  const primaryNotificationDocId = primaryArticle.docId;
-  const primaryContentItemId = `editorial:${primaryNotificationDocId}`;
+  const primarySignalCandidate = signalCandidateRows[0];
+  const primaryNotificationDocId = primarySignalCandidate.docId;
+  const primaryContentItemId = `signal_candidate:${primaryNotificationDocId}`;
   await waitFor(
-    "primary article worker pipeline before deterministic selection seed",
+    "primary signal_candidate worker pipeline before deterministic selection seed",
     async () =>
       queryPostgresInt(
         env,
         `
           select count(*)::int
-          from articles a
+          from signal_candidates a
           left join final_selection_results final on final.doc_id = a.doc_id
           where a.doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
             and (
@@ -362,25 +362,25 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
     {
       timeoutMs: 180000,
       intervalMs: 2000,
-      describeLastValue: (count) => `stable primary article count=${String(count)}`,
+      describeLastValue: (count) => `stable primary signal_candidate count=${String(count)}`,
     }
   );
   firstResultLine(queryPostgres(
     env,
     `
-      with article_cluster as (
+      with signal_candidate_cluster as (
         select
           doc_id,
           coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
           title,
           published_at
-        from articles
+        from signal_candidates
         where doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
       ),
       upsert_cluster as (
         insert into event_clusters (
           cluster_id,
-          article_count,
+          signal_candidate_count,
           primary_title,
           min_published_at,
           max_published_at
@@ -391,10 +391,10 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
           title,
           coalesce(published_at, now()),
           coalesce(published_at, now())
-        from article_cluster
+        from signal_candidate_cluster
         on conflict (cluster_id) do update
         set
-          article_count = greatest(event_clusters.article_count, 1),
+          signal_candidate_count = greatest(event_clusters.signal_candidate_count, 1),
           primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
           min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
           max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
@@ -404,20 +404,20 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
       upsert_member as (
         insert into event_cluster_members (cluster_id, doc_id)
         select cluster_id, doc_id
-        from article_cluster
+        from signal_candidate_cluster
         on conflict (doc_id) do update
         set cluster_id = excluded.cluster_id
         returning doc_id
       )
-      update articles a
+      update signal_candidates a
       set
         processing_state = 'matched',
-        event_cluster_id = article_cluster.cluster_id,
+        event_cluster_id = signal_candidate_cluster.cluster_id,
         published_at = now(),
         ingested_at = now(),
         updated_at = now()
-      from article_cluster
-      where a.doc_id = article_cluster.doc_id;
+      from signal_candidate_cluster
+      where a.doc_id = signal_candidate_cluster.doc_id;
 
       insert into system_feed_results (
         doc_id,
@@ -501,7 +501,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
     "system-selected collection availability",
     async () => {
       const payload = await fetchJson(
-        `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(primaryArticle.title)}`
+        `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(primarySignalCandidate.title)}`
       );
       const items = Array.isArray(payload?.items) ? payload.items : [];
       return items.some((item) => String(item?.content_item_id ?? "") === primaryContentItemId);
@@ -544,7 +544,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
           'runId',
           ${sqlLiteral(runId)}
         )
-      from articles a
+      from signal_candidates a
       where a.doc_id = ${sqlLiteral(primaryNotificationDocId)}::uuid
       on conflict (doc_id, interest_id) do update
       set
@@ -647,7 +647,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
     targetUserId: userId,
     webCookie,
     contentItemId: primaryContentItemId,
-    articleTitles: titles,
+    signalCandidateTitles: titles,
     channelIds,
   };
 }
@@ -825,23 +825,23 @@ async function seedAdminFixtures(env, adminCookie, runId) {
   ));
   assert.ok(discoveryInventoryId);
 
-  const articleDocId = firstResultLine(queryPostgres(
+  const signalCandidateDocId = firstResultLine(queryPostgres(
     env,
     `
       select doc_id::text
-      from articles
+      from signal_candidates
       order by ingested_at desc
       limit 1;
     `
   ));
-  assert.ok(articleDocId);
+  assert.ok(signalCandidateDocId);
   queryPostgres(
     env,
     `
-      update articles
+      update signal_candidates
       set enrichment_state = 'failed',
           updated_at = now()
-      where doc_id = ${sqlLiteral(articleDocId)};
+      where doc_id = ${sqlLiteral(signalCandidateDocId)};
     `
   );
 
@@ -864,20 +864,20 @@ async function seedAdminFixtures(env, adminCookie, runId) {
     discoveryArtifactId,
     discoveryCandidateId,
     discoveryInventoryId,
-    articleDocId,
+    signalCandidateDocId,
     resourceId,
   };
 }
 
 async function reassertWebMatchSeed(env, runId, scenario) {
-  const docId = String(scenario.contentItemId ?? "").replace(/^editorial:/, "");
+  const docId = String(scenario.contentItemId ?? "").replace(/^signal_candidate:/, "");
   if (!docId || !scenario.targetUserId || !scenario.userInterestId) {
     throw new Error("Web match seed cannot be reasserted without content, user, and interest identifiers.");
   }
   firstResultLine(await queryPostgresWithConcurrencyRetry(
     env,
     `
-      update articles
+      update signal_candidates
       set
         processing_state = 'matched',
         published_at = now(),
@@ -927,7 +927,7 @@ async function reassertWebMatchSeed(env, runId, scenario) {
         0.99,
         'notify',
         jsonb_build_object('source', 'ui-button-audit-reassert', 'runId', ${sqlLiteral(runId)})
-      from articles a
+      from signal_candidates a
       where a.doc_id = ${sqlLiteral(docId)}::uuid
       on conflict (doc_id, interest_id) do update
       set
@@ -952,7 +952,7 @@ async function auditWebButtons(page, env, runId, scenario, result) {
 
   log("Web: collection save/unsave.");
   await reassertWebMatchSeed(env, runId, scenario);
-  await openPage(page, `/?q=${encodeURIComponent(scenario.articleTitles[0] ?? "")}`);
+  await openPage(page, `/?q=${encodeURIComponent(scenario.signalCandidateTitles[0] ?? "")}`);
   await waitFor(
     "collection save toggle",
     async () => page.getByRole("button", { name: /Save|Unsave/ }).count(),
@@ -1350,9 +1350,9 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   );
   result.checked.push("admin:/user-interests delete");
 
-  log("Admin: article moderation and retry buttons.");
-  await markArticleAsRecentFailure(env, fixtures.articleDocId, runId);
-  await openPage(page, `/articles?view=recent-failures&selected=${encodeURIComponent(fixtures.articleDocId)}`);
+  log("Admin: signal_candidate moderation and retry buttons.");
+  await markSignalCandidateAsRecentFailure(env, fixtures.signalCandidateDocId, runId);
+  await openPage(page, `/signal-candidates?view=recent-failures&selected=${encodeURIComponent(fixtures.signalCandidateDocId)}`);
   const blockButton = page.getByRole("button", { name: /Block|Unblock/ }).first();
   await blockButton.waitFor({ state: "visible", timeout: 60000 }).catch(async (error) => {
     const currentUrl = page.url();
@@ -1363,18 +1363,18 @@ async function auditAdminButtons(page, env, runId, fixtures, webScenario, result
   });
   const initialBlockLabel = String((await blockButton.textContent()) ?? "").trim();
   if (/Block/.test(initialBlockLabel)) {
-    await clickConfirmAction(page, blockButton, "Block article");
-    await clickConfirmAction(page, page.getByRole("button", { name: /Unblock/ }).first(), "Unblock article");
+    await clickConfirmAction(page, blockButton, "Block signal_candidate");
+    await clickConfirmAction(page, page.getByRole("button", { name: /Unblock/ }).first(), "Unblock signal_candidate");
   } else {
-    await clickConfirmAction(page, blockButton, "Unblock article");
-    await clickConfirmAction(page, page.getByRole("button", { name: /Block/ }).first(), "Block article");
-    await clickConfirmAction(page, page.getByRole("button", { name: /Unblock/ }).first(), "Unblock article");
+    await clickConfirmAction(page, blockButton, "Unblock signal_candidate");
+    await clickConfirmAction(page, page.getByRole("button", { name: /Block/ }).first(), "Block signal_candidate");
+    await clickConfirmAction(page, page.getByRole("button", { name: /Unblock/ }).first(), "Unblock signal_candidate");
   }
-  result.checked.push("admin:/articles block/unblock");
+  result.checked.push("admin:/signal-candidates block/unblock");
 
-  await openPage(page, `/articles/${encodeURIComponent(fixtures.articleDocId)}`);
+  await openPage(page, `/signal-candidates/${encodeURIComponent(fixtures.signalCandidateDocId)}`);
   await page.getByRole("button", { name: "Retry enrichment" }).click();
-  result.checked.push("admin:/articles/:id retry enrichment");
+  result.checked.push("admin:/signal-candidates/:id retry enrichment");
 
   log("Admin: resources filter button.");
   await openPage(page, "/resources");
@@ -1539,7 +1539,7 @@ async function main() {
         userId,
         webInterestId: webScenario.userInterestId,
         contentItemId: webScenario.contentItemId,
-        articleDocId: adminFixtures.articleDocId,
+        signalCandidateDocId: adminFixtures.signalCandidateDocId,
         channelIds: [...webScenario.channelIds, adminFixtures.editableChannelId, adminFixtures.deletableChannelId],
       },
     };

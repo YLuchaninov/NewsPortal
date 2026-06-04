@@ -395,7 +395,7 @@ const contentAnalysisBackfillPayloadSchema = {
     properties: {
       subjectTypes: {
         type: ["string", "array"],
-        items: { type: "string", enum: ["article", "web_resource", "story_cluster"] },
+        items: { type: "string", enum: ["signal_candidate", "web_resource", "story_cluster"] },
       },
       modules: {
         type: ["string", "array"],

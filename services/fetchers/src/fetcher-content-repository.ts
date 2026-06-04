@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import {
-  ARTICLE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
   RESOURCE_INGEST_REQUESTED_EVENT
 } from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 
-import { upsertArticleObservation } from "./document-observations";
+import { upsertSignalCandidateObservation } from "./document-observations";
 import {
   classifyDuplicatePreflightInputs,
-  type PersistArticleInput,
+  type PersistSignalCandidateInput,
   type PersistResourceInput
 } from "./fetcher-persistence-types";
 
@@ -20,9 +20,9 @@ function uniqueNonEmpty(values: Iterable<string>): string[] {
 export class FetcherContentRepository {
   constructor(private readonly pool: Pool) {}
 
-  async persistArticlesWithPreflight(
+  async persistSignalCandidatesWithPreflight(
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ): Promise<{ ingestedCount: number; duplicateCount: number }> {
     const { pendingInputs, duplicateCount: preflightDuplicateCount } =
       await this.filterDuplicatePreflightInputs(channelId, inputs);
@@ -30,7 +30,7 @@ export class FetcherContentRepository {
     let duplicateCount = preflightDuplicateCount;
 
     for (const input of pendingInputs) {
-      const persisted = await this.persistArticle(input);
+      const persisted = await this.persistSignalCandidate(input);
       if (persisted) {
         ingestedCount += 1;
       } else {
@@ -68,7 +68,7 @@ export class FetcherContentRepository {
     };
   }
 
-  private async filterDuplicatePreflightInputs<T extends PersistArticleInput>(
+  private async filterDuplicatePreflightInputs<T extends PersistSignalCandidateInput>(
     channelId: string,
     inputs: readonly T[]
   ): Promise<{ pendingInputs: T[]; duplicateCount: number }> {
@@ -79,27 +79,27 @@ export class FetcherContentRepository {
       };
     }
 
-    const knownExternalArticleIds = uniqueNonEmpty(inputs.map((input) => input.externalArticleId));
+    const knownExternalSignalCandidateIds = uniqueNonEmpty(inputs.map((input) => input.externalSignalCandidateId));
     const knownUrls = uniqueNonEmpty(inputs.map((input) => input.url));
 
-    const [externalRefResult, articleUrlResult] = await Promise.all([
-      knownExternalArticleIds.length > 0
-        ? this.pool.query<{ externalArticleId: string }>(
+    const [externalRefResult, signalCandidateUrlResult] = await Promise.all([
+      knownExternalSignalCandidateIds.length > 0
+        ? this.pool.query<{ externalSignalCandidateId: string }>(
             `
-              select external_article_id as "externalArticleId"
-              from article_external_refs
+              select external_signal_candidate_id as "externalSignalCandidateId"
+              from signal_candidate_external_refs
               where
                 channel_id = $1
-                and external_article_id = any($2::text[])
+                and external_signal_candidate_id = any($2::text[])
             `,
-            [channelId, knownExternalArticleIds]
+            [channelId, knownExternalSignalCandidateIds]
           )
-        : Promise.resolve({ rows: [] } as { rows: Array<{ externalArticleId: string }> }),
+        : Promise.resolve({ rows: [] } as { rows: Array<{ externalSignalCandidateId: string }> }),
       knownUrls.length > 0
         ? this.pool.query<{ url: string }>(
             `
               select url
-              from articles
+              from signal_candidates
               where
                 channel_id = $1
                 and url = any($2::text[])
@@ -111,8 +111,8 @@ export class FetcherContentRepository {
 
     const decisions = classifyDuplicatePreflightInputs(
       inputs,
-      new Set(externalRefResult.rows.map((row) => row.externalArticleId)),
-      new Set(articleUrlResult.rows.map((row) => row.url))
+      new Set(externalRefResult.rows.map((row) => row.externalSignalCandidateId)),
+      new Set(signalCandidateUrlResult.rows.map((row) => row.url))
     );
 
     return {
@@ -134,7 +134,7 @@ export class FetcherContentRepository {
       };
     }
 
-    const knownExternalResourceIds = uniqueNonEmpty(inputs.map((input) => input.externalArticleId));
+    const knownExternalResourceIds = uniqueNonEmpty(inputs.map((input) => input.externalSignalCandidateId));
     const knownUrls = uniqueNonEmpty(inputs.map((input) => input.url));
 
     const [externalRefResult, resourceUrlResult] = await Promise.all([
@@ -178,15 +178,15 @@ export class FetcherContentRepository {
     };
   }
 
-  private async persistArticle(input: PersistArticleInput): Promise<boolean> {
+  private async persistSignalCandidate(input: PersistSignalCandidateInput): Promise<boolean> {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
       const insertResult = await client.query<{ docId: string }>(
         `
-          insert into articles (
+          insert into signal_candidates (
             channel_id,
-            source_article_id,
+            source_signal_candidate_id,
             url,
             content_kind,
             content_format,
@@ -203,7 +203,7 @@ export class FetcherContentRepository {
             $2,
             $3,
             'editorial',
-            'article',
+            'signal_candidate',
             $4,
             $5,
             $6,
@@ -217,7 +217,7 @@ export class FetcherContentRepository {
         `,
         [
           input.channel.channelId,
-          input.externalArticleId,
+          input.externalSignalCandidateId,
           input.url,
           input.publishedAt,
           input.title,
@@ -228,28 +228,28 @@ export class FetcherContentRepository {
           JSON.stringify(input.rawPayload)
         ]
       );
-      const insertedArticle = insertResult.rows[0];
-      if (!insertedArticle) {
+      const insertedSignalCandidate = insertResult.rows[0];
+      if (!insertedSignalCandidate) {
         await client.query("rollback");
         return false;
       }
 
       await client.query(
         `
-          insert into article_external_refs (
+          insert into signal_candidate_external_refs (
             external_ref_id,
             channel_id,
-            external_article_id,
+            external_signal_candidate_id,
             doc_id
           )
           values ($1, $2, $3, $4)
-          on conflict (channel_id, external_article_id) do nothing
+          on conflict (channel_id, external_signal_candidate_id) do nothing
         `,
-        [randomUUID(), input.channel.channelId, input.externalArticleId, insertedArticle.docId]
+        [randomUUID(), input.channel.channelId, input.externalSignalCandidateId, insertedSignalCandidate.docId]
       );
-      await upsertArticleObservation(client, insertedArticle.docId);
-      await this.insertOutboxEvent(client, ARTICLE_INGEST_REQUESTED_EVENT, "article", insertedArticle.docId, {
-        docId: insertedArticle.docId,
+      await upsertSignalCandidateObservation(client, insertedSignalCandidate.docId);
+      await this.insertOutboxEvent(client, SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT, "signal_candidate", insertedSignalCandidate.docId, {
+        docId: insertedSignalCandidate.docId,
         version: 1
       });
       await client.query("commit");
@@ -311,7 +311,7 @@ export class FetcherContentRepository {
               extraction_error = null,
               projection_state = 'pending',
               projection_error = null,
-              projected_article_id = null,
+              projected_signal_candidate_id = null,
               updated_at = now()
             where resource_id = $1 and channel_id = $2
           `,
@@ -381,7 +381,7 @@ export class FetcherContentRepository {
         `,
         [
           input.channel.channelId,
-          input.externalArticleId,
+          input.externalSignalCandidateId,
           input.url,
           input.url,
           input.resourceKind,

@@ -60,7 +60,7 @@ create table if not exists content_analysis_results (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint content_analysis_results_subject_type_check
-    check (subject_type in ('article', 'web_resource', 'canonical_document', 'story_cluster')),
+    check (subject_type in ('signal_candidate', 'web_resource', 'canonical_document', 'story_cluster')),
   constraint content_analysis_results_analysis_type_check
     check (analysis_type in ('ner', 'sentiment', 'entity_sentiment', 'category', 'system_interest_label', 'content_filter', 'cluster_summary')),
   constraint content_analysis_results_status_check
@@ -106,7 +106,7 @@ create table if not exists content_entities (
   analysis_id uuid references content_analysis_results (analysis_id) on delete cascade,
   created_at timestamptz not null default now(),
   constraint content_entities_subject_type_check
-    check (subject_type in ('article', 'web_resource', 'canonical_document', 'story_cluster')),
+    check (subject_type in ('signal_candidate', 'web_resource', 'canonical_document', 'story_cluster')),
   constraint content_entities_mentions_json_array_check
     check (jsonb_typeof(mentions_json) = 'array'),
   constraint content_entities_mention_count_positive_check
@@ -141,7 +141,7 @@ create table if not exists content_labels (
   analysis_id uuid references content_analysis_results (analysis_id) on delete set null,
   created_at timestamptz not null default now(),
   constraint content_labels_subject_type_check
-    check (subject_type in ('article', 'web_resource', 'canonical_document', 'story_cluster')),
+    check (subject_type in ('signal_candidate', 'web_resource', 'canonical_document', 'story_cluster')),
   constraint content_labels_label_type_check
     check (label_type in ('system_interest', 'taxonomy', 'sentiment', 'tone', 'risk')),
   constraint content_labels_decision_check
@@ -212,7 +212,7 @@ create table if not exists content_filter_results (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint content_filter_results_subject_type_check
-    check (subject_type in ('article', 'web_resource', 'canonical_document', 'story_cluster')),
+    check (subject_type in ('signal_candidate', 'web_resource', 'canonical_document', 'story_cluster')),
   constraint content_filter_results_mode_check
     check (mode in ('disabled', 'observe', 'dry_run', 'hold', 'enforce')),
   constraint content_filter_results_decision_check
@@ -322,36 +322,36 @@ update sequences
 set
   task_graph = jsonb_build_array(
     jsonb_build_object(
-      'key', 'extract_article',
-      'module', 'enrichment.article_extract',
+      'key', 'extract_signal_candidate',
+      'module', 'enrichment.signal_candidate_extract',
       'options', jsonb_build_object()
     ),
-    jsonb_build_object('key', 'normalize', 'module', 'article.normalize', 'options', jsonb_build_object()),
-    jsonb_build_object('key', 'dedup', 'module', 'article.dedup', 'options', jsonb_build_object()),
-    jsonb_build_object('key', 'embed', 'module', 'article.embed', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'normalize', 'module', 'signal_candidate.normalize', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'dedup', 'module', 'signal_candidate.dedup', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'embed', 'module', 'signal_candidate.embed', 'options', jsonb_build_object()),
     jsonb_build_object(
       'key', 'content_ner',
       'module', 'content.ner_extract',
       'enabled', true,
-      'options', jsonb_build_object('mode', 'observe', 'subjectType', 'article')
+      'options', jsonb_build_object('mode', 'observe', 'subjectType', 'signal_candidate')
     ),
-    jsonb_build_object('key', 'match_criteria', 'module', 'article.match_criteria', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'match_criteria', 'module', 'signal_candidate.match_criteria', 'options', jsonb_build_object()),
     jsonb_build_object(
       'key', 'system_interest_labels',
       'module', 'content.system_interest_label_project',
       'enabled', true,
       'options', jsonb_build_object('mode', 'observe')
     ),
-    jsonb_build_object('key', 'cluster', 'module', 'article.cluster', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'cluster', 'module', 'signal_candidate.cluster', 'options', jsonb_build_object()),
     jsonb_build_object(
       'key', 'content_filter',
       'module', 'content.filter_gate',
       'enabled', true,
       'options', jsonb_build_object('mode', 'dry_run', 'policyKey', 'default_recent_content_gate')
     ),
-    jsonb_build_object('key', 'match_interests', 'module', 'article.match_interests', 'options', jsonb_build_object()),
-    jsonb_build_object('key', 'notify', 'module', 'article.notify', 'options', jsonb_build_object())
+    jsonb_build_object('key', 'match_interests', 'module', 'signal_candidate.match_interests', 'options', jsonb_build_object()),
+    jsonb_build_object('key', 'notify', 'module', 'signal_candidate.notify', 'options', jsonb_build_object())
   ),
-  tags = array['default', 'article', 'core', 'cutover', 'content-analysis'],
+  tags = array['default', 'signal_candidate', 'core', 'cutover', 'content-analysis'],
   updated_at = now()
 where sequence_id = '5cc77217-7a2f-4318-9fef-c6734e0f22f1';

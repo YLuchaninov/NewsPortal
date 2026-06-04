@@ -23,8 +23,8 @@ export function ChannelEditorApiMappingFields({
       <div className="mt-6">
         <h3 className="text-sm font-semibold text-foreground">JSON field mapping</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Use dot paths when the response nests article data inside objects. The
-          defaults match a top-level <code>items</code> array with common news
+          Use dot paths when the response nests signal_candidate data inside objects. The
+          defaults match a top-level <code>items</code> array with common signal
           property names.
         </p>
       </div>
@@ -47,7 +47,7 @@ export function ChannelEditorApiMappingFields({
         <FormField
           label="Title field"
           name="channel-title-field"
-          helpText="Property that contains the article headline."
+          helpText="Property that contains the signal candidate headline."
         >
           <Input
             id="channel-title-field"
@@ -73,7 +73,7 @@ export function ChannelEditorApiMappingFields({
         <FormField
           label="Body field"
           name="channel-body-field"
-          helpText="Property that contains the full or long-form article body."
+          helpText="Property that contains the full or long-form signal_candidate body."
         >
           <Input
             id="channel-body-field"
@@ -86,7 +86,7 @@ export function ChannelEditorApiMappingFields({
         <FormField
           label="URL field"
           name="channel-url-field"
-          helpText="Property that contains the canonical article URL."
+          helpText="Property that contains the canonical signal_candidate URL."
         >
           <Input
             id="channel-url-field"

@@ -12,7 +12,7 @@ interface WaitOptions {
   pollIntervalMs: number;
 }
 
-interface ArticleRow {
+interface SignalCandidateRow {
   docId: string;
   title: string;
   body: string;
@@ -60,7 +60,7 @@ function longFeedBody(runId: string): string {
   );
 }
 
-function articleHtml(runId: string, title: string, bodyLabel: string, imageUrl: string): string {
+function signalCandidateHtml(runId: string, title: string, bodyLabel: string, imageUrl: string): string {
   const paragraphs = Array.from(
     { length: 12 },
     (_, index) =>
@@ -91,12 +91,12 @@ async function startFixtureServer(runId: string): Promise<{
   const server = createServer((request: IncomingMessage, response: ServerResponse): void => {
     const host = request.headers.host ?? "127.0.0.1";
     const baseUrl = `http://${host}`;
-    const shortTitle = `Enrichment short article ${runId}`;
-    const longTitle = `Enrichment long article ${runId}`;
-    const failedTitle = `Enrichment failing article ${runId}`;
-    const shortArticleUrl = `${baseUrl}/articles/short.html`;
-    const longArticleUrl = `${baseUrl}/articles/long.html`;
-    const failedArticleUrl = `${baseUrl}/articles/failure.html`;
+    const shortTitle = `Enrichment short signal_candidate ${runId}`;
+    const longTitle = `Enrichment long signal_candidate ${runId}`;
+    const failedTitle = `Enrichment failing signal_candidate ${runId}`;
+    const shortSignalCandidateUrl = `${baseUrl}/signal-candidates/short.html`;
+    const longSignalCandidateUrl = `${baseUrl}/signal-candidates/long.html`;
+    const failedSignalCandidateUrl = `${baseUrl}/signal-candidates/failure.html`;
     const shortImageUrl = `${baseUrl}/media/short.jpg`;
     const failureImageUrl = `${baseUrl}/media/failure.jpg`;
 
@@ -111,7 +111,7 @@ async function startFixtureServer(runId: string): Promise<{
     <item>
       <guid>enrichment-short-${runId}</guid>
       <title>${shortTitle}</title>
-      <link>${shortArticleUrl}</link>
+      <link>${shortSignalCandidateUrl}</link>
       <description><![CDATA[Short feed body ${runId}.]]></description>
       <content:encoded><![CDATA[<p>Short feed body ${runId}.</p>]]></content:encoded>
       <pubDate>${new Date().toUTCString()}</pubDate>
@@ -119,7 +119,7 @@ async function startFixtureServer(runId: string): Promise<{
     <item>
       <guid>enrichment-long-${runId}</guid>
       <title>${longTitle}</title>
-      <link>${longArticleUrl}</link>
+      <link>${longSignalCandidateUrl}</link>
       <description><![CDATA[${longFeedBody(runId)}]]></description>
       <content:encoded><![CDATA[<p>${longFeedBody(runId)}</p>]]></content:encoded>
       <pubDate>${new Date().toUTCString()}</pubDate>
@@ -127,7 +127,7 @@ async function startFixtureServer(runId: string): Promise<{
     <item>
       <guid>enrichment-failed-${runId}</guid>
       <title>${failedTitle}</title>
-      <link>${failedArticleUrl}</link>
+      <link>${failedSignalCandidateUrl}</link>
       <description><![CDATA[Failure feed sentinel ${runId}.]]></description>
       <content:encoded><![CDATA[<p>Failure feed sentinel ${runId}.</p>]]></content:encoded>
       <enclosure url="${failureImageUrl}" type="image/jpeg" />
@@ -142,23 +142,23 @@ async function startFixtureServer(runId: string): Promise<{
       return;
     }
 
-    if (request.url === "/articles/short.html") {
+    if (request.url === "/signal-candidates/short.html") {
       response.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
       });
-      response.end(articleHtml(runId, shortTitle, "Expanded enrichment paragraph", shortImageUrl));
+      response.end(signalCandidateHtml(runId, shortTitle, "Expanded enrichment paragraph", shortImageUrl));
       return;
     }
 
-    if (request.url === "/articles/long.html") {
+    if (request.url === "/signal-candidates/long.html") {
       response.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
       });
-      response.end(articleHtml(runId, longTitle, "Expanded long-page paragraph", shortImageUrl));
+      response.end(signalCandidateHtml(runId, longTitle, "Expanded long-page paragraph", shortImageUrl));
       return;
     }
 
-    if (request.url === "/articles/failure.html") {
+    if (request.url === "/signal-candidates/failure.html") {
       response.writeHead(500, {
         "content-type": "text/plain; charset=utf-8",
       });
@@ -246,8 +246,8 @@ async function seedChannel(pool: Pool, feedUrl: string): Promise<string> {
   return result.rows[0].channelId;
 }
 
-async function fetchArticleRows(pool: Pool, channelId: string): Promise<ArticleRow[]> {
-  const result = await pool.query<ArticleRow>(
+async function fetchSignalCandidateRows(pool: Pool, channelId: string): Promise<SignalCandidateRow[]> {
+  const result = await pool.query<SignalCandidateRow>(
     `
       select
         doc_id::text as "docId",
@@ -257,7 +257,7 @@ async function fetchArticleRows(pool: Pool, channelId: string): Promise<ArticleR
         enrichment_state as "enrichmentState",
         processing_state as "processingState",
         has_media as "hasMedia"
-      from articles
+      from signal_candidates
       where channel_id = $1
       order by title asc
     `,
@@ -271,7 +271,7 @@ async function countMediaAssets(pool: Pool, docId: string): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `
       select count(*)::text as count
-      from article_media_assets
+      from signal_candidate_media_assets
       where doc_id = $1
     `,
     [docId]
@@ -282,15 +282,15 @@ async function countMediaAssets(pool: Pool, docId: string): Promise<number> {
 async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string): Promise<void> {
   await waitForCondition(
     async () => {
-      const rows = await fetchArticleRows(pool, channelId);
+      const rows = await fetchSignalCandidateRows(pool, channelId);
       if (rows.length !== 3) {
         return false;
       }
 
       const states = Object.fromEntries(rows.map((row) => [row.title, row]));
-      const shortRow = states[`Enrichment short article ${runId}`];
-      const longRow = states[`Enrichment long article ${runId}`];
-      const failedRow = states[`Enrichment failing article ${runId}`];
+      const shortRow = states[`Enrichment short signal_candidate ${runId}`];
+      const longRow = states[`Enrichment long signal_candidate ${runId}`];
+      const failedRow = states[`Enrichment failing signal_candidate ${runId}`];
       if (!shortRow || !longRow || !failedRow) {
         return false;
       }
@@ -310,34 +310,34 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
     }
   );
 
-  const rows = await fetchArticleRows(pool, channelId);
+  const rows = await fetchSignalCandidateRows(pool, channelId);
   const byTitle = Object.fromEntries(rows.map((row) => [row.title, row]));
-  const shortRow = byTitle[`Enrichment short article ${runId}`];
-  const longRow = byTitle[`Enrichment long article ${runId}`];
-  const failedRow = byTitle[`Enrichment failing article ${runId}`];
+  const shortRow = byTitle[`Enrichment short signal_candidate ${runId}`];
+  const longRow = byTitle[`Enrichment long signal_candidate ${runId}`];
+  const failedRow = byTitle[`Enrichment failing signal_candidate ${runId}`];
 
   if (!shortRow.body.includes(`Expanded enrichment paragraph ${runId}`)) {
-    throw new Error("Expected short-body article to use the extracted article content.");
+    throw new Error("Expected short-body signal_candidate to use the extracted signal_candidate content.");
   }
   if (!shortRow.hasMedia || (await countMediaAssets(pool, shortRow.docId)) < 1) {
-    throw new Error("Expected short-body article enrichment to persist preview media.");
+    throw new Error("Expected short-body signal_candidate enrichment to persist preview media.");
   }
 
   if (!longRow.body.includes(`Long feed sentinel ${runId}`)) {
-    throw new Error("Expected long-body article to preserve the original feed body.");
+    throw new Error("Expected long-body signal_candidate to preserve the original feed body.");
   }
   if (longRow.body.includes(`Expanded long-page paragraph ${runId}`)) {
-    throw new Error("Expected long-body article to skip full-article extraction.");
+    throw new Error("Expected long-body signal_candidate to skip full-signal_candidate extraction.");
   }
   if (!longRow.fullContentHtml?.includes(`Long feed sentinel ${runId}`)) {
-    throw new Error("Expected skipped article to retain feed HTML in full_content_html.");
+    throw new Error("Expected skipped signal_candidate to retain feed HTML in full_content_html.");
   }
 
   if (!failedRow.body.includes(`Failure feed sentinel ${runId}`)) {
-    throw new Error("Expected failed article enrichment to preserve the original feed body.");
+    throw new Error("Expected failed signal_candidate enrichment to preserve the original feed body.");
   }
   if (!failedRow.hasMedia || (await countMediaAssets(pool, failedRow.docId)) < 1) {
-    throw new Error("Expected failed article enrichment to keep feed media assets.");
+    throw new Error("Expected failed signal_candidate enrichment to keep feed media assets.");
   }
 
   const taskRunResult = await pool.query<{ count: string }>(
@@ -345,10 +345,10 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
       select count(*)::text as count
       from sequence_task_runs str
       join sequence_runs sr on sr.run_id = str.run_id
-      where str.task_key = 'extract_article'
+      where str.task_key = 'extract_signal_candidate'
         and sr.context_json ->> 'doc_id' in (
           select doc_id::text
-          from articles
+          from signal_candidates
           where channel_id = $1
         )
     `,
@@ -356,7 +356,7 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
   );
 
   if (Number(taskRunResult.rows[0]?.count ?? "0") < 3) {
-    throw new Error("Expected sequence task runs to record one article extraction step per article.");
+    throw new Error("Expected sequence task runs to record one signal_candidate extraction step per signal_candidate.");
   }
 }
 

@@ -80,7 +80,7 @@ export interface ReplayStoredProjectionOptions {
   force?: boolean;
 }
 
-function buildArticleParserOptions() {
+function buildSignalCandidateParserOptions() {
   return {
     descriptionTruncateLen: 320,
     descriptionLengthThreshold: 120,
@@ -125,7 +125,7 @@ export class ResourceEnrichmentService {
         resource_id: resource.resourceId,
         resource_kind: this.resolveResourceKind(resource.resourceKind),
         extraction_state: "skipped",
-        projected_doc_id: resource.projectedArticleId,
+        projected_doc_id: resource.projectedSignalCandidateId,
         documents_count: asArray(resource.documentsJson).length,
         media_count: asArray(resource.mediaJson).length,
         error: "already_enriched",
@@ -158,7 +158,7 @@ export class ResourceEnrichmentService {
         linksOutJson: [],
         contentHash: resource.body ? computeContentHash(resource.body) : null,
         errorText: message,
-        projectedDocId: resource.projectedArticleId,
+        projectedDocId: resource.projectedSignalCandidateId,
       });
     }
   }
@@ -179,13 +179,13 @@ export class ResourceEnrichmentService {
           ? "skipped"
           : "enriched";
 
-    if (resource.projectedArticleId && options.force !== true) {
+    if (resource.projectedSignalCandidateId && options.force !== true) {
       return {
         status: "skipped",
         resource_id: resource.resourceId,
         resource_kind: this.resolveResourceKind(resource.resourceKind),
         extraction_state: extractionState,
-        projected_doc_id: resource.projectedArticleId,
+        projected_doc_id: resource.projectedSignalCandidateId,
         documents_count: asArray(resource.documentsJson).length,
         media_count: asArray(resource.mediaJson).length,
         error: "already_projected",
@@ -198,7 +198,7 @@ export class ResourceEnrichmentService {
         resource_id: resource.resourceId,
         resource_kind: this.resolveResourceKind(resource.resourceKind),
         extraction_state: extractionState,
-        projected_doc_id: resource.projectedArticleId,
+        projected_doc_id: resource.projectedSignalCandidateId,
         documents_count: asArray(resource.documentsJson).length,
         media_count: asArray(resource.mediaJson).length,
         error: "resource_not_enriched",
@@ -530,7 +530,7 @@ export class ResourceEnrichmentService {
           extracted = await extractFromHtml(
             html,
             finalUrl,
-            buildArticleParserOptions(),
+            buildSignalCandidateParserOptions(),
           );
         } catch (error) {
           this.logger.warn({ error, resourceId: resource.resourceId }, "Editorial extraction fallback triggered.");
@@ -564,9 +564,9 @@ export class ResourceEnrichmentService {
           siteName: readOptionalString(extractMetaContent(html, ["og:site_name"])),
           observability: baseObservability,
           editorialExtraction: {
-            articleExtractorInvoked: extractorDecision.shouldInvoke,
-            articleExtractorReason: extractorDecision.reason,
-            articleExtractorFetchReused: extractorDecision.shouldInvoke,
+            signalCandidateExtractorInvoked: extractorDecision.shouldInvoke,
+            signalCandidateExtractorReason: extractorDecision.reason,
+            signalCandidateExtractorFetchReused: extractorDecision.shouldInvoke,
             baseBodyLength: baseBody.length,
             finalBodyLength: body.length,
             bodyUpliftChars,

@@ -8,15 +8,15 @@
 - Redis + BullMQ как transport only;
 - SQL migrations с нуля;
 - outbox relay, публикующего thin jobs из PostgreSQL в BullMQ;
-- RSS fetchers с cursor-aware raw article persistence;
+- RSS fetchers с cursor-aware raw signal_candidate persistence;
 - Python workers для `normalize + dedup`, читающих BullMQ jobs с inbox idempotency;
 - Python workers для `embed + cluster + system-interest gating + optional user-interest match + notify + system-interest-scope Gemini-review`, также работающих через BullMQ и inbox idempotency;
-- phase-2 article tables для raw, normalized и deduped state;
+- phase-2 signal_candidate tables для raw, normalized и deduped state;
 - phase-3 feature extraction, embedding registries, compiled interest/criterion state и HNSW registry plumbing;
 - phase-4 matching, notification, moderation, reactions, prompt-template и audit tables;
 - foundation tables для users, roles, profiles, channels, outbox и inbox idempotency;
 - Astro web/admin apps с Firebase-backed session bridge и локальными write routes;
-- FastAPI read/debug/explain endpoints для articles, clusters, notifications, channels, templates и maintenance views;
+- FastAPI read/debug/explain endpoints для signal_candidates, clusters, notifications, channels, templates и maintenance views;
 - Discovery vNext source acquisition with typed artifacts, candidates, probe reports, source understanding, routing decisions, inventory, policy-gated handoff and safe-by-default runtime flags;
 - multi-provider fetchers для RSS, website/http, external JSON APIs и IMAP-polled email feeds;
 - SSR-ready Astro build/runtime path для `web` и `admin` через Node adapter;
@@ -198,7 +198,7 @@ pnpm test:product:local:core
 - `pnpm integration_tests`
   Root-level full-acceptance gate; сейчас это thin alias на `pnpm test:mvp:internal`.
 
-## Article LLM Review Runtime
+## SignalCandidate LLM Review Runtime
 
 - Baseline system-interest gray-zone review stays env-driven and uses Gemini plus `llm_review_log` as the spend/usage source of truth.
 - Main env surface for this lane:
@@ -208,7 +208,7 @@ pnpm test:product:local:core
   - `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_BASE_URL`
   - `LLM_INPUT_COST_PER_MILLION_USD`, `LLM_OUTPUT_COST_PER_MILLION_USD`
 - `LLM_REVIEW_MONTHLY_BUDGET_CENTS=0` disables the monthly cap only; it does not disable the lane itself.
-- When the monthly cap is exhausted, system-interest gray-zone criteria are auto-resolved by env policy instead of leaving articles in `pending_llm`.
+- When the monthly cap is exhausted, system-interest gray-zone criteria are auto-resolved by env policy instead of leaving signal_candidates in `pending_llm`.
 - Operator read surfaces for this runtime are:
   - `/maintenance/llm-budget-summary`
   - `/dashboard/summary`
@@ -320,7 +320,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
 - fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
 - worker пишет first-class Gemini usage/cost поля в `llm_review_log`;
-- public `/collections/system-selected` теперь показывает system-selected content items по article/resource gate, даже если у текущего пользователя нет ни одного `user_interest`;
+- public `/collections/system-selected` теперь показывает system-selected content items по signal_candidate/resource gate, даже если у текущего пользователя нет ни одного `user_interest`;
 - web показывает configured notification channels, working `notification_preferences`, browser-side `web_push` connect flow и расширенный lifecycle interests.
 
 Полный operator-facing runbook теперь собран в [docs/product/operator/manual-mvp-runbook.md](docs/product/operator/manual-mvp-runbook.md). Используй его, если нужен не только quick start, а полный local MVP walkthrough c setup, API checks, moderation/backfill, optional notifications и cleanup/reset guidance.
@@ -397,7 +397,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
    pnpm test:relay:phase45:compose
    ```
 
-   Этот smoke теперь подтверждает последовательный routing `article.clustered -> q.match.criteria -> article.criteria.matched -> q.match.interests`.
+   Этот smoke теперь подтверждает последовательный routing `signal_candidate.clustered -> q.match.criteria -> signal_candidate.criteria.matched -> q.match.interests`.
 
 10. Запустить worker smokes внутри контейнера `worker` после поднятия Postgres/Redis:
 
@@ -472,10 +472,10 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 ## Текущий охват
 
 - Queue payloads остаются тонкими и содержат только ID плюс компактные metadata.
-- Article processing уже поддерживает путь `raw -> normalized -> deduped -> embedded -> clustered`, после которого system interests записывают editorial gate в `system_feed_results`, а per-user personalization и notify продолжаются только для eligible статей.
-- Public/system-selected collection eligibility теперь читается из `system_feed_results` plus `allowed_content_kinds`, а не из `articles.processing_state`.
+- SignalCandidate processing уже поддерживает путь `raw -> normalized -> deduped -> embedded -> clustered`, после которого system interests записывают editorial gate в `system_feed_results`, а per-user personalization и notify продолжаются только для eligible статей.
+- Public/system-selected collection eligibility теперь читается из `system_feed_results` plus `allowed_content_kinds`, а не из `signal_candidates.processing_state`.
 - Изменения admin `interest_templates` and real `user_interests` запускают versioned compile jobs и обновляют Postgres-backed compiled/vector registries.
-- Gemini является baseline provider только для system-interest gray-zone review; interest-side gray-zone LLM review в baseline runtime отключен, а article-side monthly cap/hard-stop now resolves gray-zone criteria by env policy instead of leaving them pending.
+- Gemini является baseline provider только для system-interest gray-zone review; interest-side gray-zone LLM review в baseline runtime отключен, а signal_candidate-side monthly cap/hard-stop now resolves gray-zone criteria by env policy instead of leaving them pending.
 - Firebase-backed anonymous web sessions и non-anonymous admin sessions подключены через Astro BFF routes.
 - `./data` bind-mounted в Python services, поэтому derived models, HNSW indices, snapshots и logs переживают container rebuild.
 - HNSW остается derived state; `interest_centroids` и `event_cluster_centroids` пересобираются из PostgreSQL.
@@ -484,17 +484,17 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 
 Ingest smoke test создает временный RSS channel внутри running `fetchers` container, поднимает локальный fixture feed и проверяет, что:
 
-- одна article row проходит путь `raw -> normalized -> deduped`;
-- создается одна строка в `article_external_refs`;
+- одна signal_candidate row проходит путь `raw -> normalized -> deduped`;
+- создается одна строка в `signal_candidate_external_refs`;
 - обновляются fetch cursors `etag` и `timestamp`;
-- события `article.ingest.requested` и `article.normalized` публикуются через outbox;
+- события `signal_candidate.ingest.requested` и `signal_candidate.normalized` публикуются через outbox;
 - `worker.normalize` и `worker.dedup` фиксируются в `inbox_processed_events`;
-- повторный fetch того же feed не создает duplicate articles.
+- повторный fetch того же feed не создает duplicate signal_candidates.
 
 Отдельные multi-channel proofs через `pnpm test:ingest:multi:compose` и `pnpm test:ingest:soak:compose` поднимают host-side synthetic RSS fixture server, создают RSS каналы через admin bulk endpoint и дополнительно доказывают:
 
 - bounded-concurrency scheduler не abort-ит весь batch из-за `invalid_xml` или `timeout` канала;
-- `not_modified` fixtures действительно отдают `304`, а повторный fetch проходит через `next_due_at`-aware second cycle со stable article count;
+- `not_modified` fixtures действительно отдают `304`, а повторный fetch проходит через `next_due_at`-aware second cycle со stable signal_candidate count;
 - full RSS-only path `admin -> source_channels -> fetchers -> relay -> workers` остается green на 24 и 60 feeds.
 
 Полезные verification queries после smoke test:
@@ -507,7 +507,7 @@ select
   sfr.eligible_for_feed,
   a.normalized_at,
   a.deduped_at
-from articles a
+from signal_candidates a
 left join system_feed_results sfr on sfr.doc_id = a.doc_id
 order by a.ingested_at desc
 limit 5;

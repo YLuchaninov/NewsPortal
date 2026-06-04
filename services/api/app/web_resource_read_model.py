@@ -79,9 +79,9 @@ def list_web_resources_page(
         resource_filters.append("wr.resource_kind = %s")
         params.append(resource_kind)
     if projection == "projected":
-        resource_filters.append("wr.projected_article_id is not null")
+        resource_filters.append("wr.projected_signal_candidate_id is not null")
     elif projection == "resource_only":
-        resource_filters.append("wr.projected_article_id is null")
+        resource_filters.append("wr.projected_signal_candidate_id is null")
     analysis_filters, analysis_params = build_content_analysis_filter_clause_func(
         subject_alias="wr.resource_id",
         subject_type="web_resource",
@@ -120,8 +120,8 @@ def list_web_resources_page(
           wr.extraction_error,
           wr.projection_state,
           wr.projection_error,
-          wr.projected_article_id::text as projected_article_id,
-          pa.title as projected_article_title,
+          wr.projected_signal_candidate_id::text as projected_signal_candidate_id,
+          pa.title as projected_signal_candidate_title,
           case
             when {content_item_ready_expr}
             then 'resource:' || wr.resource_id::text
@@ -150,8 +150,8 @@ def list_web_resources_page(
             as final_selection_canonical_review_reused_count,
           coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
             as final_selection_canonical_selection_reused,
-          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
-            as final_selection_duplicate_article_count_for_canonical,
+          coalesce((fsr.explain_json ->> 'duplicateSignalCandidateCountForCanonical')::int, 0)
+            as final_selection_duplicate_signal_candidate_count_for_canonical,
           fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
@@ -159,9 +159,9 @@ def list_web_resources_page(
           jsonb_array_length(coalesce(wr.child_resources_json, '[]'::jsonb))::int as child_resources_count
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
-        left join articles pa on pa.doc_id = wr.projected_article_id
-        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
-        left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id
+        left join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
+        left join system_feed_results sfr on sfr.doc_id = wr.projected_signal_candidate_id
         {where_clause}
         order by coalesce(wr.published_at, wr.discovered_at) desc nulls last, wr.updated_at desc, wr.resource_id
     """
@@ -225,8 +225,8 @@ def get_web_resource(
           wr.extraction_error,
           wr.projection_state,
           wr.projection_error,
-          wr.projected_article_id::text as projected_article_id,
-          pa.title as projected_article_title,
+          wr.projected_signal_candidate_id::text as projected_signal_candidate_id,
+          pa.title as projected_signal_candidate_title,
           case
             when {content_item_ready_expr}
             then 'resource:' || wr.resource_id::text
@@ -255,8 +255,8 @@ def get_web_resource(
             as final_selection_canonical_review_reused_count,
           coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
             as final_selection_canonical_selection_reused,
-          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
-            as final_selection_duplicate_article_count_for_canonical,
+          coalesce((fsr.explain_json ->> 'duplicateSignalCandidateCountForCanonical')::int, 0)
+            as final_selection_duplicate_signal_candidate_count_for_canonical,
           fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           jsonb_array_length(coalesce(wr.documents_json, '[]'::jsonb))::int as documents_count,
           jsonb_array_length(coalesce(wr.media_json, '[]'::jsonb))::int as media_count,
@@ -271,9 +271,9 @@ def get_web_resource(
           wr.raw_payload_json
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
-        left join articles pa on pa.doc_id = wr.projected_article_id
-        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
-        left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id
+        left join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
+        left join system_feed_results sfr on sfr.doc_id = wr.projected_signal_candidate_id
         where wr.resource_id = %s
         """,
         (resource_id,),
@@ -283,8 +283,8 @@ def get_web_resource(
     interest_filter_results: list[dict[str, Any]] = []
     llm_reviews: list[dict[str, Any]] = []
     notifications: list[dict[str, Any]] = []
-    projected_article_id = str(resource.get("projected_article_id") or "").strip()
-    if projected_article_id:
+    projected_signal_candidate_id = str(resource.get("projected_signal_candidate_id") or "").strip()
+    if projected_signal_candidate_id:
         interest_filter_results = query_all_func(
             """
             select *
@@ -292,7 +292,7 @@ def get_web_resource(
             where doc_id = %s
             order by filter_scope, created_at desc
             """,
-            (projected_article_id,),
+            (projected_signal_candidate_id,),
         )
         llm_reviews = query_all_func(
             """
@@ -301,7 +301,7 @@ def get_web_resource(
             where doc_id = %s
             order by created_at desc
             """,
-            (projected_article_id,),
+            (projected_signal_candidate_id,),
         )
         notifications = query_all_func(
             """
@@ -310,7 +310,7 @@ def get_web_resource(
             where doc_id = %s
             order by created_at desc
             """,
-            (projected_article_id,),
+            (projected_signal_candidate_id,),
         )
     resource = apply_resource_selection_payload_func(
         resource,

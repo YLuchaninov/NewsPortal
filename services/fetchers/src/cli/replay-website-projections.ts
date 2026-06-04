@@ -53,7 +53,7 @@ async function listReplayCandidates(
   options: CliOptions,
 ): Promise<ReplayCandidateRow[]> {
   const filters = [
-    "wr.projected_article_id is null",
+    "wr.projected_signal_candidate_id is null",
     "wr.extraction_state = 'enriched'",
     "wr.projection_state = 'explicitly_rejected_before_pipeline'",
     "wr.projection_error = 'legacy_resource_only_without_common_handoff'",

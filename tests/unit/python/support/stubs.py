@@ -231,7 +231,7 @@ def install_worker_runtime_import_stubs() -> None:
         class _CriterionBaselineCompiler:
             pass
 
-        class _HeuristicArticleFeatureExtractor:
+        class _HeuristicSignalCandidateFeatureExtractor:
             def extract(self, *args, **kwargs):
                 return types.SimpleNamespace(numbers=[], short_tokens=[], places=[], entities=[])
 
@@ -240,7 +240,7 @@ def install_worker_runtime_import_stubs() -> None:
                 raise NotImplementedError
 
         ml_stub.CriterionBaselineCompiler = _CriterionBaselineCompiler
-        ml_stub.HeuristicArticleFeatureExtractor = _HeuristicArticleFeatureExtractor
+        ml_stub.HeuristicSignalCandidateFeatureExtractor = _HeuristicSignalCandidateFeatureExtractor
         ml_stub.InterestBaselineCompiler = _InterestBaselineCompiler
         ml_stub.load_embedding_provider = lambda: object()
         ml_stub.mix_weighted_vectors = lambda *args, **kwargs: []

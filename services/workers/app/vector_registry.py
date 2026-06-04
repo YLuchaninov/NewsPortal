@@ -14,7 +14,7 @@ from .scoring import normalize_fts_score
 INTEREST_CENTROIDS_INDEX_NAME = "interest_centroids"
 
 
-async def upsert_article_features(
+async def upsert_signal_candidate_features(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: uuid.UUID,
     *,
@@ -27,7 +27,7 @@ async def upsert_article_features(
 ) -> None:
     await cursor.execute(
         """
-        insert into article_features (
+        insert into signal_candidate_features (
           doc_id,
           numbers,
           short_tokens,
@@ -158,7 +158,7 @@ async def upsert_embedding_registry(
     return embedding_id
 
 
-async def upsert_article_vector_registry(
+async def upsert_signal_candidate_vector_registry(
     cursor: psycopg.AsyncCursor[Any],
     *,
     doc_id: uuid.UUID,
@@ -168,7 +168,7 @@ async def upsert_article_vector_registry(
 ) -> None:
     await cursor.execute(
         """
-        insert into article_vector_registry (
+        insert into signal_candidate_vector_registry (
           doc_id,
           vector_type,
           embedding_id,
@@ -555,14 +555,14 @@ async def update_criterion_compile_status(
 
 
 
-async def fetch_article_features_row(
+async def fetch_signal_candidate_features_row(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: uuid.UUID,
 ) -> dict[str, list[str]]:
     await cursor.execute(
         """
         select numbers, short_tokens, places, entities
-        from article_features
+        from signal_candidate_features
         where doc_id = %s
         """,
         (doc_id,),
@@ -583,7 +583,7 @@ async def fetch_article_features_row(
     }
 
 
-async def fetch_article_vectors(
+async def fetch_signal_candidate_vectors(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: uuid.UUID,
 ) -> dict[str, list[float]]:
@@ -592,7 +592,7 @@ async def fetch_article_vectors(
         select
           avr.vector_type,
           er.embedding_json
-        from article_vector_registry avr
+        from signal_candidate_vector_registry avr
         join embedding_registry er on er.embedding_id = avr.embedding_id
         where avr.doc_id = %s
           and avr.is_active = true
@@ -646,7 +646,7 @@ async def compute_lexical_score(
             search_vector,
             to_tsquery('simple', %s)
           ) as score
-        from articles
+        from signal_candidates
         where doc_id = %s
         """,
         (tsquery, doc_id),

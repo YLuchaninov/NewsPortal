@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .discovery_enrichment_plugins import ArticleEnricherPlugin, ArticleLoaderPlugin
+from .discovery_enrichment_plugins import SignalCandidateEnricherPlugin, SignalCandidateLoaderPlugin
 from .discovery_llm_plugins import LlmAnalyzerPlugin
 from .discovery_probe_plugins import RssProbePlugin, UrlValidatorPlugin, WebsiteProbePlugin
 from .discovery_registration_plugins import SourceRegistrarPlugin
@@ -32,8 +32,8 @@ DISCOVERY_PLUGIN_CLASSES = (
 UTILITY_PLUGIN_CLASSES = (DbStorePlugin,)
 
 ENRICHMENT_PLUGIN_CLASSES = (
-    ArticleLoaderPlugin,
-    ArticleEnricherPlugin,
+    SignalCandidateLoaderPlugin,
+    SignalCandidateEnricherPlugin,
 )
 
 DISCOVERY_ENRICHMENT_PLUGIN_CLASSES = (

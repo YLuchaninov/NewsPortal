@@ -30,9 +30,9 @@ export interface FetchCursorRow {
   cursorJson: Record<string, unknown>;
 }
 
-export interface PersistArticleInput {
+export interface PersistSignalCandidateInput {
   channel: SourceChannelRow;
-  externalArticleId: string;
+  externalSignalCandidateId: string;
   url: string;
   publishedAt: string;
   title: string;
@@ -45,7 +45,7 @@ export interface PersistArticleInput {
 
 export interface PersistResourceInput {
   channel: SourceChannelRow;
-  externalArticleId: string;
+  externalSignalCandidateId: string;
   url: string;
   resourceKind: string;
   title: string;
@@ -59,10 +59,10 @@ export interface PersistResourceInput {
   rawPayload: Record<string, unknown>;
 }
 
-export interface DuplicatePreflightDecision<T extends { externalArticleId: string; url: string }> {
+export interface DuplicatePreflightDecision<T extends { externalSignalCandidateId: string; url: string }> {
   input: T;
   shouldPersist: boolean;
-  duplicateReason: "externalArticleId" | "url" | null;
+  duplicateReason: "externalSignalCandidateId" | "url" | null;
 }
 
 export interface CursorUpdateInput {
@@ -78,7 +78,7 @@ export interface ChannelPollCompletion {
   httpStatus: number | null;
   retryAfterSeconds: number | null;
   fetchedItemCount: number;
-  newArticleCount: number;
+  newSignalCandidateCount: number;
   duplicateSuppressedCount: number;
   cursorChanged: boolean;
   errorMessage: string | null;
@@ -92,28 +92,28 @@ export interface ChannelPollCompletion {
 export type CursorMap = Record<string, FetchCursorRow>;
 
 export function classifyDuplicatePreflightInputs<
-  T extends { externalArticleId: string; url: string }
+  T extends { externalSignalCandidateId: string; url: string }
 >(
   inputs: readonly T[],
-  knownExternalArticleIds: ReadonlySet<string>,
+  knownExternalSignalCandidateIds: ReadonlySet<string>,
   knownUrls: ReadonlySet<string>
 ): Array<DuplicatePreflightDecision<T>> {
-  const seenExternalArticleIds = new Set<string>();
+  const seenExternalSignalCandidateIds = new Set<string>();
   const seenUrls = new Set<string>();
 
   return inputs.map((input) => {
-    const externalArticleId = input.externalArticleId.trim();
+    const externalSignalCandidateId = input.externalSignalCandidateId.trim();
     const url = input.url.trim();
 
     if (
-      externalArticleId &&
-      (knownExternalArticleIds.has(externalArticleId) ||
-        seenExternalArticleIds.has(externalArticleId))
+      externalSignalCandidateId &&
+      (knownExternalSignalCandidateIds.has(externalSignalCandidateId) ||
+        seenExternalSignalCandidateIds.has(externalSignalCandidateId))
     ) {
       return {
         input,
         shouldPersist: false,
-        duplicateReason: "externalArticleId"
+        duplicateReason: "externalSignalCandidateId"
       };
     }
 
@@ -125,8 +125,8 @@ export function classifyDuplicatePreflightInputs<
       };
     }
 
-    if (externalArticleId) {
-      seenExternalArticleIds.add(externalArticleId);
+    if (externalSignalCandidateId) {
+      seenExternalSignalCandidateIds.add(externalSignalCandidateId);
     }
     if (url) {
       seenUrls.add(url);

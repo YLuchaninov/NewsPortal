@@ -233,7 +233,7 @@ test("classifyResourceCandidate promotes dated collection cards to editorial ins
 
   assert.equal(classification.kind, "editorial");
   assert.ok(classification.reasons.includes("signal:published_at"));
-  assert.ok(classification.reasons.includes("collection:article_card"));
+  assert.ok(classification.reasons.includes("collection:signal_candidate_card"));
 });
 
 test("classifyResourceCandidate keeps detail-like editorial pages out of listing on ambient card-heavy layouts", () => {
@@ -253,7 +253,7 @@ test("classifyResourceCandidate keeps detail-like editorial pages out of listing
   assert.ok(classification.reasons.includes("path:editorial_detail"));
 });
 
-test("extractCollectionLinkCandidates infers heading titles for generic CTA links inside article cards", () => {
+test("extractCollectionLinkCandidates infers heading titles for generic CTA links inside signal_candidate cards", () => {
   const html = `
     <section class="views-row">
       <span class="field field--name-title field--type-string field--label-hidden">
@@ -392,7 +392,7 @@ test("discoverWebsiteResources handles very large sitemap result sets without ov
   const sitemapBody = `<?xml version="1.0" encoding="UTF-8"?><urlset>${Array.from(
     { length: 70000 },
     (_, index) =>
-      `<url><loc>${baseUrl}/articles/${index + 1}</loc><lastmod>2026-04-15T12:00:00Z</lastmod></url>`
+      `<url><loc>${baseUrl}/signal-candidates/${index + 1}</loc><lastmod>2026-04-15T12:00:00Z</lastmod></url>`
   ).join("")}</urlset>`;
   const policy: RuntimeCrawlPolicy = {
     ...buildPolicy({

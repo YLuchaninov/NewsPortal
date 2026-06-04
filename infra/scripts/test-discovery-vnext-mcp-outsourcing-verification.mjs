@@ -39,7 +39,7 @@ const OUTSOURCING_SIGNAL_PACKS = [
     ],
     negativeTexts: [
       "vendor marketing page without buyer notice",
-      "generic procurement advice article",
+      "generic procurement advice signal_candidate",
       "job advertisement without contract buyer evidence",
     ],
     candidatePositiveSignals: [
@@ -269,8 +269,8 @@ const REQUIRED_TOOLS = [
   "outbox.events.list",
   "fetch_runs.list",
   "web_resources.list",
-  "articles.list",
-  "articles.explain",
+  "signal_candidates.list",
+  "signal_candidates.explain",
   "content_items.list",
   "content_items.explain",
   "maintenance.reindex.request",
@@ -476,7 +476,7 @@ function buildInterestPayload(pack, namespace, iteration = 0) {
       "outsourcing agency service page without buyer-authored project evidence",
       "job-only page without vendor, contractor, RFP, proposal, or external delivery ask",
       "category, tag, search, profile, or listing wrapper without project details",
-      "generic how-to article, market report, or SEO page without a current buyer signal",
+      "generic how-to signal_candidate, market report, or SEO page without a current buyer signal",
     ],
     places: pack.geographies,
     languages_allowed: pack.languages,
@@ -874,7 +874,7 @@ async function routeCandidate(client, token, report, pack, packReport, candidate
 function reportHasFetchedContent(report) {
   return report.packs.some(
     (pack) =>
-      (pack.webResources.length > 0 || pack.articles.length > 0 || pack.contentItems.length > 0) &&
+      (pack.webResources.length > 0 || pack.signal_candidates.length > 0 || pack.contentItems.length > 0) &&
       pack.explainableItems.length > 0
   );
 }
@@ -915,14 +915,14 @@ async function proveContentTail(client, token, report, pack, packReport, routed,
   }, { timeoutMs });
   packReport.webResources = rows(resourcesPage);
 
-  const articlesPage = await safeMcp(report, client, token, "articles.list", { channelId, page: 1, pageSize: 20 });
-  packReport.articles = rows(articlesPage);
-  for (const article of packReport.articles.slice(0, 5)) {
-    const docId = idFrom(article, ["doc_id", "docId"]);
+  const signalCandidatesPage = await safeMcp(report, client, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 });
+  packReport.signal_candidates = rows(signalCandidatesPage);
+  for (const signal_candidate of packReport.signal_candidates.slice(0, 5)) {
+    const docId = idFrom(signal_candidate, ["doc_id", "docId"]);
     if (!docId) continue;
-    const explain = await safeMcp(report, client, token, "articles.explain", { docId });
-    if (explain && signalScore(pack, { article, explain }) > 0) {
-      packReport.explainableItems.push({ kind: "article", id: docId, title: article.title ?? null, url: article.url ?? null });
+    const explain = await safeMcp(report, client, token, "signal_candidates.explain", { docId });
+    if (explain && signalScore(pack, { signal_candidate, explain }) > 0) {
+      packReport.explainableItems.push({ kind: "signal_candidate", id: docId, title: signal_candidate.title ?? null, url: signal_candidate.url ?? null });
       report.docIds.add(docId);
     }
   }
@@ -968,7 +968,7 @@ async function runPack(client, token, report, pack) {
     outboxEvents: [],
     fetchRuns: [],
     webResources: [],
-    articles: [],
+    signal_candidates: [],
     contentItems: [],
     explainableItems: [],
   };
@@ -1026,7 +1026,7 @@ async function runPack(client, token, report, pack) {
       continue;
     }
     if (
-      (packReport.webResources.length > 0 || packReport.articles.length > 0 || packReport.contentItems.length > 0) &&
+      (packReport.webResources.length > 0 || packReport.signal_candidates.length > 0 || packReport.contentItems.length > 0) &&
       packReport.explainableItems.length > 0
     ) {
       packReport.status = "signal_content_fetched";
@@ -1144,17 +1144,17 @@ async function runPollingWindows(client, token, report, pollWindows) {
       discovery: {},
     };
     for (const channelId of [...report.channelIds]) {
-      const [fetchRuns, webResources, articles, contentItems] = await Promise.all([
+      const [fetchRuns, webResources, signal_candidates, contentItems] = await Promise.all([
         safeMcp(report, client, token, "fetch_runs.list", { channelId, page: 1, pageSize: 20 }),
         safeMcp(report, client, token, "web_resources.list", { channelId, page: 1, pageSize: 20 }),
-        safeMcp(report, client, token, "articles.list", { channelId, page: 1, pageSize: 20 }),
+        safeMcp(report, client, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 }),
         safeMcp(report, client, token, "content_items.list", { channelId, page: 1, pageSize: 20 }),
       ]);
       observation.channels.push({
         channelId,
         fetchRuns: rows(fetchRuns).length,
         webResources: rows(webResources).length,
-        articles: rows(articles).length,
+        signal_candidates: rows(signal_candidates).length,
         contentItems: rows(contentItems).length,
       });
     }
@@ -1207,7 +1207,7 @@ function summarizeStatus(report) {
     (pack) => pack.routingAttempts.length > 0 || pack.adapterBacklog.length > 0 || pack.sourceInventory.length > 0
   );
   const contentEvidence = report.packs.filter(
-    (pack) => pack.webResources.length > 0 || pack.articles.length > 0 || pack.contentItems.length > 0 || pack.explainableItems.length > 0
+    (pack) => pack.webResources.length > 0 || pack.signal_candidates.length > 0 || pack.contentItems.length > 0 || pack.explainableItems.length > 0
   );
   const explainableItems = report.packs.reduce((count, pack) => count + pack.explainableItems.length, 0);
   report.successCriteria = {
@@ -1231,7 +1231,7 @@ function summarizeStatus(report) {
     recordGap(report, "runtime_gap", "Fewer than 2 sources reached routing/source inventory/adapter backlog evidence.");
   }
   if (report.successCriteria.contentEvidence < 1) {
-    recordGap(report, "downstream_selection_gap", "No source produced fetched resources/articles/content items.");
+    recordGap(report, "downstream_selection_gap", "No source produced fetched resources/signal-candidates/content items.");
   }
   if (report.successCriteria.explainableItems < 1) {
     recordGap(report, "diagnostic_gap", "No fetched item had item-level explainable signal evidence.");
@@ -1280,7 +1280,7 @@ function markdown(report) {
       `- adapterBacklog: ${pack.adapterBacklog.length}`,
       `- channelId: ${pack.routed?.channelId ?? "n/a"}`,
       `- webResources: ${pack.webResources.length}`,
-      `- articles: ${pack.articles.length}`,
+      `- signal_candidates: ${pack.signal_candidates.length}`,
       `- contentItems: ${pack.contentItems.length}`,
       `- explainableItems: ${pack.explainableItems.length}`,
       "",

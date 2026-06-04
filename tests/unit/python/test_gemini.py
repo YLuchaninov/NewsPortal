@@ -86,7 +86,7 @@ class GeminiTests(unittest.TestCase):
 
     def test_review_with_gemini_returns_usage_unavailable_without_api_key(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
-            result = review_with_gemini("review this article")
+            result = review_with_gemini("review this signal candidate")
 
         self.assertEqual(result.decision, "uncertain")
         self.assertEqual(result.provider_latency_ms, None)
@@ -134,7 +134,7 @@ class GeminiTests(unittest.TestCase):
                 },
                 clear=False,
             ):
-                result = review_with_gemini("review this article")
+                result = review_with_gemini("review this signal candidate")
 
         self.assertEqual(result.decision, "approve")
         self.assertEqual(result.prompt_tokens, 200)
@@ -182,7 +182,7 @@ class GeminiTests(unittest.TestCase):
                 },
                 clear=False,
             ):
-                result = review_with_gemini("review this article")
+                result = review_with_gemini("review this signal candidate")
 
         self.assertEqual(result.decision, "reject")
         self.assertEqual(result.score, 0.2)

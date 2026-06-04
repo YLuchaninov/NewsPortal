@@ -1541,29 +1541,29 @@ export async function verifyChannelBulkOnboardingWithPool(
              sc.is_active as "isActive",
              sc.fetch_url as "fetchUrl",
              sc.updated_at as "updatedAt",
-             (select count(*)::int from articles a where a.channel_id = sc.channel_id) as "articleCount",
+             (select count(*)::int from signal_candidates a where a.channel_id = sc.channel_id) as "signalCandidateCount",
              (select count(*)::int from channel_fetch_runs cfr where cfr.channel_id = sc.channel_id) as "fetchRunCount",
              (select count(*)::int from channel_fetch_runs cfr where cfr.channel_id = sc.channel_id and cfr.outcome_kind in ('success', 'new_content')) as "successfulFetchRunCount",
              (select count(*)::int from web_resources wr where wr.channel_id = sc.channel_id) as "webResourceCount",
-             (select count(*)::int from web_resources wr where wr.channel_id = sc.channel_id and wr.projected_article_id is not null) as "projectedArticleCount",
+             (select count(*)::int from web_resources wr where wr.channel_id = sc.channel_id and wr.projected_signal_candidate_id is not null) as "projectedSignalCandidateCount",
              (
                select count(*)::int
                from web_resources wr
-               join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+               join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
                where wr.channel_id = sc.channel_id and fsr.final_decision = 'selected'
-             ) as "selectedProjectedArticleCount",
+             ) as "selectedProjectedSignalCandidateCount",
              (
                select count(*)::int
                from web_resources wr
-               join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+               join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
                where wr.channel_id = sc.channel_id and fsr.final_decision = 'rejected'
-             ) as "rejectedProjectedArticleCount",
+             ) as "rejectedProjectedSignalCandidateCount",
              (
                select count(*)::int
                from web_resources wr
-               join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+               join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
                where wr.channel_id = sc.channel_id and fsr.final_decision = 'gray_zone'
-             ) as "grayZoneProjectedArticleCount"
+             ) as "grayZoneProjectedSignalCandidateCount"
       from source_channels sc
       where cardinality($1::text[]) = 0 or sc.channel_id::text = any($1::text[])
       order by sc.updated_at desc
@@ -1582,7 +1582,7 @@ export async function verifyChannelBulkOnboardingWithPool(
              count(*)::int as count
       from source_channels sc
       join web_resources wr on wr.channel_id = sc.channel_id
-      left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+      left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
       where (cardinality($1::text[]) = 0 or sc.channel_id::text = any($1::text[]))
         and sc.provider_type = 'website'
       group by sc.channel_id, sc.name, coalesce(fsr.final_decision, 'not_projected'), wr.projection_state
@@ -1620,11 +1620,11 @@ export async function verifyChannelBulkOnboardingWithPool(
                      wr.resource_kind as "resourceKind",
                      wr.extraction_state as "extractionState",
                      wr.projection_state as "projectionState",
-                     wr.projected_article_id::text as "projectedArticleId",
+                     wr.projected_signal_candidate_id::text as "projectedSignalCandidateId",
                      fsr.final_decision as "finalDecision",
                      fsr.verification_state as "verificationState"
               from web_resources wr
-              left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+              left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
               where cardinality($1::text[]) = 0 or wr.channel_id::text = any($1::text[])
               order by wr.updated_at desc
               limit 20
@@ -1638,16 +1638,16 @@ export async function verifyChannelBulkOnboardingWithPool(
   const acquisitionSucceeded = channelResult.rows.filter((row) => {
     const providerType = String(row.providerType ?? "");
     const fetchRuns = Number(row.fetchRunCount ?? 0);
-    const articles = Number(row.articleCount ?? 0);
+    const signal_candidates = Number(row.signalCandidateCount ?? 0);
     const resources = Number(row.webResourceCount ?? 0);
-    return fetchRuns > 0 || articles > 0 || (providerType === "website" && resources > 0);
+    return fetchRuns > 0 || signal_candidates > 0 || (providerType === "website" && resources > 0);
   }).length;
   const websiteProjected = channelResult.rows.reduce(
-    (sum, row) => sum + Number(row.projectedArticleCount ?? 0),
+    (sum, row) => sum + Number(row.projectedSignalCandidateCount ?? 0),
     0
   );
   const websiteProjectedRejected = channelResult.rows.reduce(
-    (sum, row) => sum + Number(row.rejectedProjectedArticleCount ?? 0),
+    (sum, row) => sum + Number(row.rejectedProjectedSignalCandidateCount ?? 0),
     0
   );
   const warnings: string[] = [];
@@ -1656,7 +1656,7 @@ export async function verifyChannelBulkOnboardingWithPool(
   }
   if (websiteProjectedRejected > 0) {
     warnings.push(
-      "Some website resources projected into articles and were rejected downstream by final_selection_results; that is selection/content policy behavior, not channel onboarding failure."
+      "Some website resources projected into signal_candidates and were rejected downstream by final_selection_results; that is selection/content policy behavior, not channel onboarding failure."
     );
   }
   const providerShapeRisks = channelResult.rows

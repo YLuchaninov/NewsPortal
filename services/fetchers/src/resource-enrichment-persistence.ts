@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { ARTICLE_INGEST_REQUESTED_EVENT, type ResourceKind } from "@signalops/contracts";
+import { SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT, type ResourceKind } from "@signalops/contracts";
 import type { Pool, PoolClient } from "pg";
 
 import type { FetchersConfig } from "./config";
-import { upsertArticleObservation } from "./document-observations";
+import { upsertSignalCandidateObservation } from "./document-observations";
 import { resolveProjectionDecision } from "./resource-enrichment-projection";
 import {
   asArray,
@@ -39,7 +39,7 @@ export interface WebResourceRow {
   rawPayloadJson: Record<string, unknown>;
   extractionState: string;
   extractionError: string | null;
-  projectedArticleId: string | null;
+  projectedSignalCandidateId: string | null;
   channelName: string;
   userAgent: string;
   requestTimeoutMs: number;
@@ -114,7 +114,7 @@ export function buildPersistedExtraction(resource: WebResourceRow): ExtractionPe
     linksOutJson: asArray(resource.linksOutJson),
     contentHash: resource.body ? computeContentHash(resource.body) : null,
     errorText: resource.extractionError,
-    projectedDocId: resource.projectedArticleId,
+    projectedDocId: resource.projectedSignalCandidateId,
   };
 }
 
@@ -152,7 +152,7 @@ export class ResourceEnrichmentRepository {
           wr.raw_payload_json as "rawPayloadJson",
           wr.extraction_state as "extractionState",
           wr.extraction_error as "extractionError",
-          wr.projected_article_id::text as "projectedArticleId",
+          wr.projected_signal_candidate_id::text as "projectedSignalCandidateId",
           sc.name as "channelName",
           coalesce(sc.config_json ->> 'userAgent', $2) as "userAgent",
           coalesce((sc.config_json ->> 'requestTimeoutMs')::int, $3) as "requestTimeoutMs",
@@ -178,7 +178,7 @@ export class ResourceEnrichmentRepository {
       let projectedDocId = extraction.projectedDocId;
       const projectionDecision = resolveProjectionDecision(extraction);
       if (projectionDecision.shouldProject) {
-        projectedDocId = await this.ensureProjectedArticle(
+        projectedDocId = await this.ensureProjectedSignalCandidate(
           client,
           resource,
           extraction,
@@ -221,7 +221,7 @@ export class ResourceEnrichmentRepository {
             content_hash = $18,
             extraction_state = $19,
             extraction_error = $20,
-            projected_article_id = $21,
+            projected_signal_candidate_id = $21,
             projection_state = $22,
             projection_error = $23,
             enriched_at = case when $19 = 'enriched' then now() else enriched_at end,
@@ -274,15 +274,15 @@ export class ResourceEnrichmentRepository {
     }
   }
 
-  private async ensureProjectedArticle(
+  private async ensureProjectedSignalCandidate(
     client: PoolClient,
     resource: WebResourceRow,
     extraction: ExtractionPersistShape,
     projectedBody: string,
   ): Promise<string | null> {
-    const sourceArticleId = resource.externalResourceId ?? resource.normalizedUrl;
+    const sourceSignalCandidateId = resource.externalResourceId ?? resource.normalizedUrl;
     const publishedAt = extraction.publishedAt ?? resource.publishedAt ?? new Date().toISOString();
-    const articlePayload = JSON.stringify({
+    const signalCandidatePayload = JSON.stringify({
       fetcher: "resource_projection",
       websiteAcquisition: {
         resourceId: resource.resourceId,
@@ -302,9 +302,9 @@ export class ResourceEnrichmentRepository {
     });
     const insertResult = await client.query<{ docId: string }>(
       `
-        insert into articles (
+        insert into signal_candidates (
           channel_id,
-          source_article_id,
+          source_signal_candidate_id,
           url,
           content_kind,
           content_format,
@@ -321,7 +321,7 @@ export class ResourceEnrichmentRepository {
           $2,
           $3,
           $4,
-          'article',
+          'signal_candidate',
           $5,
           $6,
           $7,
@@ -335,7 +335,7 @@ export class ResourceEnrichmentRepository {
       `,
       [
         resource.channelId,
-        sourceArticleId,
+        sourceSignalCandidateId,
         extraction.finalUrl,
         extraction.resourceKind,
         publishedAt,
@@ -344,14 +344,14 @@ export class ResourceEnrichmentRepository {
         projectedBody,
         extraction.lang,
         extraction.langConfidence,
-        articlePayload,
+        signalCandidatePayload,
       ],
     );
     let docId = insertResult.rows[0]?.docId ?? null;
     if (!docId) {
       const existing = await client.query<{ docId: string }>(
         `
-          update articles
+          update signal_candidates
           set
             content_kind = $4,
             published_at = $5,
@@ -364,14 +364,14 @@ export class ResourceEnrichmentRepository {
             updated_at = now()
           where channel_id = $1
             and (
-              source_article_id = $2
+              source_signal_candidate_id = $2
               or url = $3
             )
           returning doc_id::text as "docId"
         `,
         [
           resource.channelId,
-          sourceArticleId,
+          sourceSignalCandidateId,
           extraction.finalUrl,
           extraction.resourceKind,
           publishedAt,
@@ -380,7 +380,7 @@ export class ResourceEnrichmentRepository {
           projectedBody,
           extraction.lang,
           extraction.langConfidence,
-          articlePayload,
+          signalCandidatePayload,
         ],
       );
       docId = existing.rows[0]?.docId ?? null;
@@ -389,15 +389,15 @@ export class ResourceEnrichmentRepository {
       const existing = await client.query<{ docId: string }>(
         `
           select doc_id::text as "docId"
-          from articles
+          from signal_candidates
           where channel_id = $1
             and (
-              source_article_id = $2
+              source_signal_candidate_id = $2
               or url = $3
             )
           limit 1
         `,
-        [resource.channelId, sourceArticleId, extraction.finalUrl],
+        [resource.channelId, sourceSignalCandidateId, extraction.finalUrl],
       );
       docId = existing.rows[0]?.docId ?? null;
     }
@@ -407,20 +407,20 @@ export class ResourceEnrichmentRepository {
 
     await client.query(
       `
-        insert into article_external_refs (
+        insert into signal_candidate_external_refs (
           external_ref_id,
           channel_id,
-          external_article_id,
+          external_signal_candidate_id,
           doc_id
         )
         values ($1, $2, $3, $4)
-        on conflict (channel_id, external_article_id) do nothing
+        on conflict (channel_id, external_signal_candidate_id) do nothing
       `,
-      [randomUUID(), resource.channelId, sourceArticleId, docId],
+      [randomUUID(), resource.channelId, sourceSignalCandidateId, docId],
     );
 
-    if (!resource.projectedArticleId) {
-      await upsertArticleObservation(client, docId);
+    if (!resource.projectedSignalCandidateId) {
+      await upsertSignalCandidateObservation(client, docId);
       await client.query(
         `
           insert into outbox_events (
@@ -430,12 +430,12 @@ export class ResourceEnrichmentRepository {
             aggregate_id,
             payload_json
           )
-          values ($1, $2, 'article', $3, $4::jsonb)
+          values ($1, $2, 'signal_candidate', $3, $4::jsonb)
           on conflict do nothing
         `,
         [
           randomUUID(),
-          ARTICLE_INGEST_REQUESTED_EVENT,
+          SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
           docId,
           JSON.stringify({
             docId,

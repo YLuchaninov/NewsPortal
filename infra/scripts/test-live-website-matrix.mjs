@@ -674,7 +674,7 @@ function shouldExpectResources(fetchRun) {
   const metrics = asObject(fetchRun?.provider_metrics_json);
   return (
     asInt(fetchRun?.fetched_item_count, 0) > 0 ||
-    asInt(fetchRun?.new_article_count, 0) > 0 ||
+    asInt(fetchRun?.new_signal_candidate_count, 0) > 0 ||
     asInt(metrics.finalAcceptedCount, 0) > 0 ||
     asInt(metrics.staticAcceptedCount, 0) > 0 ||
     asInt(metrics.browserAcceptedCount, 0) > 0
@@ -734,10 +734,10 @@ function chooseResourceIdsForInspection(items) {
   for (const item of items.filter((entry) => String(entry.resource_kind ?? "") === "editorial").slice(0, 3)) {
     push(item);
   }
-  for (const item of items.filter((entry) => !entry.projected_article_id).slice(0, 3)) {
+  for (const item of items.filter((entry) => !entry.projected_signal_candidate_id).slice(0, 3)) {
     push(item);
   }
-  for (const item of items.filter((entry) => entry.projected_article_id).slice(0, 3)) {
+  for (const item of items.filter((entry) => entry.projected_signal_candidate_id).slice(0, 3)) {
     push(item);
   }
   for (const item of items.slice(0, 6)) {
@@ -798,7 +798,7 @@ function summarizeResources(items, details) {
   let challengeHintCount = 0;
 
   for (const item of items) {
-    if (item.projected_article_id) {
+    if (item.projected_signal_candidate_id) {
       projectedCount += 1;
     }
   }
@@ -825,7 +825,7 @@ function summarizeResources(items, details) {
     if (/browserchallengekind/i.test(rawPayloadString)) {
       challengeHintCount += 1;
     }
-    if (asBoolean(editorialExtraction.articleExtractorInvoked)) {
+    if (asBoolean(editorialExtraction.signalCandidateExtractorInvoked)) {
       extractorInvokedCount += 1;
     }
     if (asBoolean(editorialExtraction.extractorImprovedBody)) {
@@ -857,7 +857,7 @@ function summarizeResources(items, details) {
     transitionSamples: transitionSamples.slice(0, 8),
     browserProvenanceCount,
     challengeHintCount,
-    articleExtractorInvokedCount: extractorInvokedCount,
+    signalCandidateExtractorInvokedCount: extractorInvokedCount,
     extractorImprovedBodyCount,
     bodyChangedCount,
     positiveBodyUpliftCount,
@@ -875,7 +875,7 @@ function buildRunSnapshot(fetchRun, resourcesPayload, details) {
     outcomeKind: fetchRun?.outcome_kind ?? null,
     httpStatus: fetchRun?.http_status ?? null,
     fetchedItemCount: asInt(fetchRun?.fetched_item_count, 0),
-    newArticleCount: asInt(fetchRun?.new_article_count, 0),
+    newSignalCandidateCount: asInt(fetchRun?.new_signal_candidate_count, 0),
     duplicateSuppressedCount: asInt(fetchRun?.duplicate_suppressed_count, 0),
     errorText: fetchRun?.error_text ?? null,
     providerMetrics: metrics,

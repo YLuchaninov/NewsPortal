@@ -12,7 +12,7 @@ export interface FetchersConfig {
   enrichmentConcurrency: number;
   enrichmentTimeoutMs: number;
   enrichmentUserAgent: string;
-  enrichmentMaxOembedPerArticle: number;
+  enrichmentMaxOembedPerSignalCandidate: number;
   enrichmentOembedTimeoutMs: number;
   enrichmentPerDomainConcurrency: number;
   enrichmentPerDomainMinIntervalMs: number;
@@ -90,9 +90,9 @@ export function loadFetchersConfig(): FetchersConfig {
     enrichmentConcurrency: Math.max(1, Math.floor(readNumber("ENRICHMENT_CONCURRENCY", 5))),
     enrichmentTimeoutMs: readNumber("ENRICHMENT_TIMEOUT_MS", 15000),
     enrichmentUserAgent: process.env.ENRICHMENT_USER_AGENT ?? defaultUserAgent,
-    enrichmentMaxOembedPerArticle: Math.max(
+    enrichmentMaxOembedPerSignalCandidate: Math.max(
       1,
-      Math.floor(readNumber("ENRICHMENT_MAX_OEMBED_PER_ARTICLE", 3))
+      Math.floor(readNumber("ENRICHMENT_MAX_OEMBED_PER_SIGNAL_CANDIDATE", 3))
     ),
     enrichmentOembedTimeoutMs: readNumber("ENRICHMENT_OEMBED_TIMEOUT_MS", 10000),
     enrichmentPerDomainConcurrency: Math.max(

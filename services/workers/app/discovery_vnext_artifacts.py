@@ -21,7 +21,7 @@ DIRECTNESS_VALUES = {"direct", "indirect", "precursor", "contextual"}
 CAPABILITY_VALUES = {"high", "medium", "low", "unknown"}
 ACCESS_PATTERNS = {"public", "requires_browser", "requires_auth", "captcha_blocked", "blocked", "unknown"}
 ARTIFACT_EXPECTATIONS = {
-    "article",
+    "signal_candidate",
     "listing",
     "document",
     "dataset",
@@ -57,7 +57,7 @@ ARTIFACT_FRESHNESS_KINDS = {
     "recurring_feed",
     "official_update",
     "static_service_page",
-    "evergreen_article",
+    "evergreen_signal_candidate",
     "documentation_or_guide",
     "dataset_or_registry",
     "community_thread",

@@ -13,7 +13,7 @@ import { getPool } from "../../../lib/server/db";
 export const prerender = false;
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareAdminAction(request, {
-    fallbackRedirectPath: "/articles",
+    fallbackRedirectPath: "/signal-candidates",
     actionToken: { scope: "moderation" },
   });
   if (!action.ok) {
@@ -32,7 +32,7 @@ export const POST: APIRoute = async ({ request }) => {
     actionType = requestedActionType;
   } catch {
     return adminActionError(action.context, {
-      section: "articles",
+      section: "signal_candidates",
       message: "Invalid moderation payload.",
       status: 400,
     });
@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
     await client.query("begin");
     await client.query(
       `
-        update articles
+        update signal_candidates
         set
           visibility_state = $2,
           updated_at = now()
@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
     await client.query(
       `
-        insert into article_moderation_actions (
+        insert into signal_candidate_moderation_actions (
           moderation_action_id,
           doc_id,
           admin_user_id,
@@ -68,8 +68,8 @@ export const POST: APIRoute = async ({ request }) => {
     );
     await insertAdminAuditLog(client, {
       actorUserId: session.userId,
-      actionType: "article_moderation",
-      entityType: "article",
+      actionType: "signal_candidate_moderation",
+      entityType: "signal_candidate",
       entityId: docId,
       payloadJson: { actionType, reason },
     });
@@ -77,8 +77,8 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     await client.query("rollback");
     return adminActionError(action.context, {
-      section: "articles",
-      message: "Unable to update article moderation right now.",
+      section: "signal_candidates",
+      message: "Unable to update signal_candidate moderation right now.",
       status: 500,
       json: {
         error: error instanceof Error ? error.message : "Moderation failed.",
@@ -89,8 +89,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   return adminActionSuccess(action.context, {
-    section: "articles",
-    message: actionType === "block" ? "Article blocked" : "Article unblocked",
+    section: "signal_candidates",
+    message: actionType === "block" ? "SignalCandidate blocked" : "SignalCandidate unblocked",
     json: { ok: true },
   });
 };

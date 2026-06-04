@@ -102,7 +102,7 @@ class TransientDatabaseFlakyPlugin(TaskPlugin):
     ) -> dict[str, Any]:
         self.calls += 1
         if self.calls == 1:
-            raise DeadlockDetected("deadlock detected while updating articles")
+            raise DeadlockDetected("deadlock detected while updating signal_candidates")
         return {"transientRetrySucceeded": True}
 
 

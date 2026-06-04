@@ -16,7 +16,7 @@ function createConfig() {
     enrichmentConcurrency: 2,
     enrichmentTimeoutMs: 15000,
     enrichmentUserAgent: "test-agent",
-    enrichmentMaxOembedPerArticle: 2,
+    enrichmentMaxOembedPerSignalCandidate: 2,
     enrichmentOembedTimeoutMs: 10000,
     enrichmentPerDomainConcurrency: 1,
     enrichmentPerDomainMinIntervalMs: 0,

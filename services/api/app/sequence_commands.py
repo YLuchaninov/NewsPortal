@@ -444,7 +444,7 @@ def get_active_sequence_for_trigger(
     return row
 
 
-def ensure_published_article_retry_event(
+def ensure_published_signal_candidate_retry_event(
     *,
     event_id: str,
     doc_id: str,
@@ -457,7 +457,7 @@ def ensure_published_article_retry_event(
         "docId": doc_id,
         "eventId": event_id,
         "manualRetry": True,
-        "source": "maintenance_article_enrichment_retry",
+        "source": "maintenance_signal_candidate_enrichment_retry",
     }
     with connect_func(build_database_url_func(), row_factory=dict_row_value) as connection:
         with connection.cursor() as cursor:
@@ -476,8 +476,8 @@ def ensure_published_article_retry_event(
                 )
                 values (
                   %s,
-                  'article.ingest.requested',
-                  'article',
+                  'signal_candidate.ingest.requested',
+                  'signal_candidate',
                   %s,
                   %s::jsonb,
                   'published',
@@ -502,38 +502,38 @@ def ensure_published_article_retry_event(
             )
 
 
-def request_article_enrichment_retry(
+def request_signal_candidate_enrichment_retry(
     doc_id: str,
     payload: Any | None = None,
     *,
     query_one_func: Callable[[str, tuple[Any, ...]], dict[str, Any] | None],
     get_active_sequence_for_trigger_func: Callable[[str], dict[str, Any]],
     uuid4_func: Callable[[], Any],
-    ensure_published_article_retry_event_func: Callable[..., None],
+    ensure_published_signal_candidate_retry_event_func: Callable[..., None],
     create_sequence_run_request_for_trigger_func: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
-    article = query_one_func(
+    signal_candidate = query_one_func(
         """
         select doc_id::text as doc_id
-        from articles
+        from signal_candidates
         where doc_id = %s
         limit 1
         """,
         (doc_id,),
     )
-    if article is None:
-        raise SequenceNotFoundError(f"Article {doc_id} was not found.")
+    if signal_candidate is None:
+        raise SequenceNotFoundError(f"SignalCandidate {doc_id} was not found.")
 
-    sequence = get_active_sequence_for_trigger_func("article.ingest.requested")
+    sequence = get_active_sequence_for_trigger_func("signal_candidate.ingest.requested")
     event_id = str(uuid4_func())
     trigger_meta = {
-        "source": "maintenance_article_enrichment_retry",
+        "source": "maintenance_signal_candidate_enrichment_retry",
         "docId": doc_id,
     }
     if payload and payload.requested_by:
         trigger_meta["requestedBy"] = payload.requested_by
 
-    ensure_published_article_retry_event_func(event_id=event_id, doc_id=doc_id)
+    ensure_published_signal_candidate_retry_event_func(event_id=event_id, doc_id=doc_id)
 
     return create_sequence_run_request_for_trigger_func(
         str(sequence["sequence_id"]),

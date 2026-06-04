@@ -62,7 +62,7 @@ export function IngressAdapterDryRunPanel({
         <div>
           <h2 className="text-base font-semibold text-foreground">Dry-run</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Runs the adapter preview path without writing articles, resources, cursors, outbox rows, or fetch runs.
+            Runs the adapter preview path without writing signal_candidates, resources, cursors, outbox rows, or fetch runs.
           </p>
         </div>
         <Button type="button" onClick={runDryRun} disabled={pending || !fetchUrl.trim()}>

@@ -96,7 +96,7 @@ class ApiMatchesTests(unittest.TestCase):
             "query_all",
             return_value=[
                 {
-                    "content_item_id": "editorial:doc-1",
+                    "content_item_id": "signal_candidate:doc-1",
                     "title": "AI policy update",
                     "_normalized_title": "ai policy update",
                     "_search_text": "AI policy update lead body",
@@ -109,7 +109,7 @@ class ApiMatchesTests(unittest.TestCase):
 
         self.assertEqual(
             result,
-            [{"content_item_id": "editorial:doc-1", "title": "AI policy update"}],
+            [{"content_item_id": "signal_candidate:doc-1", "title": "AI policy update"}],
         )
 
 

@@ -1,5 +1,5 @@
 export type ContentAnalysisSubjectType =
-  | "article"
+  | "signal_candidate"
   | "web_resource"
   | "canonical_document"
   | "story_cluster";

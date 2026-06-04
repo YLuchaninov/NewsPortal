@@ -21,7 +21,7 @@ class ApiWebResourcesTests(unittest.TestCase):
                 "resource_id": "resource-1",
                 "resource_kind": "entity",
                 "content_item_ready": False,
-                "projected_article_id": None,
+                "projected_signal_candidate_id": None,
             }
         ]
         with (
@@ -51,14 +51,14 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertIn("sc.provider_type = 'website'", count_sql)
         self.assertIn("wr.channel_id = %s", count_sql)
         self.assertIn("wr.extraction_state = %s", count_sql)
-        self.assertIn("wr.projected_article_id is null", count_sql)
+        self.assertIn("wr.projected_signal_candidate_id is null", count_sql)
         self.assertIn("wr.resource_kind = %s", count_sql)
         self.assertEqual(count_params, ("channel-1", "skipped", "entity"))
 
         items_sql, items_params = query_all.call_args.args
-        self.assertIn("left join articles pa on pa.doc_id = wr.projected_article_id", items_sql)
-        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", items_sql)
-        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", items_sql)
+        self.assertIn("left join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id", items_sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id", items_sql)
+        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_signal_candidate_id", items_sql)
         self.assertIn("sfr.eligible_for_feed as system_feed_eligible", items_sql)
         self.assertIn("when false", items_sql)
         self.assertIn(
@@ -88,14 +88,14 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code, 404)
         self.assertEqual(error.exception.detail, "Web resource not found.")
 
-    def test_get_web_resource_includes_selection_diagnostics_for_projected_article(self) -> None:
+    def test_get_web_resource_includes_selection_diagnostics_for_projected_signal_candidate(self) -> None:
         with (
             patch.object(
                 api_main,
                 "query_one",
                 return_value={
                     "resource_id": "resource-1",
-                    "projected_article_id": "doc-1",
+                    "projected_signal_candidate_id": "doc-1",
                     "final_selection_decision": "gray_zone",
                     "final_selection_mode": "hold",
                     "final_selection_summary": "Gray zone held by profile policy",
@@ -115,8 +115,8 @@ class ApiWebResourcesTests(unittest.TestCase):
         self.assertEqual(resource["selection_guidance"]["tone"], "warning")
         sql = query_one.call_args.args[0]
         self.assertIn("sfr.eligible_for_feed as system_feed_eligible", sql)
-        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id", sql)
-        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_article_id", sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id", sql)
+        self.assertIn("left join system_feed_results sfr on sfr.doc_id = wr.projected_signal_candidate_id", sql)
 
     def test_get_web_resource_keeps_unprojected_resource_pending_without_content_collection_truth(self) -> None:
         with patch.object(
@@ -124,7 +124,7 @@ class ApiWebResourcesTests(unittest.TestCase):
             "query_one",
             return_value={
                 "resource_id": "resource-2",
-                "projected_article_id": None,
+                "projected_signal_candidate_id": None,
                 "content_item_ready": False,
                 "system_selection_decision": None,
             },

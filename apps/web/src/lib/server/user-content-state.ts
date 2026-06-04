@@ -71,10 +71,10 @@ export const DEFAULT_USER_CONTENT_STATE: UserContentStateView = {
 
 function parseContentItemId(
   contentItemId: string
-): { originType: "editorial" | "resource" | null; originId: string | null } {
+): { originType: "signal_candidate" | "resource" | null; originId: string | null } {
   const [originType, ...rest] = String(contentItemId ?? "").split(":");
   const originId = rest.join(":").trim();
-  if (!originId || (originType !== "editorial" && originType !== "resource")) {
+  if (!originId || (originType !== "signal_candidate" && originType !== "resource")) {
     return { originType: null, originId: null };
   }
   return {
@@ -172,7 +172,7 @@ export async function resolveRepresentativeContentItemIds(
   contentItemIds: string[]
 ): Promise<Map<string, string>> {
   const editorialContentItemIds = Array.from(
-    new Set(contentItemIds.filter((contentItemId) => parseContentItemId(contentItemId).originType === "editorial"))
+    new Set(contentItemIds.filter((contentItemId) => parseContentItemId(contentItemId).originType === "signal_candidate"))
   );
   const representativeMap = new Map<string, string>();
   if (editorialContentItemIds.length === 0) {
@@ -189,19 +189,19 @@ export async function resolveRepresentativeContentItemIds(
           requested_content_item_id,
           split_part(requested_content_item_id, ':', 2)::uuid as requested_doc_id
         from unnest($1::text[]) requested_content_item_id
-        where requested_content_item_id like 'editorial:%'
+        where requested_content_item_id like 'signal_candidate:%'
       ),
       requested_families as (
         select
           re.requested_content_item_id,
           coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id
         from requested_editorial re
-        join articles a on a.doc_id = re.requested_doc_id
+        join signal_candidates a on a.doc_id = re.requested_doc_id
       ),
       ranked_family as (
         select
           rf.requested_content_item_id,
-          'editorial:' || a.doc_id::text as content_item_id,
+          'signal_candidate:' || a.doc_id::text as content_item_id,
           row_number() over (
             partition by rf.requested_content_item_id
             order by
@@ -211,7 +211,7 @@ export async function resolveRepresentativeContentItemIds(
               a.doc_id
           ) as family_rank
         from requested_families rf
-        join articles a
+        join signal_candidates a
           on coalesce(a.canonical_doc_id, a.doc_id) = rf.family_doc_id
         left join final_selection_results fsr on fsr.doc_id = a.doc_id
         left join system_feed_results sfr on sfr.doc_id = a.doc_id
@@ -252,14 +252,14 @@ async function fetchEditorialFamilyStateRows(
           requested_content_item_id,
           split_part(requested_content_item_id, ':', 2)::uuid as requested_doc_id
         from unnest($2::text[]) requested_content_item_id
-        where requested_content_item_id like 'editorial:%'
+        where requested_content_item_id like 'signal_candidate:%'
       ),
       requested_families as (
         select
           re.requested_content_item_id,
           coalesce(a.canonical_doc_id, a.doc_id) as family_doc_id
         from requested_editorial re
-        join articles a on a.doc_id = re.requested_doc_id
+        join signal_candidates a on a.doc_id = re.requested_doc_id
       ),
       ranked_family_state as (
         select
@@ -275,11 +275,11 @@ async function fetchEditorialFamilyStateRows(
             order by ucs.updated_at desc, ucs.content_item_id
           ) as row_number
         from requested_families rf
-        join articles family_articles
-          on coalesce(family_articles.canonical_doc_id, family_articles.doc_id) = rf.family_doc_id
+        join signal_candidates family_signal_candidates
+          on coalesce(family_signal_candidates.canonical_doc_id, family_signal_candidates.doc_id) = rf.family_doc_id
         join user_content_state ucs
           on ucs.user_id = $1
-         and ucs.content_item_id = 'editorial:' || family_articles.doc_id::text
+         and ucs.content_item_id = 'signal_candidate:' || family_signal_candidates.doc_id::text
       )
       select
         requested_content_item_id,
@@ -314,13 +314,13 @@ async function fetchEditorialRows(
         latest.latest_content_at::text as latest_content_at,
         (uf.event_cluster_id is not null) as is_following_story,
         uf.last_seen_at::text as followed_last_seen_at
-        from articles a
+        from signal_candidates a
         left join user_followed_event_clusters uf
           on uf.user_id = $1
        and uf.event_cluster_id = a.event_cluster_id
       left join lateral (
         select max(coalesce(a2.published_at, a2.ingested_at)) as latest_content_at
-        from articles a2
+        from signal_candidates a2
         left join final_selection_results fsr on fsr.doc_id = a2.doc_id
         left join system_feed_results sfr on sfr.doc_id = a2.doc_id
         where a2.event_cluster_id = a.event_cluster_id
@@ -340,7 +340,7 @@ async function fetchSingleEditorialRow(
   contentItemId: string
 ): Promise<EditorialFollowRow | null> {
   const parsed = parseContentItemId(contentItemId);
-  if (parsed.originType !== "editorial" || !parsed.originId) {
+  if (parsed.originType !== "signal_candidate" || !parsed.originId) {
     return null;
   }
 
@@ -386,11 +386,11 @@ export async function getUserContentStateMap(
     .map((item) => String(item.content_item_id ?? "").trim())
     .filter(Boolean);
   const editorialOriginIds = items
-    .filter((item) => item.origin_type === "editorial")
+    .filter((item) => item.origin_type === "signal_candidate")
     .map((item) => String(item.origin_id ?? "").trim())
     .filter(Boolean);
   const editorialContentItemIds = items
-    .filter((item) => item.origin_type === "editorial")
+    .filter((item) => item.origin_type === "signal_candidate")
     .map((item) => String(item.content_item_id ?? "").trim())
     .filter(Boolean);
 
@@ -420,7 +420,7 @@ export async function getUserContentStateMap(
     items.map((item) => {
       const contentItemId = String(item.content_item_id ?? "").trim();
       const editorialRow =
-        item.origin_type === "editorial"
+        item.origin_type === "signal_candidate"
           ? editorialMap.get(String(item.origin_id ?? "").trim())
           : null;
       return [
@@ -452,14 +452,14 @@ async function resolveEditorialClusterId(
   contentItemId: string
 ): Promise<string | null> {
   const parsed = parseContentItemId(contentItemId);
-  if (parsed.originType !== "editorial" || !parsed.originId) {
+  if (parsed.originType !== "signal_candidate" || !parsed.originId) {
     return null;
   }
 
   const result = await pool.query<{ event_cluster_id: string | null }>(
     `
       select event_cluster_id::text as event_cluster_id
-      from articles
+      from signal_candidates
       where doc_id = $1::uuid
       limit 1
     `,
@@ -738,7 +738,7 @@ export async function listFollowedStoryRefs(
         with ranked_cluster_items as (
           select
             uf.event_cluster_id::text as event_cluster_id,
-            'editorial:' || a.doc_id::text as content_item_id,
+            'signal_candidate:' || a.doc_id::text as content_item_id,
             uf.followed_at::text as followed_at,
             uf.last_seen_at::text as last_seen_at,
             max(coalesce(a.published_at, a.ingested_at)) over (
@@ -752,7 +752,7 @@ export async function listFollowedStoryRefs(
                 a.doc_id
             ) as row_number
           from user_followed_event_clusters uf
-          join articles a on a.event_cluster_id = uf.event_cluster_id
+          join signal_candidates a on a.event_cluster_id = uf.event_cluster_id
           left join final_selection_results fsr on fsr.doc_id = a.doc_id
           left join system_feed_results sfr on sfr.doc_id = a.doc_id
           where uf.user_id = $1

@@ -1,5 +1,5 @@
 create table if not exists system_feed_results (
-  doc_id uuid primary key references articles (doc_id) on delete cascade,
+  doc_id uuid primary key references signal_candidates (doc_id) on delete cascade,
   decision text not null,
   eligible_for_feed boolean not null default false,
   total_criteria_count integer not null default 0,

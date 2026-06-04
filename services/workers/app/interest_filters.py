@@ -79,10 +79,10 @@ async def fetch_verification_result_snapshot(
 async def resolve_interest_filter_context(
     cursor: psycopg.AsyncCursor[Any],
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     prefer_story_cluster: bool,
 ) -> dict[str, Any]:
-    raw_canonical_document_id = article.get("canonical_doc_id") or article.get("doc_id")
+    raw_canonical_document_id = signal_candidate.get("canonical_doc_id") or signal_candidate.get("doc_id")
     canonical_document_id: uuid.UUID | None = None
     if raw_canonical_document_id:
         try:

@@ -84,7 +84,7 @@ export function buildDiscoveryWebsiteProbeResult(input: {
     discovery_source: resource.discoverySource,
     reasons: resource.classification.reasons.slice(0, 4),
   }));
-  const sampleArticles = sampleResources
+  const sampleSignalCandidates = sampleResources
     .filter((resource) => ["editorial", "entity"].includes(resource.kind))
     .slice(0, Math.max(1, input.sampleCount))
     .map((resource) => ({
@@ -131,11 +131,11 @@ export function buildDiscoveryWebsiteProbeResult(input: {
     is_news_site: classification.kind === "editorial",
     has_hidden_rss: input.discoveredFeedUrls.length > 0,
     hidden_rss_urls: [...input.discoveredFeedUrls],
-    article_count_estimate: detailCountEstimate,
+    signal_candidate_count_estimate: detailCountEstimate,
     freshness: input.datePatternsFound ? "daily" : "unknown",
     date_patterns_found: input.datePatternsFound,
     category_urls: [...input.listingUrls].slice(0, 10),
-    sample_articles: sampleArticles,
+    sample_signal_candidates: sampleSignalCandidates,
     browser_assisted_recommended: input.browserAttempt.recommended,
     browser_assisted_recommendation_reasons: input.browserAttempt.recommendationReasons,
     challenge_kind: input.browserAttempt.challengeKind,

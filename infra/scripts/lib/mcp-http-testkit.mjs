@@ -428,7 +428,7 @@ export function extractCookie(setCookies) {
 const adminActionTokenCache = new Map();
 const webActionTokenCache = new Map();
 const adminActionScopes = new Map([
-  ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
+  ["/bff/admin/signal-candidates/enrichment-retry", "signal_candidates.enrichment-retry"],
   ["/bff/admin/automation", "automation"],
   ["/bff/admin/channels", "channels"],
   ["/bff/admin/channels/bulk", "channels.bulk"],

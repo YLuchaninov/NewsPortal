@@ -51,7 +51,7 @@ def _resolve_subject(options: Mapping[str, Any], context: Mapping[str, Any]) -> 
             if _read_string(options=options, context=context, key="story_cluster_id", aliases=("storyClusterId",))
             else "web_resource"
             if _read_string(options=options, context=context, key="resource_id", aliases=("resourceId",))
-            else "article"
+            else "signal_candidate"
         )
     if subject_type == "web_resource":
         subject_id = _read_string(
@@ -68,7 +68,7 @@ def _resolve_subject(options: Mapping[str, Any], context: Mapping[str, Any]) -> 
             aliases=("storyClusterId", "aggregate_id", "aggregateId"),
         )
     else:
-        subject_type = "article"
+        subject_type = "signal_candidate"
         subject_id = _read_string(options=options, context=context, key="doc_id", aliases=("docId",))
     if subject_id is None:
         raise ValueError(f"Unable to resolve content analysis subject id for {subject_type}.")
@@ -83,13 +83,13 @@ class ContentNerExtractPlugin(TaskPlugin):
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
         subject_type = options.get("subjectType", options.get("subject_type", "auto"))
-        if subject_type not in {"auto", "article", "web_resource", None}:
-            errors.append("subjectType must be auto, article, or web_resource.")
+        if subject_type not in {"auto", "signal_candidate", "web_resource", None}:
+            errors.append("subjectType must be auto, signal_candidate, or web_resource.")
         return errors
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "doc_id": "Article subject id when subjectType is article or auto.",
+            "doc_id": "SignalCandidate subject id when subjectType is signal_candidate or auto.",
             "resource_id": "Web resource subject id when subjectType is web_resource or auto.",
         }
 
@@ -136,7 +136,7 @@ class ContentSystemInterestLabelProjectPlugin(TaskPlugin):
     category = "content_analysis"
 
     def describe_inputs(self) -> dict[str, str]:
-        return {"doc_id": "Article id with interest_filter_results to project."}
+        return {"doc_id": "SignalCandidate id with interest_filter_results to project."}
 
     def describe_outputs(self) -> dict[str, str]:
         return {
@@ -154,7 +154,7 @@ class ContentSystemInterestLabelProjectPlugin(TaskPlugin):
             return {
                 "content_analysis_skipped": True,
                 "content_analysis_reason": result.get("reason"),
-                "content_analysis_subject_type": "article",
+                "content_analysis_subject_type": "signal_candidate",
                 "content_analysis_subject_id": doc_id,
                 "content_analysis_policy_key": result.get("policyKey"),
                 "content_analysis_policy_version": result.get("policyVersion"),
@@ -173,13 +173,13 @@ class ContentSentimentAnalyzePlugin(TaskPlugin):
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
         subject_type = options.get("subjectType", options.get("subject_type", "auto"))
-        if subject_type not in {"auto", "article", "web_resource", None}:
-            errors.append("subjectType must be auto, article, or web_resource.")
+        if subject_type not in {"auto", "signal_candidate", "web_resource", None}:
+            errors.append("subjectType must be auto, signal_candidate, or web_resource.")
         return errors
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "doc_id": "Article subject id when subjectType is article or auto.",
+            "doc_id": "SignalCandidate subject id when subjectType is signal_candidate or auto.",
             "resource_id": "Web resource subject id when subjectType is web_resource or auto.",
         }
 
@@ -230,13 +230,13 @@ class ContentCategoryClassifyPlugin(TaskPlugin):
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
         subject_type = options.get("subjectType", options.get("subject_type", "auto"))
-        if subject_type not in {"auto", "article", "web_resource", None}:
-            errors.append("subjectType must be auto, article, or web_resource.")
+        if subject_type not in {"auto", "signal_candidate", "web_resource", None}:
+            errors.append("subjectType must be auto, signal_candidate, or web_resource.")
         return errors
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "doc_id": "Article subject id when subjectType is article or auto.",
+            "doc_id": "SignalCandidate subject id when subjectType is signal_candidate or auto.",
             "resource_id": "Web resource subject id when subjectType is web_resource or auto.",
         }
 
@@ -286,13 +286,13 @@ class ContentStructuredExtractPlugin(TaskPlugin):
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
         subject_type = options.get("subjectType", options.get("subject_type", "auto"))
-        if subject_type not in {"auto", "article", "web_resource", None}:
-            errors.append("subjectType must be auto, article, or web_resource.")
+        if subject_type not in {"auto", "signal_candidate", "web_resource", None}:
+            errors.append("subjectType must be auto, signal_candidate, or web_resource.")
         return errors
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "doc_id": "Article subject id when subjectType is article or auto.",
+            "doc_id": "SignalCandidate subject id when subjectType is signal_candidate or auto.",
             "resource_id": "Web resource subject id when subjectType is web_resource or auto.",
         }
 
@@ -354,7 +354,7 @@ class ContentClusterSummaryProjectPlugin(TaskPlugin):
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "story_cluster_id": "Story cluster id, usually from article.cluster output.",
+            "story_cluster_id": "Story cluster id, usually from signal_candidate.cluster output.",
         }
 
     def describe_outputs(self) -> dict[str, str]:
@@ -402,7 +402,7 @@ class ContentFilterGatePlugin(TaskPlugin):
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "doc_id": "Article subject id when subjectType is article or auto.",
+            "doc_id": "SignalCandidate subject id when subjectType is signal_candidate or auto.",
             "resource_id": "Web resource subject id when subjectType is web_resource or auto.",
         }
 

@@ -57,7 +57,7 @@ test("HN Algolia adapter normalizes search hits to acquisition items", async () 
   });
 
   assert.equal(items.length, 1);
-  assert.equal(items[0]?.externalArticleId, "hn_algolia_search:42");
+  assert.equal(items[0]?.externalSignalCandidateId, "hn_algolia_search:42");
   assert.equal(items[0]?.rawPayload.fetcher, "api_adapter");
   assert.equal(items[0]?.rawPayload.sourceRole, "community_search");
 });
@@ -160,7 +160,7 @@ test("GitHub issues adapter normalizes public issue search results", async () =>
   });
 
   assert.equal(items.length, 1);
-  assert.equal(items[0]?.externalArticleId, "github_issues_search:99");
+  assert.equal(items[0]?.externalSignalCandidateId, "github_issues_search:99");
   assert.equal(items[0]?.rawPayload.adapterKey, "github_issues_search");
   assert.match(items[0]?.body ?? "", /migrate/);
 });

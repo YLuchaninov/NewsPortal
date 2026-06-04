@@ -26,7 +26,7 @@ export interface FeedIngressAdapterProvenance {
   canonicalResolved: boolean;
   discussionUrl: string | null;
   discussionOnly: boolean;
-  itemKind: "generic" | "discussion_thread" | "linked_article";
+  itemKind: "generic" | "discussion_thread" | "linked_signal_candidate";
 }
 
 export interface AdaptedFeedEntry {
@@ -110,14 +110,14 @@ function extractHackerNewsArticleUrl(entry: ParsedFeedEntry): string | null {
     .map((value) => toPlaintext(value))
     .filter(Boolean);
   for (const text of textSources) {
-    const articleSection = text.match(/Article URL:\s*(.+?)(?:Comments URL:|Points:|#\s*Comments?:|$)/i);
-    if (!articleSection?.[1]) {
+    const signalCandidateSection = text.match(/Article URL:\s*(.+?)(?:Comments URL:|Points:|#\s*Comments?:|$)/i);
+    if (!signalCandidateSection?.[1]) {
       continue;
     }
 
-    const articleUrl = extractFirstHttpUrl(articleSection[1]);
-    if (articleUrl) {
-      return articleUrl;
+    const signalCandidateUrl = extractFirstHttpUrl(signalCandidateSection[1]);
+    if (signalCandidateUrl) {
+      return signalCandidateUrl;
     }
   }
 
@@ -241,9 +241,9 @@ const hackerNewsCommentsAdapter: FeedIngressAdapter = {
     }
 
     const discussionUrl = normalizeUrl(entry.url);
-    const articleUrl = normalizeUrl(extractHackerNewsArticleUrl(entry));
-    const canonicalUrl = articleUrl ?? discussionUrl;
-    const itemKind = articleUrl ? "linked_article" : "discussion_thread";
+    const signalCandidateUrl = normalizeUrl(extractHackerNewsArticleUrl(entry));
+    const canonicalUrl = signalCandidateUrl ?? discussionUrl;
+    const itemKind = signalCandidateUrl ? "linked_signal_candidate" : "discussion_thread";
 
     return {
       entry,
@@ -253,9 +253,9 @@ const hackerNewsCommentsAdapter: FeedIngressAdapter = {
         strategy: context.strategy,
         sourceUrl: discussionUrl,
         canonicalUrl,
-        canonicalResolved: Boolean(articleUrl && discussionUrl && articleUrl !== discussionUrl),
+        canonicalResolved: Boolean(signalCandidateUrl && discussionUrl && signalCandidateUrl !== discussionUrl),
         discussionUrl,
-        discussionOnly: !articleUrl,
+        discussionOnly: !signalCandidateUrl,
         itemKind
       }
     };

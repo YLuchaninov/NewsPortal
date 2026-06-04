@@ -471,7 +471,7 @@ const panels: ResourcePanel[] = [
         <h2 class="text-base font-semibold tracking-normal">LLM Gateway</h2>
         <div class="mt-4 grid gap-3">
           <input name="task" required value="discovery_compile_interest_graph" class="h-9 rounded-md border bg-background px-3 text-sm" />
-          <textarea name="payloadJson" rows="5" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"goal":"Detect public observable signals.","artifactExpectations":["article","document","dataset"]}`}</textarea>
+          <textarea name="payloadJson" rows="5" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"goal":"Detect public observable signals.","artifactExpectations":["signal_candidate","document","dataset"]}`}</textarea>
           <textarea name="budgetJson" rows="2" class="rounded-md border bg-background px-3 py-2 text-sm" spellcheck="false">{`{"maxRunCostCents":1}`}</textarea>
           <label class="flex items-center gap-2 text-sm text-muted-foreground">
             <input name="liveProviderExecution" type="checkbox" class="h-4 w-4 rounded border-input" />
@@ -578,7 +578,7 @@ const panels: ResourcePanel[] = [
         </select>
         <select name="artifactFreshnessKind" class="h-9 rounded-md border bg-background px-3 text-sm">
           <option value="">Any freshness</option>
-          {["recurring_listing", "recurring_feed", "official_update", "dataset_or_registry", "community_thread", "documentation_or_guide", "evergreen_article", "static_service_page", "unknown"].map((value) => (
+          {["recurring_listing", "recurring_feed", "official_update", "dataset_or_registry", "community_thread", "documentation_or_guide", "evergreen_signal_candidate", "static_service_page", "unknown"].map((value) => (
             <option value={value} selected={inventoryFilters.artifactFreshnessKind === value}>{value}</option>
           ))}
         </select>

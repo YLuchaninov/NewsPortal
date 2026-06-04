@@ -106,19 +106,19 @@ async def fetch_selection_gate_result_row(
             ),
             "verification_target_id": final_selection_result.get("verification_target_id"),
             "verification_state": final_selection_result.get("verification_state"),
-            "selection_reuse_source": "article_level",
+            "selection_reuse_source": "signal_candidate_level",
         }
 
     await cursor.execute(
         """
         select canonical_doc_id
-        from articles
+        from signal_candidates
         where doc_id = %s
         """,
         (doc_id,),
     )
-    article_row = await cursor.fetchone() or {}
-    canonical_document_id = article_row.get("canonical_doc_id")
+    signal_candidate_row = await cursor.fetchone() or {}
+    canonical_document_id = signal_candidate_row.get("canonical_doc_id")
     if canonical_document_id is not None:
         await cursor.execute(
             """
@@ -163,7 +163,7 @@ async def fetch_selection_gate_result_row(
             """
             select sfr.*
             from system_feed_results sfr
-            join articles a on a.doc_id = sfr.doc_id
+            join signal_candidates a on a.doc_id = sfr.doc_id
             where a.canonical_doc_id = %s
             order by coalesce(sfr.eligible_for_feed, false) desc, sfr.updated_at desc, sfr.doc_id asc
             limit 1
@@ -183,12 +183,12 @@ async def fetch_selection_gate_result_row(
         "verification_target_id": None,
         "verification_state": None,
         "selection_reuse_source": (
-            "canonical_reused" if canonical_document_id is not None else "article_level"
+            "canonical_reused" if canonical_document_id is not None else "signal_candidate_level"
         ),
     }
 
 
-async def is_article_eligible_for_personalization(
+async def is_signal_candidate_eligible_for_personalization(
     *,
     doc_id: str,
     open_connection_func: OpenConnectionFactory | None = None,

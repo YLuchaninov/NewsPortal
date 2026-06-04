@@ -44,7 +44,7 @@ test("working noisy semantic channels remain retained instead of disabled", () =
     selectedRows: 0,
     grayRows: 12,
     rejectedRows: 200,
-    articleCount: 212,
+    signalCandidateCount: 212,
   });
 
   assert.equal(label, "working_noisy_semantic_match");
@@ -58,7 +58,7 @@ test("low-yield and negative-control working sources are not auto-disable candid
       isActive: true,
       lastSuccessAt: "2026-05-11T10:00:00.000Z",
       selectedRows: 0,
-      articleCount: 0,
+      signalCandidateCount: 0,
     }),
     "working_low_yield",
   );
@@ -161,7 +161,7 @@ test("source-family coverage read model reports retained noisy sources", async (
               runCount7d: 3,
               failureCount7d: 0,
               newItemCount7d: 25,
-              articleCount: 25,
+              signalCandidateCount: 25,
               webResourceCount: 0,
               selectedRows: 0,
               grayRows: 3,
@@ -188,7 +188,7 @@ test("source-family coverage read model reports retained noisy sources", async (
               runCount7d: 0,
               failureCount7d: 0,
               newItemCount7d: 0,
-              articleCount: 0,
+              signalCandidateCount: 0,
               webResourceCount: 0,
               selectedRows: 0,
               grayRows: 0,

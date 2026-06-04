@@ -30,15 +30,15 @@ function passingMegaArtifact() {
     scenarios: [
       {
         key: "example_a_job_board",
-        liveSelectedArticleEvidence: { selectedFinalRows: 1 },
+        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
       {
         key: "example_b_dev_news",
-        liveSelectedArticleEvidence: { selectedFinalRows: 1 },
+        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
       {
         key: "example_c_outsourcing",
-        liveSelectedArticleEvidence: { selectedFinalRows: 1 },
+        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
     ],
   };

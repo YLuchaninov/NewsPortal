@@ -19,9 +19,9 @@ def _get_discovery_runtime() -> Any:
     return _registry_owner.get_discovery_runtime()
 
 
-class ArticleLoaderPlugin(ContextTaskPlugin):
-    name = "enrichment.article_loader"
-    description = "Load articles for enrichment through a pluggable data adapter."
+class SignalCandidateLoaderPlugin(ContextTaskPlugin):
+    name = "enrichment.signal_candidate_loader"
+    description = "Load signal_candidates for enrichment through a pluggable data adapter."
     category = "enrichment"
 
     async def execute(
@@ -63,14 +63,14 @@ class ArticleLoaderPlugin(ContextTaskPlugin):
 
         runtime = _get_discovery_runtime()
         raw_results = await resolve_runtime_call(
-            runtime.article_loader.load_articles(
+            runtime.signal_candidate_loader.load_signal_candidates(
                 filters=filters,
                 limit=limit,
                 include_blocked=include_blocked,
             )
         )
-        articles = _coerce_mapping_list(raw_results, field_name="articles")
-        return {"articles": articles}
+        signal_candidates = _coerce_mapping_list(raw_results, field_name="signal_candidates")
+        return {"signal_candidates": signal_candidates}
 
     def validate_options(self, options: dict[str, Any]) -> list[str]:
         errors: list[str] = []
@@ -91,21 +91,21 @@ class ArticleLoaderPlugin(ContextTaskPlugin):
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "filters": "Direct article loader filters.",
+            "filters": "Direct signal_candidate loader filters.",
             "filters_field": "Context field containing the loader filters.",
-            "limit": "Maximum number of articles to load.",
-            "include_blocked": "Whether blocked articles may be included.",
+            "limit": "Maximum number of signal_candidates to load.",
+            "include_blocked": "Whether blocked signal_candidates may be included.",
         }
 
     def describe_outputs(self) -> dict[str, str]:
         return {
-            "articles": "Loaded article rows for later enrichment tasks.",
+            "signal_candidates": "Loaded signal_candidate rows for later enrichment tasks.",
         }
 
 
-class ArticleEnricherPlugin(ContextTaskPlugin):
-    name = "enrichment.article_enricher"
-    description = "Persist enrichment results back to articles through a pluggable adapter."
+class SignalCandidateEnricherPlugin(ContextTaskPlugin):
+    name = "enrichment.signal_candidate_enricher"
+    description = "Persist enrichment results back to signal_candidates through a pluggable adapter."
     category = "enrichment"
 
     async def execute(
@@ -113,13 +113,13 @@ class ArticleEnricherPlugin(ContextTaskPlugin):
         options: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        articles_field = self._resolve_optional_string(
+        signal_candidates_field = self._resolve_optional_string(
             options=options,
             context=context,
-            key="articles_field",
-            aliases=("articlesField",),
-        ) or "articles"
-        articles = _coerce_mapping_list(context.get(articles_field) or [], field_name=articles_field)
+            key="signal_candidates_field",
+            aliases=("signalCandidatesField",),
+        ) or "signal_candidates"
+        signal_candidates = _coerce_mapping_list(context.get(signal_candidates_field) or [], field_name=signal_candidates_field)
 
         enrichment_field = self._resolve_optional_string(
             options=options,
@@ -150,32 +150,32 @@ class ArticleEnricherPlugin(ContextTaskPlugin):
 
         runtime = _get_discovery_runtime()
         raw_result = await resolve_runtime_call(
-            runtime.article_enricher.enrich_articles(
-                articles=articles,
+            runtime.signal_candidate_enricher.enrich_signal_candidates(
+                signal_candidates=signal_candidates,
                 enrichment=enrichment,
                 mode=mode,
                 target_field=target_field,
             )
         )
 
-        updated_articles = articles
-        enriched_count = len(articles)
+        updated_signal_candidates = signal_candidates
+        enriched_count = len(signal_candidates)
         if isinstance(raw_result, Mapping):
-            if raw_result.get("articles") is not None:
-                updated_articles = _coerce_mapping_list(
-                    raw_result.get("articles"),
-                    field_name="articles",
+            if raw_result.get("signal_candidates") is not None:
+                updated_signal_candidates = _coerce_mapping_list(
+                    raw_result.get("signal_candidates"),
+                    field_name="signal_candidates",
                 )
             if raw_result.get("enriched_count") is not None:
                 enriched_count = int(raw_result["enriched_count"])
         elif isinstance(raw_result, list):
-            updated_articles = _coerce_mapping_list(raw_result, field_name="articles")
-            enriched_count = len(updated_articles)
+            updated_signal_candidates = _coerce_mapping_list(raw_result, field_name="signal_candidates")
+            enriched_count = len(updated_signal_candidates)
         elif isinstance(raw_result, int):
             enriched_count = raw_result
 
         return {
-            "articles": updated_articles,
+            "signal_candidates": updated_signal_candidates,
             "enriched_count": max(0, int(enriched_count)),
         }
 
@@ -184,8 +184,8 @@ class ArticleEnricherPlugin(ContextTaskPlugin):
         self._validate_optional_non_empty_string(
             options,
             errors,
-            option_key="articles_field",
-            aliases=("articlesField",),
+            option_key="signal_candidates_field",
+            aliases=("signalCandidatesField",),
         )
         self._validate_optional_non_empty_string(
             options,
@@ -206,14 +206,14 @@ class ArticleEnricherPlugin(ContextTaskPlugin):
 
     def describe_inputs(self) -> dict[str, str]:
         return {
-            "articles_field": "Context field containing articles to enrich.",
+            "signal_candidates_field": "Context field containing signal_candidates to enrich.",
             "enrichment_field": "Context field containing enrichment payload.",
             "mode": "How to apply enrichment: merge or replace.",
-            "target_field": "Optional article field to update through the adapter.",
+            "target_field": "Optional signal_candidate field to update through the adapter.",
         }
 
     def describe_outputs(self) -> dict[str, str]:
         return {
-            "articles": "Updated article rows after enrichment.",
-            "enriched_count": "Number of articles acknowledged by the enricher adapter.",
+            "signal_candidates": "Updated signal_candidate rows after enrichment.",
+            "enriched_count": "Number of signal_candidates acknowledged by the enricher adapter.",
         }

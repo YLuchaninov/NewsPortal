@@ -55,7 +55,7 @@ def _iter_text_fragments(value: Any) -> Iterable[str]:
         ):
             if key in value:
                 yield from _iter_text_fragments(value[key])
-        for key in ("sample_entries", "articles", "matched_terms", "topics", "tags"):
+        for key in ("sample_entries", "signal_candidates", "matched_terms", "topics", "tags"):
             if key in value:
                 yield from _iter_text_fragments(value[key])
         return

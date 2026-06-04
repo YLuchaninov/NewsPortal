@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 
-def load_article_residual_rows(
+def load_signal_candidate_residual_rows(
     *,
     q: str | None = None,
     verification_state: str | None = None,
@@ -13,8 +13,8 @@ def load_article_residual_rows(
     normalize_web_content_search_query_func: Callable[[str | None], str | None],
     build_web_content_search_pattern_func: Callable[[str], str],
     query_all_func: Callable[[str, tuple[Any, ...]], list[dict[str, Any]]],
-    article_preview_projection_func: Callable[[str, str, str], str],
-    article_observation_join_clause_func: Callable[[str, str], str],
+    signal_candidate_preview_projection_func: Callable[[str, str, str], str],
+    signal_candidate_observation_join_clause_func: Callable[[str, str], str],
     final_selection_join_clause_func: Callable[[str, str], str],
     system_feed_join_clause_func: Callable[[str, str], str],
     primary_media_join_clause_func: Callable[[str, str], str],
@@ -86,14 +86,14 @@ def load_article_residual_rows(
             as final_selection_canonical_review_reused_count,
           coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
             as final_selection_canonical_selection_reused,
-          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
-            as final_selection_duplicate_article_count_for_canonical,
+          coalesce((fsr.explain_json ->> 'duplicateSignalCandidateCountForCanonical')::int, 0)
+            as final_selection_duplicate_signal_candidate_count_for_canonical,
           fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
           sfr.decision as system_feed_decision,
           coalesce(sfr.eligible_for_feed, false) as system_feed_eligible,
-          {article_preview_projection_func("a", "sc", "pma")},
+          {signal_candidate_preview_projection_func("a", "sc", "pma")},
           coalesce(ifc.system_criterion_rows, 0) as system_criterion_rows,
           coalesce(ifc.user_interest_rows, 0) as user_interest_rows,
           coalesce(ifc.matched_rows, 0) as matched_rows,
@@ -102,9 +102,9 @@ def load_article_residual_rows(
           coalesce(ifc.technical_filtered_out_rows, 0) as technical_filtered_out_rows,
           coalesce(llm.llm_review_rows, 0) as llm_review_rows,
           coalesce(notify.notification_rows, 0) as notification_rows
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
-        {article_observation_join_clause_func("a", "obs")}
+        {signal_candidate_observation_join_clause_func("a", "obs")}
         {final_selection_join_clause_func("a", "fsr")}
         {system_feed_join_clause_func("a", "sfr")}
         left join canonical_documents cd
@@ -147,58 +147,58 @@ def load_article_residual_rows(
     )
 
 
-def build_article_residual_payload(
-    article_like: Mapping[str, Any],
+def build_signal_candidate_residual_payload(
+    signal_candidate_like: Mapping[str, Any],
     *,
-    apply_article_selection_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
+    apply_signal_candidate_selection_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
     build_selection_explain_payload_func: Callable[..., dict[str, Any]],
     build_selection_diagnostics_payload_from_counts_func: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
-    article = apply_article_selection_payload_func(article_like)
+    signal_candidate = apply_signal_candidate_selection_payload_func(signal_candidate_like)
     selection_explain = build_selection_explain_payload_func(
-        selection_like=article,
+        selection_like=signal_candidate,
         final_selection_result=None,
         system_feed_result=None,
     )
     selection_diagnostics = build_selection_diagnostics_payload_from_counts_func(
         selection_explain=selection_explain,
-        system_criterion_rows=int(article_like.get("system_criterion_rows") or 0),
-        user_interest_rows=int(article_like.get("user_interest_rows") or 0),
-        matched_rows=int(article_like.get("matched_rows") or 0),
-        no_match_rows=int(article_like.get("no_match_rows") or 0),
-        gray_zone_rows=int(article_like.get("gray_zone_rows") or 0),
+        system_criterion_rows=int(signal_candidate_like.get("system_criterion_rows") or 0),
+        user_interest_rows=int(signal_candidate_like.get("user_interest_rows") or 0),
+        matched_rows=int(signal_candidate_like.get("matched_rows") or 0),
+        no_match_rows=int(signal_candidate_like.get("no_match_rows") or 0),
+        gray_zone_rows=int(signal_candidate_like.get("gray_zone_rows") or 0),
         technical_filtered_out_rows=int(
-            article_like.get("technical_filtered_out_rows") or 0
+            signal_candidate_like.get("technical_filtered_out_rows") or 0
         ),
-        llm_review_rows=int(article_like.get("llm_review_rows") or 0),
-        notification_rows=int(article_like.get("notification_rows") or 0),
+        llm_review_rows=int(signal_candidate_like.get("llm_review_rows") or 0),
+        notification_rows=int(signal_candidate_like.get("notification_rows") or 0),
     )
-    article["selection_explain"] = selection_explain
-    article["selection_diagnostics"] = selection_diagnostics
-    article["interest_filter_summary"] = {
-        "systemCriterionRows": int(article_like.get("system_criterion_rows") or 0),
-        "userInterestRows": int(article_like.get("user_interest_rows") or 0),
-        "matchedRows": int(article_like.get("matched_rows") or 0),
-        "noMatchRows": int(article_like.get("no_match_rows") or 0),
-        "grayZoneRows": int(article_like.get("gray_zone_rows") or 0),
+    signal_candidate["selection_explain"] = selection_explain
+    signal_candidate["selection_diagnostics"] = selection_diagnostics
+    signal_candidate["interest_filter_summary"] = {
+        "systemCriterionRows": int(signal_candidate_like.get("system_criterion_rows") or 0),
+        "userInterestRows": int(signal_candidate_like.get("user_interest_rows") or 0),
+        "matchedRows": int(signal_candidate_like.get("matched_rows") or 0),
+        "noMatchRows": int(signal_candidate_like.get("no_match_rows") or 0),
+        "grayZoneRows": int(signal_candidate_like.get("gray_zone_rows") or 0),
         "technicalFilteredOutRows": int(
-            article_like.get("technical_filtered_out_rows") or 0
+            signal_candidate_like.get("technical_filtered_out_rows") or 0
         ),
     }
-    article["llm_review_row_count"] = int(article_like.get("llm_review_rows") or 0)
-    article["notification_row_count"] = int(article_like.get("notification_rows") or 0)
-    return article
+    signal_candidate["llm_review_row_count"] = int(signal_candidate_like.get("llm_review_rows") or 0)
+    signal_candidate["notification_row_count"] = int(signal_candidate_like.get("notification_rows") or 0)
+    return signal_candidate
 
 
-def article_matches_residual_filters(
-    article: Mapping[str, Any],
+def signal_candidate_matches_residual_filters(
+    signal_candidate: Mapping[str, Any],
     *,
     downstream_loss_bucket: str | None = None,
     selection_blocker_stage: str | None = None,
     selection_blocker_reason: str | None = None,
     selection_mode: str | None = None,
 ) -> bool:
-    diagnostics = article.get("selection_diagnostics")
+    diagnostics = signal_candidate.get("selection_diagnostics")
     if diagnostics is None or not isinstance(diagnostics, dict):
         return False
     if (
@@ -219,12 +219,12 @@ def article_matches_residual_filters(
         != selection_blocker_reason
     ):
         return False
-    if selection_mode and str(article.get("selection_mode") or "").strip() != selection_mode:
+    if selection_mode and str(signal_candidate.get("selection_mode") or "").strip() != selection_mode:
         return False
     return True
 
 
-def summarize_article_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+def summarize_signal_candidate_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     def count_by(values: list[str | None]) -> list[dict[str, Any]]:
         counts: dict[str, int] = {}
         for value in values:
@@ -264,7 +264,7 @@ def summarize_article_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, 
             1
             for payload in diagnostics
             if payload.get("downstreamLossBucket")
-            == "articles_missing_interest_filter_results"
+            == "signal_candidates_missing_interest_filter_results"
         ),
     }
     return {
@@ -296,7 +296,7 @@ def summarize_article_residual_rows(rows: list[Mapping[str, Any]]) -> dict[str, 
     }
 
 
-def list_article_residuals(
+def list_signal_candidate_residuals(
     *,
     downstream_loss_bucket: str | None,
     selection_blocker_stage: str | None,
@@ -311,9 +311,9 @@ def list_article_residuals(
     page_size: int,
     normalize_optional_query_string_func: Callable[[Any], str | None],
     normalize_web_content_search_query_func: Callable[[str | None], str | None],
-    load_article_residual_rows_func: Callable[..., list[dict[str, Any]]],
-    build_article_residual_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
-    article_matches_residual_filters_func: Callable[..., bool],
+    load_signal_candidate_residual_rows_func: Callable[..., list[dict[str, Any]]],
+    build_signal_candidate_residual_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
+    signal_candidate_matches_residual_filters_func: Callable[..., bool],
     build_paginated_response_func: Callable[
         [list[dict[str, Any]], int, int, int], dict[str, Any]
     ],
@@ -332,8 +332,8 @@ def list_article_residuals(
     duplicate_kind = normalize_optional_query_string_func(duplicate_kind)
     q = normalize_web_content_search_query_func(q)
     rows = [
-        build_article_residual_payload_func(row)
-        for row in load_article_residual_rows_func(
+        build_signal_candidate_residual_payload_func(row)
+        for row in load_signal_candidate_residual_rows_func(
             q=q,
             verification_state=verification_state,
             processing_state=processing_state,
@@ -344,7 +344,7 @@ def list_article_residuals(
     filtered_rows = [
         row
         for row in rows
-        if article_matches_residual_filters_func(
+        if signal_candidate_matches_residual_filters_func(
             row,
             downstream_loss_bucket=downstream_loss_bucket,
             selection_blocker_stage=selection_blocker_stage,
@@ -358,7 +358,7 @@ def list_article_residuals(
     )
 
 
-def summarize_article_residuals(
+def summarize_signal_candidate_residuals(
     *,
     downstream_loss_bucket: str | None,
     selection_blocker_stage: str | None,
@@ -371,10 +371,10 @@ def summarize_article_residuals(
     q: str | None,
     normalize_optional_query_string_func: Callable[[Any], str | None],
     normalize_web_content_search_query_func: Callable[[str | None], str | None],
-    load_article_residual_rows_func: Callable[..., list[dict[str, Any]]],
-    build_article_residual_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
-    article_matches_residual_filters_func: Callable[..., bool],
-    summarize_article_residual_rows_func: Callable[
+    load_signal_candidate_residual_rows_func: Callable[..., list[dict[str, Any]]],
+    build_signal_candidate_residual_payload_func: Callable[[Mapping[str, Any]], dict[str, Any]],
+    signal_candidate_matches_residual_filters_func: Callable[..., bool],
+    summarize_signal_candidate_residual_rows_func: Callable[
         [list[dict[str, Any]]], dict[str, Any]
     ],
 ) -> dict[str, Any]:
@@ -392,8 +392,8 @@ def summarize_article_residuals(
     duplicate_kind = normalize_optional_query_string_func(duplicate_kind)
     q = normalize_web_content_search_query_func(q)
     rows = [
-        build_article_residual_payload_func(row)
-        for row in load_article_residual_rows_func(
+        build_signal_candidate_residual_payload_func(row)
+        for row in load_signal_candidate_residual_rows_func(
             q=q,
             verification_state=verification_state,
             processing_state=processing_state,
@@ -404,7 +404,7 @@ def summarize_article_residuals(
     filtered_rows = [
         row
         for row in rows
-        if article_matches_residual_filters_func(
+        if signal_candidate_matches_residual_filters_func(
             row,
             downstream_loss_bucket=downstream_loss_bucket,
             selection_blocker_stage=selection_blocker_stage,
@@ -424,5 +424,5 @@ def summarize_article_residuals(
             "duplicateKind": duplicate_kind,
             "q": q,
         },
-        **summarize_article_residual_rows_func(filtered_rows),
+        **summarize_signal_candidate_residual_rows_func(filtered_rows),
     }

@@ -131,14 +131,14 @@ const server = createServer((request, response) => {
     <item>
       <guid>fixture-\${namespace}-1</guid>
       <title>Fixture update \${namespace}</title>
-      <link>\${baseUrl}/article-1</link>
+      <link>\${baseUrl}/signal_candidate-1</link>
       <description>Public observable update for deterministic discovery flow.</description>
       <pubDate>Fri, 29 May 2026 10:00:00 GMT</pubDate>
     </item>
     <item>
       <guid>fixture-\${namespace}-2</guid>
       <title>Fixture second update \${namespace}</title>
-      <link>\${baseUrl}/article-2</link>
+      <link>\${baseUrl}/signal_candidate-2</link>
       <description>Second public observable update for rediscovery proof.</description>
       <pubDate>Fri, 29 May 2026 11:00:00 GMT</pubDate>
     </item>
@@ -151,8 +151,8 @@ const server = createServer((request, response) => {
     response.writeHead(200, { "content-type": "application/xml; charset=utf-8" });
     response.end(\`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>\${baseUrl}/article-1</loc><lastmod>2026-05-29</lastmod></url>
-  <url><loc>\${baseUrl}/article-2</loc><lastmod>2026-05-29</lastmod></url>
+  <url><loc>\${baseUrl}/signal_candidate-1</loc><lastmod>2026-05-29</lastmod></url>
+  <url><loc>\${baseUrl}/signal_candidate-2</loc><lastmod>2026-05-29</lastmod></url>
 </urlset>\`);
     return;
   }
@@ -168,8 +168,8 @@ const server = createServer((request, response) => {
   <body>
     <main>
       <h1>Discovery vNext fixture \${namespace}</h1>
-      <a href="\${baseUrl}/article-1">Fixture article one</a>
-      <a href="\${baseUrl}/article-2">Fixture article two</a>
+      <a href="\${baseUrl}/signal_candidate-1">Fixture signal_candidate one</a>
+      <a href="\${baseUrl}/signal_candidate-2">Fixture signal_candidate two</a>
     </main>
   </body>
 </html>\`);
@@ -297,10 +297,10 @@ delete from inbox_processed_events
 where event_id in (
   select event_id
   from outbox_events
-  where aggregate_type = 'article'
+  where aggregate_type = 'signal_candidate'
     and aggregate_id in (
       select doc_id
-      from articles
+      from signal_candidates
       where channel_id in (
         select channel_id
         from source_channels
@@ -313,10 +313,10 @@ where event_id in (
 );
 
 delete from outbox_events
-where aggregate_type = 'article'
+where aggregate_type = 'signal_candidate'
   and aggregate_id in (
     select doc_id
-    from articles
+    from signal_candidates
     where channel_id in (
       select channel_id
       from source_channels
@@ -327,7 +327,7 @@ where aggregate_type = 'article'
     )
   );
 
-delete from articles
+delete from signal_candidates
 where channel_id in (
   select channel_id
   from source_channels

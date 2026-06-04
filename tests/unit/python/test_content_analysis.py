@@ -31,7 +31,7 @@ class ContentAnalysisTests(unittest.TestCase):
     def _make_subject(self, *, published_at: datetime | None) -> ContentSubject:
         now = datetime.now(timezone.utc)
         return ContentSubject(
-            subject_type="article",
+            subject_type="signal_candidate",
             subject_id="doc-1",
             title="Apple Inc announces Warsaw expansion",
             lead="Tim Cook met European Union officials.",

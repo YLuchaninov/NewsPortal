@@ -21,8 +21,8 @@ const services = {
     root: "services/fetchers",
     entries: {
       "main.mjs": "src/main.ts",
-      "cli/article-yield-diagnostics.mjs": "src/cli/article-yield-diagnostics.ts",
-      "cli/article-yield-remediate.mjs": "src/cli/article-yield-remediate.ts",
+      "cli/signal-candidate-yield-diagnostics.mjs": "src/cli/signal-candidate-yield-diagnostics.ts",
+      "cli/signal-candidate-yield-remediate.mjs": "src/cli/signal-candidate-yield-remediate.ts",
       "cli/replay-website-projections.mjs": "src/cli/replay-website-projections.ts",
       "cli/run-once.mjs": "src/cli/run-once.ts",
     },

@@ -41,22 +41,22 @@ pnpm dev:mvp:internal:no-build
 3. Откройте `Channels`.
 4. Создайте RSS source или импортируйте небольшой bundle.
 5. Дождитесь fetch run.
-6. Проверьте, что появились articles.
+6. Проверьте, что появились signal_candidates.
 7. Откройте `Rules` и создайте system interests.
 8. Если правила должны примениться к старому контенту, запустите reindex/backfill.
-9. Проверьте `Articles`, `Clusters`, `Observability`.
+9. Проверьте `Signal Candidates`, `Clusters`, `Observability`.
 
 Ожидаемый результат: материал проходит ingest -> processing -> selection, а оператор видит причины и состояние.
 
 ## Website lane
 
-Для website source проверяйте не только `Articles`.
+Для website source проверяйте не только `Signal Candidates`.
 
 1. Создайте `website` channel.
 2. Дождитесь poll.
 3. Откройте `Resources`.
 4. Проверьте найденные resources, provenance and projection state.
-5. Для website source отделяйте acquisition/projection proof от downstream selection proof: `web_resources` могут остаться resource-only или спроецироваться в `articles`, а projected rows могут дальше получить `final_decision=rejected`.
+5. Для website source отделяйте acquisition/projection proof от downstream selection proof: `web_resources` могут остаться resource-only или спроецироваться в `signal_candidates`, а projected rows могут дальше получить `final_decision=rejected`.
 6. Если сайт JS-heavy и static path не помогает, включайте browser fallback только явно.
 
 Перед тем как считать lane рабочим proof, используйте:
@@ -112,7 +112,7 @@ Admin `/ingress-adapters` управляет catalog/read-detail/create-edit dec
 
 Channel adapter truth is `source_channel_adapter_binding`. New admin/channel saves create or preserve this binding; legacy `config_json.adapterStrategy` and old API `adapterKey` may remain as historical JSON diagnostics, but runtime selection and read-model resolution ignore them. `ingress.adapters.legacy_fallback_report` is now readiness evidence: removal stays safe only when every active supported channel has a valid enabled binding and clean smoke proof shows zero historical `legacy_config` fetch-run resolutions.
 
-Dry-run is preview-only: it must not write `articles`, `web_resources`, `fetch_cursors`, `outbox_events` or `channel_fetch_runs`.
+Dry-run is preview-only: it must not write `signal_candidates`, `web_resources`, `fetch_cursors`, `outbox_events` or `channel_fetch_runs`.
 
 ## Delivery checks
 
@@ -140,7 +140,7 @@ pnpm dev:mvp:internal:down:volumes
 
 - Health endpoints green.
 - Admin login работает.
-- RSS ingest дает articles.
+- RSS ingest дает signal_candidates.
 - Website ingest дает visible resources.
 - System interests влияют на selection.
 - Reindex/backfill видим как операторский job.

@@ -80,7 +80,7 @@ const COMMON_SITEMAP_PATHS = [
   "/post-sitemap.xml",
   "/page-sitemap.xml",
 ];
-const COLLECTION_PATH_HINT_RE = /(?:^|\/)(blog|news|press|updates|articles|posts|insights|resources)(?:\/|$)/i;
+const COLLECTION_PATH_HINT_RE = /(?:^|\/)(blog|news|press|updates|signal_candidates|posts|insights|resources)(?:\/|$)/i;
 const FEED_PATH_HINT_RE = /(?:feed|rss|atom|jsonfeed|\.xml$|\.rss$|\.atom$)/i;
 
 interface TextFetchResult {
@@ -274,7 +274,7 @@ function addSameSiteLinkCandidates(baseUrl: string, html: string, candidates: Fe
       });
       continue;
     }
-    if (COLLECTION_PATH_HINT_RE.test(new URL(link.url).pathname) || /(news|blog|press|updates|articles)/i.test(link.text)) {
+    if (COLLECTION_PATH_HINT_RE.test(new URL(link.url).pathname) || /(news|blog|press|updates|signal_candidates)/i.test(link.text)) {
       const feedUrl = inferFeedUrlFromCollection(link.url);
       if (feedUrl) {
         pushCandidate(candidates, {

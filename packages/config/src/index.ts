@@ -12,7 +12,7 @@ export const THEME_MODES: ThemeMode[] = ["light", "dark", "system"];
 
 export const DEFAULT_BRAND_CONFIG: BrandConfig = {
   productName: "SignalOps",
-  tagline: "Internal local MVP for clustered news alerts",
+  tagline: "Internal local MVP for clustered signal alerts",
   accentColor: "#c45c2f",
   surfaceColor: "#f8f1e8",
   backgroundGradient:

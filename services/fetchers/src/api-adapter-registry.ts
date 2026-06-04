@@ -9,7 +9,7 @@ import {
 } from "./ddgs-direct-search";
 
 export interface ApiAdapterFetchedItem {
-  externalArticleId: string;
+  externalSignalCandidateId: string;
   url: string;
   publishedAt: string;
   title: string;
@@ -172,7 +172,7 @@ function normalizeJsonItem(input: {
   }
   const id = firstString(input.id, url);
   return {
-    externalArticleId: `${input.adapterKey}:${id}`,
+    externalSignalCandidateId: `${input.adapterKey}:${id}`,
     url,
     publishedAt: readDate(input.publishedAt, input.fetchedAt),
     title,
@@ -372,7 +372,7 @@ function normalizeSearchResult(input: {
     return null;
   }
   return {
-    externalArticleId: `${input.adapterKey}:${firstString(input.id, url)}`,
+    externalSignalCandidateId: `${input.adapterKey}:${firstString(input.id, url)}`,
     url,
     publishedAt: readDate(input.publishedAt, input.context.fetchedAt),
     title,
@@ -661,7 +661,7 @@ async function extractResearchHtmlItems(
       bodyHtml.match(/\b[0-9][0-9,]*\s?(?:USD|EUR|GBP)\b/iu)?.[0]
     );
     results.push({
-      externalArticleId: `${adapterKey}:${finalUrl}`,
+      externalSignalCandidateId: `${adapterKey}:${finalUrl}`,
       url: finalUrl,
       publishedAt: context.fetchedAt,
       title,

@@ -8,11 +8,11 @@ from psycopg.rows import dict_row
 from .common import build_database_url
 
 
-class PostgresArticleLoaderAdapter:
+class PostgresSignalCandidateLoaderAdapter:
     def __init__(self, database_url: str | None = None) -> None:
         self._database_url = database_url or build_database_url()
 
-    def load_articles(
+    def load_signal_candidates(
         self,
         *,
         filters: dict[str, Any],
@@ -27,7 +27,7 @@ class PostgresArticleLoaderAdapter:
               language,
               visibility_state,
               published_at
-            from articles
+            from signal_candidates
         """
         conditions: list[str] = []
         params: list[Any] = []

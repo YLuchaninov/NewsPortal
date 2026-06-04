@@ -29,8 +29,8 @@ function createJob(): AdminReindexJobSnapshot {
     cancellable: false,
     createdAt: "2026-04-10T12:00:00Z",
     createdAtLabel: "2026-04-10T12:00:00Z",
-    processedArticles: 24,
-    totalArticles: 24,
+    processedSignalCandidates: 24,
+    totalSignalCandidates: 24,
     progressLabel: "24/24 content items",
     selectionProfileSnapshot: {
       activeProfiles: 3,

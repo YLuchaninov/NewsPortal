@@ -20,12 +20,12 @@ create table if not exists fetch_cursors (
     unique (channel_id, cursor_type)
 );
 
-create table if not exists articles (
+create table if not exists signal_candidates (
   doc_id uuid primary key default gen_random_uuid(),
   channel_id uuid not null references source_channels (channel_id) on delete restrict,
-  source_article_id text,
+  source_signal_candidate_id text,
   url text not null,
-  content_format text not null default 'article',
+  content_format text not null default 'signal_candidate',
   published_at timestamptz not null,
   ingested_at timestamptz not null default now(),
   title text not null default '',
@@ -35,8 +35,8 @@ create table if not exists articles (
   lang_confidence double precision,
   exact_hash text,
   simhash64 bigint,
-  canonical_doc_id uuid references articles (doc_id) on delete set null,
-  family_id uuid references articles (doc_id) on delete set null,
+  canonical_doc_id uuid references signal_candidates (doc_id) on delete set null,
+  family_id uuid references signal_candidates (doc_id) on delete set null,
   event_cluster_id uuid,
   primary_media_asset_id uuid,
   has_media boolean not null default false,
@@ -49,11 +49,11 @@ create table if not exists articles (
   deduped_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint articles_content_format_check
-    check (content_format in ('article', 'video_news', 'gallery', 'mixed')),
-  constraint articles_visibility_state_check
+  constraint signal_candidates_content_format_check
+    check (content_format in ('signal_candidate', 'video_news', 'gallery', 'mixed')),
+  constraint signal_candidates_visibility_state_check
     check (visibility_state in ('visible', 'blocked')),
-  constraint articles_processing_state_check
+  constraint signal_candidates_processing_state_check
     check (
       processing_state in (
         'raw',
@@ -67,49 +67,49 @@ create table if not exists articles (
     )
 );
 
-create unique index if not exists articles_channel_source_article_id_unique
-  on articles (channel_id, source_article_id)
-  where source_article_id is not null;
+create unique index if not exists signal_candidates_channel_source_signal_candidate_id_unique
+  on signal_candidates (channel_id, source_signal_candidate_id)
+  where source_signal_candidate_id is not null;
 
-create unique index if not exists articles_channel_url_unique
-  on articles (channel_id, url);
+create unique index if not exists signal_candidates_channel_url_unique
+  on signal_candidates (channel_id, url);
 
-create index if not exists articles_channel_id_idx
-  on articles (channel_id);
+create index if not exists signal_candidates_channel_id_idx
+  on signal_candidates (channel_id);
 
-create index if not exists articles_published_at_idx
-  on articles (published_at);
+create index if not exists signal_candidates_published_at_idx
+  on signal_candidates (published_at);
 
-create index if not exists articles_visibility_state_published_at_idx
-  on articles (visibility_state, published_at);
+create index if not exists signal_candidates_visibility_state_published_at_idx
+  on signal_candidates (visibility_state, published_at);
 
-create index if not exists articles_exact_hash_idx
-  on articles (exact_hash);
+create index if not exists signal_candidates_exact_hash_idx
+  on signal_candidates (exact_hash);
 
-create index if not exists articles_simhash64_idx
-  on articles (simhash64);
+create index if not exists signal_candidates_simhash64_idx
+  on signal_candidates (simhash64);
 
-create index if not exists articles_event_cluster_id_idx
-  on articles (event_cluster_id);
+create index if not exists signal_candidates_event_cluster_id_idx
+  on signal_candidates (event_cluster_id);
 
-create index if not exists articles_family_id_idx
-  on articles (family_id);
+create index if not exists signal_candidates_family_id_idx
+  on signal_candidates (family_id);
 
-create index if not exists articles_canonical_doc_id_idx
-  on articles (canonical_doc_id);
+create index if not exists signal_candidates_canonical_doc_id_idx
+  on signal_candidates (canonical_doc_id);
 
-create index if not exists articles_processing_state_idx
-  on articles (processing_state);
+create index if not exists signal_candidates_processing_state_idx
+  on signal_candidates (processing_state);
 
-create table if not exists article_external_refs (
+create table if not exists signal_candidate_external_refs (
   external_ref_id uuid primary key default gen_random_uuid(),
   channel_id uuid not null references source_channels (channel_id) on delete cascade,
-  external_article_id text not null,
-  doc_id uuid not null references articles (doc_id) on delete cascade,
+  external_signal_candidate_id text not null,
+  doc_id uuid not null references signal_candidates (doc_id) on delete cascade,
   created_at timestamptz not null default now(),
-  constraint article_external_refs_channel_external_article_id_unique
-    unique (channel_id, external_article_id)
+  constraint signal_candidate_external_refs_channel_external_signal_candidate_id_unique
+    unique (channel_id, external_signal_candidate_id)
 );
 
-create index if not exists article_external_refs_doc_id_idx
-  on article_external_refs (doc_id);
+create index if not exists signal_candidate_external_refs_doc_id_idx
+  on signal_candidate_external_refs (doc_id);

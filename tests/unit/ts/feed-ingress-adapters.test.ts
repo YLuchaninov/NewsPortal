@@ -109,7 +109,7 @@ test("Reddit adapter parses entity-heavy Atom feeds without the generic parser o
   assert.equal(adapted.droppedStaleCount, 0);
 });
 
-test("Hacker News adapter extracts outbound article URLs, preserves discussion provenance, and drops stale/comment-only items", async () => {
+test("Hacker News adapter extracts outbound signal_candidate URLs, preserves discussion provenance, and drops stale/comment-only items", async () => {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0">
       <channel>
@@ -125,7 +125,7 @@ test("Hacker News adapter extracts outbound article URLs, preserves discussion p
           <guid>hn-2</guid>
           <title>Ask HN: how do you evaluate integration vendors?</title>
           <link>https://news.ycombinator.com/item?id=2</link>
-          <description><![CDATA[Ask HN thread with no outbound article URL.]]></description>
+          <description><![CDATA[Ask HN thread with no outbound signal_candidate URL.]]></description>
           <pubDate>Tue, 07 Apr 2026 08:00:00 GMT</pubDate>
         </item>
         <item>
@@ -166,7 +166,7 @@ test("Hacker News adapter extracts outbound article URLs, preserves discussion p
 
   const linked = adapted.entries[0];
   assert.equal(linked?.url, "https://publisher.example.com/story?id=1");
-  assert.equal(linked?.feedAdapter.itemKind, "linked_article");
+  assert.equal(linked?.feedAdapter.itemKind, "linked_signal_candidate");
   assert.equal(linked?.feedAdapter.discussionUrl, "https://news.ycombinator.com/item?id=1");
   assert.equal(linked?.feedAdapter.discussionOnly, false);
   assert.equal(linked?.feedAdapter.canonicalResolved, true);

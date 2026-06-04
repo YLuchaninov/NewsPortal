@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
-  extract as extractArticle,
+  extract as extractSignalCandidate,
   type ArticleData,
 } from "@extractus/article-extractor";
 import {
@@ -34,7 +34,7 @@ interface RawPayloadEntry {
   mediaContentUrl?: unknown;
 }
 
-interface ArticleEnrichmentRow {
+interface SignalCandidateEnrichmentRow {
   docId: string;
   channelId: string;
   providerType: string;
@@ -81,11 +81,11 @@ interface EnrichmentPersistInput {
   mediaAssets: MediaAssetCandidate[];
 }
 
-export interface ArticleEnrichmentRequest {
+export interface SignalCandidateEnrichmentRequest {
   force?: boolean;
 }
 
-export interface ArticleEnrichmentResult {
+export interface SignalCandidateEnrichmentResult {
   status: "skipped" | "enriched" | "failed";
   doc_id: string;
   enrichment_state: Exclude<EnrichmentState, "pending">;
@@ -207,8 +207,8 @@ function maybeExternalUrl(sourceUrl: unknown): string | null {
   }
 }
 
-function buildFeedMediaCandidates(article: ArticleEnrichmentRow): MediaAssetCandidate[] {
-  const entry = readRawPayloadEntry(article.rawPayloadJson);
+function buildFeedMediaCandidates(signal_candidate: SignalCandidateEnrichmentRow): MediaAssetCandidate[] {
+  const entry = readRawPayloadEntry(signal_candidate.rawPayloadJson);
   const assets: MediaAssetCandidate[] = [];
   const seen = new Set<string>();
 
@@ -236,7 +236,7 @@ function buildFeedMediaCandidates(article: ArticleEnrichmentRow): MediaAssetCand
       thumbnailUrl: null,
       mimeType,
       title: null,
-      altText: article.title || null,
+      altText: signal_candidate.title || null,
       widthPx: null,
       heightPx: null,
       durationSeconds: null,
@@ -263,8 +263,8 @@ function buildFeedMediaCandidates(article: ArticleEnrichmentRow): MediaAssetCand
   return assets;
 }
 
-function buildArticleImageCandidate(
-  article: ArticleEnrichmentRow,
+function buildSignalCandidateImageCandidate(
+  signal_candidate: SignalCandidateEnrichmentRow,
   extracted: ArticleData | null,
 ): MediaAssetCandidate[] {
   const sourceUrl = maybeExternalUrl(extracted?.image);
@@ -280,15 +280,15 @@ function buildArticleImageCandidate(
       canonicalUrl: toCanonicalUrl(sourceUrl),
       thumbnailUrl: null,
       mimeType: null,
-      title: extracted?.title ?? article.title ?? null,
-      altText: extracted?.title ?? article.title ?? null,
+      title: extracted?.title ?? signal_candidate.title ?? null,
+      altText: extracted?.title ?? signal_candidate.title ?? null,
       widthPx: null,
       heightPx: null,
       durationSeconds: null,
       embedHtml: null,
       metadataJson: {
         owner: "enrichment",
-        origin: "article_extractor.image",
+        origin: "signal_candidate_extractor.image",
       },
     },
   ];
@@ -318,7 +318,7 @@ function dedupeMediaCandidates(candidates: MediaAssetCandidate[]): MediaAssetCan
 function applySortOrder(candidates: MediaAssetCandidate[]): MediaAssetCandidate[] {
   const weight = (candidate: MediaAssetCandidate): number => {
     const origin = String(candidate.metadataJson.origin ?? "");
-    if (origin === "article_extractor.image") {
+    if (origin === "signal_candidate_extractor.image") {
       return 0;
     }
     if (candidate.mediaKind === "image") {
@@ -333,7 +333,7 @@ function applySortOrder(candidates: MediaAssetCandidate[]): MediaAssetCandidate[
   return [...candidates].sort((left, right) => weight(left) - weight(right));
 }
 
-function buildArticleParserOptions() {
+function buildSignalCandidateParserOptions() {
   return {
     descriptionTruncateLen: 320,
     descriptionLengthThreshold: 120,
@@ -350,7 +350,7 @@ function resolveStorageKind(sourceUrl: string): StorageKind {
   return "external_url";
 }
 
-export class ArticleEnrichmentService {
+export class SignalCandidateEnrichmentService {
   private readonly globalSemaphore: AsyncSemaphore;
   private readonly domainSemaphores = new Map<string, AsyncSemaphore>();
   private readonly domainNextAllowedAt = new Map<string, number>();
@@ -363,33 +363,33 @@ export class ArticleEnrichmentService {
     this.globalSemaphore = new AsyncSemaphore(config.enrichmentConcurrency);
   }
 
-  async enrichArticle(
+  async enrichSignalCandidate(
     docId: string,
-    request: ArticleEnrichmentRequest = {},
-  ): Promise<ArticleEnrichmentResult> {
-    const article = await this.loadArticle(docId);
-    if (!article) {
-      throw new Error(`Article ${docId} was not found for enrichment.`);
+    request: SignalCandidateEnrichmentRequest = {},
+  ): Promise<SignalCandidateEnrichmentResult> {
+    const signal_candidate = await this.loadSignalCandidate(docId);
+    if (!signal_candidate) {
+      throw new Error(`SignalCandidate ${docId} was not found for enrichment.`);
     }
 
     const force = request.force === true;
-    const feedMediaCandidates = buildFeedMediaCandidates(article);
-    const skipReason = this.resolveSkipReason(article, force);
+    const feedMediaCandidates = buildFeedMediaCandidates(signal_candidate);
+    const skipReason = this.resolveSkipReason(signal_candidate, force);
 
     let extracted: ArticleData | null = null;
     let extractionError: string | null = null;
 
     if (skipReason === null) {
       try {
-        const guardedArticleUrl = await validateAcquisitionUrl(article.url, { resolveDns: true });
-        if (!guardedArticleUrl.url) {
-          throw new Error(guardedArticleUrl.error ?? "Article enrichment URL is not allowed.");
+        const guardedSignalCandidateUrl = await validateAcquisitionUrl(signal_candidate.url, { resolveDns: true });
+        if (!guardedSignalCandidateUrl.url) {
+          throw new Error(guardedSignalCandidateUrl.error ?? "SignalCandidate enrichment URL is not allowed.");
         }
-        const articleUrl = guardedArticleUrl.url;
-        extracted = await this.withExternalFetchSlot(articleUrl, async () =>
-          extractArticle(
-            articleUrl,
-            buildArticleParserOptions(),
+        const signalCandidateUrl = guardedSignalCandidateUrl.url;
+        extracted = await this.withExternalFetchSlot(signalCandidateUrl, async () =>
+          extractSignalCandidate(
+            signalCandidateUrl,
+            buildSignalCandidateParserOptions(),
             {
               headers: {
                 "user-agent": this.config.enrichmentUserAgent,
@@ -401,12 +401,12 @@ export class ArticleEnrichmentService {
       } catch (error) {
         extractionError =
           error instanceof Error ? error.message : "Unknown enrichment extraction failure.";
-        this.logger.warn({ error, docId }, "Article enrichment extract failed.");
+        this.logger.warn({ error, docId }, "SignalCandidate enrichment extract failed.");
       }
     }
 
     const persisted = await this.persistEnrichmentOutcome(
-      article,
+      signal_candidate,
       {
         force,
         extracted,
@@ -419,8 +419,8 @@ export class ArticleEnrichmentService {
     return persisted;
   }
 
-  private async loadArticle(docId: string): Promise<ArticleEnrichmentRow | null> {
-    const result = await this.pool.query<ArticleEnrichmentRow>(
+  private async loadSignalCandidate(docId: string): Promise<SignalCandidateEnrichmentRow | null> {
+    const result = await this.pool.query<SignalCandidateEnrichmentRow>(
       `
         select
           a.doc_id::text as "docId",
@@ -436,7 +436,7 @@ export class ArticleEnrichmentService {
           sc.name as "channelName",
           sc.enrichment_enabled as "enrichmentEnabled",
           sc.enrichment_min_body_length as "enrichmentMinBodyLength"
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
         where a.doc_id = $1
         limit 1
@@ -448,19 +448,19 @@ export class ArticleEnrichmentService {
   }
 
   private resolveSkipReason(
-    article: ArticleEnrichmentRow,
+    signal_candidate: SignalCandidateEnrichmentRow,
     force: boolean,
   ): string | null {
     if (!this.config.enrichmentEnabled) {
       return "global_disabled";
     }
 
-    if (!force && !article.enrichmentEnabled) {
+    if (!force && !signal_candidate.enrichmentEnabled) {
       return "channel_disabled";
     }
 
     try {
-      const url = new URL(article.url);
+      const url = new URL(signal_candidate.url);
       if (!["http:", "https:"].includes(url.protocol)) {
         return "unsupported_url";
       }
@@ -472,8 +472,8 @@ export class ArticleEnrichmentService {
       return null;
     }
 
-    const currentLength = normalizePlainText(article.body).length;
-    if (currentLength >= article.enrichmentMinBodyLength) {
+    const currentLength = normalizePlainText(signal_candidate.body).length;
+    if (currentLength >= signal_candidate.enrichmentMinBodyLength) {
       return "body_long_enough";
     }
 
@@ -519,7 +519,7 @@ export class ArticleEnrichmentService {
   }
 
   private async resolveOEmbedCandidates(
-    article: ArticleEnrichmentRow,
+    signal_candidate: SignalCandidateEnrichmentRow,
     extracted: ArticleData | null,
   ): Promise<MediaAssetCandidate[]> {
     if (!extracted) {
@@ -542,7 +542,7 @@ export class ArticleEnrichmentService {
       }
       seen.add(key);
       return true;
-    }).slice(0, this.config.enrichmentMaxOembedPerArticle);
+    }).slice(0, this.config.enrichmentMaxOembedPerSignalCandidate);
 
     const assets: MediaAssetCandidate[] = [];
 
@@ -565,12 +565,12 @@ export class ArticleEnrichmentService {
             },
           ),
         );
-        const mapped = this.mapOEmbedCandidate(article, candidateFetchUrl, oembed);
+        const mapped = this.mapOEmbedCandidate(signal_candidate, candidateFetchUrl, oembed);
         if (mapped) {
           assets.push(mapped);
         }
       } catch (error) {
-        this.logger.warn({ error, candidateUrl, docId: article.docId }, "oEmbed resolution failed.");
+        this.logger.warn({ error, candidateUrl, docId: signal_candidate.docId }, "oEmbed resolution failed.");
       }
     }
 
@@ -578,7 +578,7 @@ export class ArticleEnrichmentService {
   }
 
   private mapOEmbedCandidate(
-    article: ArticleEnrichmentRow,
+    signal_candidate: SignalCandidateEnrichmentRow,
     candidateUrl: string,
     data: OembedData,
   ): MediaAssetCandidate | null {
@@ -595,8 +595,8 @@ export class ArticleEnrichmentService {
         canonicalUrl: toCanonicalUrl(candidateUrl),
         thumbnailUrl: maybeExternalUrl(data.thumbnail_url) ?? null,
         mimeType: null,
-        title: readOptionalString(data.title) ?? article.title ?? null,
-        altText: readOptionalString(data.title) ?? article.title ?? null,
+        title: readOptionalString(data.title) ?? signal_candidate.title ?? null,
+        altText: readOptionalString(data.title) ?? signal_candidate.title ?? null,
         widthPx: sanitizeOptionalPositiveInt((richData as { width?: unknown }).width),
         heightPx: sanitizeOptionalPositiveInt((richData as { height?: unknown }).height),
         durationSeconds: null,
@@ -625,8 +625,8 @@ export class ArticleEnrichmentService {
         canonicalUrl: toCanonicalUrl(imageUrl),
         thumbnailUrl: maybeExternalUrl(data.thumbnail_url) ?? null,
         mimeType: null,
-        title: readOptionalString(data.title) ?? article.title ?? null,
-        altText: readOptionalString(data.title) ?? article.title ?? null,
+        title: readOptionalString(data.title) ?? signal_candidate.title ?? null,
+        altText: readOptionalString(data.title) ?? signal_candidate.title ?? null,
         widthPx: sanitizeOptionalPositiveInt((photo as { width?: unknown }).width),
         heightPx: sanitizeOptionalPositiveInt((photo as { height?: unknown }).height),
         durationSeconds: null,
@@ -645,7 +645,7 @@ export class ArticleEnrichmentService {
   }
 
   private async persistEnrichmentOutcome(
-    article: ArticleEnrichmentRow,
+    signal_candidate: SignalCandidateEnrichmentRow,
     input: {
       force: boolean;
       extracted: ArticleData | null;
@@ -653,15 +653,15 @@ export class ArticleEnrichmentService {
       feedMediaCandidates: MediaAssetCandidate[];
       skipReason: string | null;
     },
-  ): Promise<ArticleEnrichmentResult> {
-    const currentBody = normalizePlainText(article.body);
+  ): Promise<SignalCandidateEnrichmentResult> {
+    const currentBody = normalizePlainText(signal_candidate.body);
     const extractedContentHtml = readOptionalString(input.extracted?.content);
     const extractedPlaintext = extractedContentHtml
       ? normalizePlainText(extractedContentHtml)
       : "";
-    const feedEntry = readRawPayloadEntry(article.rawPayloadJson);
+    const feedEntry = readRawPayloadEntry(signal_candidate.rawPayloadJson);
     const feedContentHtml = readOptionalString(feedEntry.contentEncoded);
-    const bodyThreshold = article.enrichmentMinBodyLength;
+    const bodyThreshold = signal_candidate.enrichmentMinBodyLength;
     const bodyReplaced =
       Boolean(extractedPlaintext) &&
       (input.force ||
@@ -678,22 +678,22 @@ export class ArticleEnrichmentService {
       dedupeMediaCandidates(
         [
           ...input.feedMediaCandidates,
-          ...buildArticleImageCandidate(article, input.extracted),
-          ...(await this.resolveOEmbedCandidates(article, input.extracted)),
+          ...buildSignalCandidateImageCandidate(signal_candidate, input.extracted),
+          ...(await this.resolveOEmbedCandidates(signal_candidate, input.extracted)),
         ],
       ),
     );
 
     const persistInput: EnrichmentPersistInput = {
       state,
-      body: bodyReplaced ? extractedPlaintext : article.body,
+      body: bodyReplaced ? extractedPlaintext : signal_candidate.body,
       bodyReplaced,
       fullContentHtml:
         state === "enriched"
           ? extractedContentHtml
           : state === "skipped"
             ? feedContentHtml
-            : article.fullContentHtml,
+            : signal_candidate.fullContentHtml,
       extractedDescription:
         state === "enriched" ? readOptionalString(input.extracted?.description) : null,
       extractedAuthor:
@@ -708,7 +708,7 @@ export class ArticleEnrichmentService {
         state === "enriched" ? sanitizeOptionalTimestamptzInput(input.extracted?.published) : null,
       extractedSourceName:
         state === "enriched"
-          ? readOptionalString(input.extracted?.source) ?? article.channelName
+          ? readOptionalString(input.extracted?.source) ?? signal_candidate.channelName
           : null,
       mediaAssets,
     };
@@ -718,7 +718,7 @@ export class ArticleEnrichmentService {
       await client.query("begin");
       await client.query(
         `
-          update articles
+          update signal_candidates
           set
             enrichment_state = $2,
             enriched_at = case
@@ -738,7 +738,7 @@ export class ArticleEnrichmentService {
           where doc_id = $1
         `,
         [
-          article.docId,
+          signal_candidate.docId,
           persistInput.state,
           persistInput.body,
           persistInput.fullContentHtml,
@@ -754,7 +754,7 @@ export class ArticleEnrichmentService {
 
       const mediaAssetCount = await this.replaceMediaAssets(
         client,
-        article.docId,
+        signal_candidate.docId,
         persistInput.mediaAssets,
       );
 
@@ -762,7 +762,7 @@ export class ArticleEnrichmentService {
 
       return {
         status: persistInput.state,
-        doc_id: article.docId,
+        doc_id: signal_candidate.docId,
         enrichment_state: persistInput.state,
         body_replaced: persistInput.bodyReplaced,
         media_asset_count: mediaAssetCount,
@@ -783,7 +783,7 @@ export class ArticleEnrichmentService {
   ): Promise<number> {
     await client.query(
       `
-        delete from article_media_assets
+        delete from signal_candidate_media_assets
         where doc_id = $1
       `,
       [docId],
@@ -792,7 +792,7 @@ export class ArticleEnrichmentService {
     if (assets.length === 0) {
       await client.query(
         `
-          update articles
+          update signal_candidates
           set
             has_media = false,
             primary_media_asset_id = null,
@@ -810,7 +810,7 @@ export class ArticleEnrichmentService {
     for (const [index, asset] of assets.entries()) {
       const result = await client.query<{ assetId: string }>(
         `
-          insert into article_media_assets (
+          insert into signal_candidate_media_assets (
             doc_id,
             media_kind,
             storage_kind,
@@ -875,7 +875,7 @@ export class ArticleEnrichmentService {
 
     await client.query(
       `
-        update articles
+        update signal_candidates
         set
           has_media = true,
           primary_media_asset_id = $2,

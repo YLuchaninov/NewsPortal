@@ -201,7 +201,7 @@ test("parseBulkRssAdminChannelInputs rejects empty payloads", () => {
   );
 });
 
-test("resolveRssChannelDeleteMode archives channels with historical articles", () => {
+test("resolveRssChannelDeleteMode archives channels with historical signal_candidates", () => {
   assert.equal(resolveRssChannelDeleteMode(0), "delete");
   assert.equal(resolveRssChannelDeleteMode(1), "archive");
   assert.equal(resolveRssChannelDeleteMode(24), "archive");

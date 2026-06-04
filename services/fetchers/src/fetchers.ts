@@ -20,7 +20,7 @@ import {
   classifyDuplicatePreflightInputs,
   FetcherPersistenceRepository,
   type ChannelPollCompletion,
-  type PersistArticleInput,
+  type PersistSignalCandidateInput,
   type PersistResourceInput,
   type SourceChannelRow
 } from "./fetcher-persistence";
@@ -40,8 +40,8 @@ interface FetcherState {
   lastChannelId: string | null;
   lastError: string | null;
   fetchedChannelCount: number;
-  ingestedArticleCount: number;
-  duplicateArticleCount: number;
+  ingestedSignalCandidateCount: number;
+  duplicateSignalCandidateCount: number;
 }
 
 export { classifyDuplicatePreflightInputs };
@@ -80,8 +80,8 @@ class FetcherService {
     lastChannelId: null,
     lastError: null,
     fetchedChannelCount: 0,
-    ingestedArticleCount: 0,
-    duplicateArticleCount: 0
+    ingestedSignalCandidateCount: 0,
+    duplicateSignalCandidateCount: 0
   };
   private readonly crawlPolicyCache: CrawlPolicyCacheService;
   private readonly persistence: FetcherPersistenceRepository;
@@ -105,8 +105,8 @@ class FetcherService {
       database: "ok",
       isPolling: String(this.state.isPolling),
       fetchedChannelCount: String(this.state.fetchedChannelCount),
-      ingestedArticleCount: String(this.state.ingestedArticleCount),
-      duplicateArticleCount: String(this.state.duplicateArticleCount),
+      ingestedSignalCandidateCount: String(this.state.ingestedSignalCandidateCount),
+      duplicateSignalCandidateCount: String(this.state.duplicateSignalCandidateCount),
       lastPollCompletedAt: this.state.lastPollCompletedAt ?? "never"
     });
   }
@@ -187,7 +187,7 @@ class FetcherService {
                 httpStatus: null,
                 retryAfterSeconds: null,
                 fetchedItemCount: 0,
-                newArticleCount: 0,
+                newSignalCandidateCount: 0,
                 duplicateSuppressedCount: 0,
                 cursorChanged: false,
                 errorMessage: message,
@@ -235,7 +235,7 @@ class FetcherService {
           httpStatus: null,
           retryAfterSeconds: null,
           fetchedItemCount: 0,
-          newArticleCount: 0,
+          newSignalCandidateCount: 0,
           duplicateSuppressedCount: 0,
           cursorChanged: false,
           errorMessage: "YouTube is future-ready only in the local MVP.",
@@ -282,8 +282,8 @@ class FetcherService {
       persistInputsWithPreflight: this.persistInputsWithPreflight.bind(this),
       markChannelSuccess: (successChannel, completion) =>
         this.markChannelSuccess(successChannel, this.enrichPollCompletion(completion, resolved)),
-      addDuplicateArticleCount: (count) => {
-        this.state.duplicateArticleCount += count;
+      addDuplicateSignalCandidateCount: (count) => {
+        this.state.duplicateSignalCandidateCount += count;
       },
       adapterStrategy,
       adapterMaxEntryAgeHours:
@@ -350,9 +350,9 @@ class FetcherService {
 
   private async persistInputsWithPreflight(
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ): Promise<{ ingestedCount: number; duplicateCount: number }> {
-    return this.persistence.persistArticlesWithPreflight(channelId, inputs);
+    return this.persistence.persistSignalCandidatesWithPreflight(channelId, inputs);
   }
 
   private async persistWebsiteResourcesWithPreflight(
@@ -368,8 +368,8 @@ class FetcherService {
   ): Promise<void> {
     await this.persistence.markChannelSuccess(channel, completion);
     this.state.fetchedChannelCount += 1;
-    this.state.ingestedArticleCount += completion.newArticleCount;
-    this.state.duplicateArticleCount += completion.duplicateSuppressedCount;
+    this.state.ingestedSignalCandidateCount += completion.newSignalCandidateCount;
+    this.state.duplicateSignalCandidateCount += completion.duplicateSuppressedCount;
     this.state.lastError = null;
   }
 

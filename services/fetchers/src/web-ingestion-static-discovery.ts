@@ -215,7 +215,7 @@ export async function discoverFromFeeds(input: {
           freshnessMarkerType: entry.publishedAt ? "timestamp" : null,
           freshnessMarkerValue: entry.publishedAt,
           discoverySource: "feed",
-          structuredTypes: ["Article"],
+          structuredTypes: ["SignalCandidate"],
           rawSignals: {
             feedUrl,
           },

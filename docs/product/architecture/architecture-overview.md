@@ -44,7 +44,7 @@ PostgreSQL хранит бизнес-истину. Redis, BullMQ, HNSW-инде�
 - `email_imap` — mailbox ingest для press inboxes и sender filters.
 - `youtube` — значение в модели provider types, без полноценного operator runtime в текущем baseline.
 
-Website-источники важны отдельно: `web_resources` не являются “почти статьями” и не должны тихо превращаться в RSS. Editorial-compatible resources могут проецироваться в `articles`, но resource truth остается видимой в admin `Resources`.
+Website-источники важны отдельно: `web_resources` не являются “почти статьями” и не должны тихо превращаться в RSS. Editorial-compatible resources могут проецироваться в `signal_candidates`, но resource truth остается видимой в admin `Resources`.
 
 Adapter selection для source channels идет через `ingress_adapter_catalog` и `source_channel_adapter_binding`. Старые RSS/API hints в `config_json` могут объяснять историю канала, но не должны быть текущей runtime truth, если binding уже есть.
 
@@ -86,7 +86,7 @@ Sequence runtime исполняет зарегистрированные TaskPlu
 
 Оператору важны не внутренние классы, а видимые точки контроля:
 
-- `/admin` — dashboard, channels, rules, articles, clusters, resources, reindex, observability.
+- `/admin` — dashboard, channels, rules, signal_candidates, clusters, resources, reindex, observability.
 - `/admin/discovery` — vNext runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback.
 - `/maintenance/*` FastAPI endpoints — read/debug/maintenance контур.
 - MCP service — безопасный control-plane для внешних operator tools.

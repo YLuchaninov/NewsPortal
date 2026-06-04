@@ -186,8 +186,8 @@ function readSelectionGuidance(resourceLike: unknown): { tone: string; summary: 
   };
 }
 
-const projectedOnPage = resources.items.filter((item) => item.projected_article_id).length;
-const resourceOnlyOnPage = resources.items.filter((item) => !item.projected_article_id).length;
+const projectedOnPage = resources.items.filter((item) => item.projected_signal_candidate_id).length;
+const resourceOnlyOnPage = resources.items.filter((item) => !item.projected_signal_candidate_id).length;
 const failedOnPage = resources.items.filter((item) => String(item.extraction_state ?? "") === "failed").length;
 const selectedResourcePreview =
   resources.items.find((item) => String(item.resource_id ?? "") === selectedResourceId) ?? resources.items[0] ?? null;
@@ -221,7 +221,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
         <h1 class="mt-2 text-2xl font-semibold tracking-tight">Website resources</h1>
         <p class="mt-2 text-sm leading-6 text-muted-foreground">
           Browse the persisted <code class="rounded bg-muted px-1 py-0.5">web_resources</code> lane directly. Editorial rows can project into
-          articles, while non-editorial resources stay visible here instead of disappearing behind an article-only workflow.
+          signal candidates, while non-editorial resources stay visible here instead of disappearing behind a signal candidate-only workflow.
         </p>
         {selectedChannel && (
           <p class="mt-2 text-sm text-muted-foreground">
@@ -287,7 +287,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
           <span class="text-xs font-medium">Projection</span>
           <select name="projection" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="all" selected={selectedProjection === "all"}>All resources</option>
-            <option value="projected" selected={selectedProjection === "projected"}>Projected to article</option>
+            <option value="projected" selected={selectedProjection === "projected"}>Projected to signal_candidate</option>
             <option value="resource_only" selected={selectedProjection === "resource_only"}>Resource-only</option>
           </select>
         </label>
@@ -359,8 +359,8 @@ function resolveResourcePreviewHref(resourceId: string): string {
                 </tr>
               ) : resources.items.map((resource) => {
                 const previewHref = resolveResourcePreviewHref(String(resource.resource_id ?? ""));
-                const projectedArticleHref = resource.projected_article_id
-                  ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
+                const projectedSignalCandidateHref = resource.projected_signal_candidate_id
+                  ? appPath(`/signal-candidates/${encodeURIComponent(String(resource.projected_signal_candidate_id))}`)
                   : null;
                 const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
                 const selectionMode = String(resource.selection_mode ?? "pending");
@@ -423,11 +423,11 @@ function resolveResourcePreviewHref(resourceId: string): string {
                     </td>
                     <td class="px-5 py-4 align-top text-sm text-muted-foreground">
                       <div class="admin-table-cell-stack">
-                        {resource.projected_article_id ? (
+                        {resource.projected_signal_candidate_id ? (
                           <div class="admin-table-meta">
                             <p class="font-medium text-foreground">Projected</p>
-                            <a href={projectedArticleHref ?? "#"} class="inline-flex text-xs text-primary hover:underline">
-                              {String(resource.projected_article_title ?? resource.projected_article_id)}
+                            <a href={projectedSignalCandidateHref ?? "#"} class="inline-flex text-xs text-primary hover:underline">
+                              {String(resource.projected_signal_candidate_title ?? resource.projected_signal_candidate_id)}
                             </a>
                           </div>
                         ) : (
@@ -473,9 +473,9 @@ function resolveResourcePreviewHref(resourceId: string): string {
                         >
                           Preview
                         </a>
-                        {projectedArticleHref && (
-                          <a href={projectedArticleHref} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
-                            Article
+                        {projectedSignalCandidateHref && (
+                          <a href={projectedSignalCandidateHref} class="inline-flex h-8 min-w-[7.5rem] items-center justify-center rounded-md border border-input px-3 text-xs font-medium transition-colors hover:bg-accent">
+                            SignalCandidate
                           </a>
                         )}
                         {sourceHref && (
@@ -540,7 +540,7 @@ function resolveResourcePreviewHref(resourceId: string): string {
               <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                 <p class="text-sm font-medium">Projection</p>
                 <p class="mt-2 text-sm text-muted-foreground">
-                  {selectedResourcePreview.projected_article_id ? "Projected to article" : "Resource-only"}
+                  {selectedResourcePreview.projected_signal_candidate_id ? "Projected to signal_candidate" : "Resource-only"}
                 </p>
                 <p class="mt-2 text-xs text-muted-foreground">
                   {String(selectedResourcePreview.projection_error ?? "Projection diagnostics are clean or not required.")}

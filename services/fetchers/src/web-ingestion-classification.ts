@@ -42,8 +42,8 @@ function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
     "news",
     "blog",
     "blogs",
-    "article",
-    "articles",
+    "signal_candidate",
+    "signal_candidates",
     "story",
     "stories",
     "post",
@@ -96,8 +96,8 @@ function inferResourceKindsFromPath(pathname: string): ResourceKind[] {
     "news",
     "blog",
     "blogs",
-    "article",
-    "articles",
+    "signal_candidate",
+    "signal_candidates",
     "story",
     "stories",
     "post",
@@ -232,7 +232,7 @@ export function classifyResourceCandidate(input: {
     (Boolean(input.publishedAtHint) || summaryText.length >= 80)
   ) {
     scores.set("editorial", (scores.get("editorial") ?? 0) + 3);
-    reasons.push("collection:article_card");
+    reasons.push("collection:signal_candidate_card");
   }
   if (/\b(press release|announc(?:e|es|ing)|statement|policy update|launch(?:es|ed)?|introduc(?:e|es|ed)|what'?s new)\b/i.test(combinedText)) {
     scores.set("editorial", (scores.get("editorial") ?? 0) + 2);

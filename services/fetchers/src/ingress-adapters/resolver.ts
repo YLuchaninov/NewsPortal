@@ -127,7 +127,7 @@ function resolveProviderDefault(channel: SourceChannelRow): ResolvedIngressAdapt
     adapterKey,
     runtimeKind: adapterKey === "api.generic_json_mapping" ? "declarative" : "builtin",
     providerType: channel.providerType,
-    outputMode: channel.providerType === "website" ? "web_resources" : "articles",
+    outputMode: channel.providerType === "website" ? "web_resources" : "signal_candidates",
     selectionMode: "provider_default",
     bindingConfigJson: {},
     catalogRecipeJson: {},

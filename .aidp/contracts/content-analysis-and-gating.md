@@ -8,7 +8,7 @@
 
 ## Subject model
 
-- Supported runtime target subject types are `article`, `web_resource` and `story_cluster`. `canonical_document` is reserved/future for read compatibility and is not a v1 backfill target.
+- Supported runtime target subject types are `signal_candidate`, `web_resource` and `story_cluster`. `canonical_document` is reserved/future for read compatibility and is not a v1 backfill target.
 - `subject_id` must reference the owner table id for the subject type.
 - `canonical_document_id` and `source_channel_id` are denormalized explain/query aids only; they must not become alternate primary keys.
 - Analysis rows are additive durable facts in PostgreSQL and may be replayed/backfilled.
@@ -29,7 +29,7 @@ PostgreSQL remains source of truth. Queue context, SDK response fields, UI chips
 - Stage 1 ships deterministic heuristic NER as `provider=heuristic`, `model_key=signalops-titlecase-v1`.
 - Stage 1 ships system-interest label projection from existing `interest_filter_results`; it does not re-run interest matching.
 - Stage 1 ships a default recent-content gate policy as `dry_run`, not enforce-by-default.
-- Stage 2 ships queued content-analysis backfill through `reindex_jobs.job_kind = content_analysis`; it replays existing articles/resources, writes progress into `options_json.progress` and skips retro notifications.
+- Stage 2 ships queued content-analysis backfill through `reindex_jobs.job_kind = content_analysis`; it replays existing signal_candidates/resources, writes progress into `options_json.progress` and skips retro notifications.
 - Stage 2 ships admin policy create/update forms. Updates to mode, combiner or `policy_json` create a new policy version and deactivate the previous one.
 - Stage 3 ships local deterministic `sentiment` and `category` modules as safe observe-mode signals. They persist `content_analysis_results` and queryable `content_labels` with label types `sentiment`, `tone`, `risk` and `taxonomy`.
 - Stage 4 ships `cluster_summary` projection for existing `story_clusters`. It records verification counts, source-family context, top entities/places and member canonical documents without changing clustering thresholds or feed visibility.
@@ -122,7 +122,7 @@ Policy modes:
 - FastAPI `/maintenance/content-analysis`, `/maintenance/content-entities`, `/maintenance/content-labels`, `/maintenance/content-filter-policies` and `/maintenance/content-filter-results` expose the layer.
 - FastAPI `/maintenance/content-analysis-policies` exposes analysis module policy configuration.
 - FastAPI `/maintenance/content-analysis/backfill` queues safe replay work through the maintenance job/outbox path.
-- Article/resource/content detail responses may attach `analysis_summary` as a compact projection.
+- SignalCandidate/resource/content detail responses may attach `analysis_summary` as a compact projection.
 - Admin surfaces may show analysis evidence and policy lists, but must keep policy writes bounded and auditable when added.
 - MCP tools are explicit namespaced operator tools: `content_analysis.*`, `content_analysis_policies.*`, `content_entities.*`, `content_labels.*`, `content_filter_policies.*`, `content_filter_results.*`.
 - MCP mutating policy tools require `write.sequences` and must write audit entries.

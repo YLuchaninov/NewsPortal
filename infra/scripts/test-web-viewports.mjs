@@ -133,7 +133,7 @@ async function verifyMobileMenuNavigation(page) {
 async function runViewportScenario({
   viewport,
   webCookie,
-  articleTitle,
+  signalCandidateTitle,
   contentItemId,
   interestDescription,
 }) {
@@ -160,10 +160,10 @@ async function runViewportScenario({
 
     const page = await context.newPage();
     log(`Running ${viewport.name} viewport checks.`);
-    const articleSearchParam = encodeURIComponent(articleTitle);
+    const signalCandidateSearchParam = encodeURIComponent(signalCandidateTitle);
 
-    await openPage(page, `http://127.0.0.1:4321/?q=${articleSearchParam}`, "SignalOps");
-    await waitForVisible(page.getByText(articleTitle), `collection article title on ${viewport.name}`);
+    await openPage(page, `http://127.0.0.1:4321/?q=${signalCandidateSearchParam}`, "SignalOps");
+    await waitForVisible(page.getByText(signalCandidateTitle), `collection signal_candidate title on ${viewport.name}`);
     await assertVisibleAction(
       page,
       page.getByRole("button", { name: /Save|Unsave/ }),
@@ -179,8 +179,8 @@ async function runViewportScenario({
       await page.waitForURL("**/matches");
     }
 
-    await openPage(page, `http://127.0.0.1:4321/matches?q=${articleSearchParam}`, "My Matches");
-    await waitForVisible(page.getByText(articleTitle), `matches article title on ${viewport.name}`);
+    await openPage(page, `http://127.0.0.1:4321/matches?q=${signalCandidateSearchParam}`, "My Matches");
+    await waitForVisible(page.getByText(signalCandidateTitle), `matches signal_candidate title on ${viewport.name}`);
     await assertVisibleAction(
       page,
       page.getByRole("button", { name: /Save|Unsave/ }),
@@ -190,7 +190,7 @@ async function runViewportScenario({
     await openPage(
       page,
       `http://127.0.0.1:4321/content/${encodeURIComponent(contentItemId)}`,
-      articleTitle
+      signalCandidateTitle
     );
     await assertVisibleAction(
       page,
@@ -209,7 +209,7 @@ async function runViewportScenario({
     );
 
     await openPage(page, "http://127.0.0.1:4321/saved", "Saved");
-    await waitForVisible(page.getByText(articleTitle), `saved article title on ${viewport.name}`);
+    await waitForVisible(page.getByText(signalCandidateTitle), `saved signal_candidate title on ${viewport.name}`);
     await assertVisibleAction(
       page,
       page.getByRole("button", { name: /Preview/ }),
@@ -221,7 +221,7 @@ async function runViewportScenario({
       `http://127.0.0.1:4321/saved/digest?item=${encodeURIComponent(contentItemId)}`,
       "Saved Digest Preview"
     );
-    await waitForVisible(page.getByText(articleTitle), `saved digest article title on ${viewport.name}`);
+    await waitForVisible(page.getByText(signalCandidateTitle), `saved digest signal_candidate title on ${viewport.name}`);
     await assertVisibleAction(
       page,
       page.getByRole("link", { name: "Download HTML" }),
@@ -234,7 +234,7 @@ async function runViewportScenario({
     );
 
     await openPage(page, "http://127.0.0.1:4321/following", "Following");
-    await waitForVisible(page.getByText(articleTitle), `following article title on ${viewport.name}`);
+    await waitForVisible(page.getByText(signalCandidateTitle), `following signal_candidate title on ${viewport.name}`);
 
     await openPage(page, "http://127.0.0.1:4321/interests", "My Interests");
     await waitForVisible(
@@ -256,7 +256,7 @@ async function runViewportScenario({
     );
 
     await openPage(page, "http://127.0.0.1:4321/notifications", "Notification History");
-    await waitForVisible(page.getByText(articleTitle), `notification article title on ${viewport.name}`);
+    await waitForVisible(page.getByText(signalCandidateTitle), `notification signal_candidate title on ${viewport.name}`);
     await assertVisibleAction(
       page,
       page.locator('button[title="Helpful"]'),
@@ -283,7 +283,7 @@ async function main() {
   const allowlistEntries = readAllowlistEntries(env);
   const adminEmail = selectAdminEmail(allowlistEntries, runId, { prefix: "viewport-admin" });
   const adminPassword = `SignalOps!${runId}`;
-  const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
+  const signalCandidateTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
   const interestDescription = "AI policy changes in the European Union and Poland";
   const notificationEmail = `viewport-user-${runId}@example.test`;
   let adminCreated = false;
@@ -438,15 +438,15 @@ async function main() {
       channelId
     );
 
-    const articleRow = await waitFor(
-      "viewport smoke article row",
+    const signalCandidateRow = await waitFor(
+      "viewport smoke signal_candidate row",
       async () => {
         const row = queryPostgres(
           env,
           `
             select doc_id::text, processing_state
-            from articles
-            where title = ${sqlLiteral(articleTitle)}
+            from signal_candidates
+            where title = ${sqlLiteral(signalCandidateTitle)}
             order by ingested_at desc
             limit 1;
           `
@@ -455,11 +455,11 @@ async function main() {
       },
       (row) => Array.isArray(row) && row.length === 2
     );
-    const docId = articleRow[0];
-    const contentItemId = `editorial:${docId}`;
+    const docId = signalCandidateRow[0];
+    const contentItemId = `signal_candidate:${docId}`;
 
     await waitFor(
-      "viewport article criteria pipeline settled",
+      "viewport signal_candidate criteria pipeline settled",
       async () =>
         queryPostgresInt(
           env,
@@ -485,19 +485,19 @@ async function main() {
     firstResultLine(queryPostgres(
       env,
       `
-        with article_cluster as (
+        with signal_candidate_cluster as (
           select
             doc_id,
             coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
             title,
             published_at
-          from articles
+          from signal_candidates
           where doc_id = ${sqlLiteral(docId)}::uuid
         ),
         upsert_cluster as (
           insert into event_clusters (
             cluster_id,
-            article_count,
+            signal_candidate_count,
             primary_title,
             min_published_at,
             max_published_at
@@ -508,10 +508,10 @@ async function main() {
             title,
             published_at,
             published_at
-          from article_cluster
+          from signal_candidate_cluster
           on conflict (cluster_id) do update
           set
-            article_count = greatest(event_clusters.article_count, 1),
+            signal_candidate_count = greatest(event_clusters.signal_candidate_count, 1),
             primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
             min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
             max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
@@ -521,25 +521,25 @@ async function main() {
         upsert_member as (
           insert into event_cluster_members (cluster_id, doc_id)
           select cluster_id, doc_id
-          from article_cluster
+          from signal_candidate_cluster
           on conflict (doc_id) do update
           set cluster_id = excluded.cluster_id
           returning doc_id
         )
-        update articles a
+        update signal_candidates a
         set
           processing_state = 'matched',
           visibility_state = 'visible',
           canonical_doc_id = null,
-          family_id = article_cluster.doc_id,
+          family_id = signal_candidate_cluster.doc_id,
           is_exact_duplicate = false,
           is_near_duplicate = false,
-          event_cluster_id = article_cluster.cluster_id,
+          event_cluster_id = signal_candidate_cluster.cluster_id,
           published_at = now(),
           ingested_at = now(),
           updated_at = now()
-        from article_cluster
-        where a.doc_id = article_cluster.doc_id;
+        from signal_candidate_cluster
+        where a.doc_id = signal_candidate_cluster.doc_id;
 
         insert into system_feed_results (
           doc_id,
@@ -645,7 +645,7 @@ async function main() {
           0.97,
           'notify',
           jsonb_build_object('source', 'web-viewports-seed', 'runId', ${sqlLiteral(runId)})
-        from articles a
+        from signal_candidates a
         where a.doc_id = ${sqlLiteral(docId)}::uuid
         on conflict (doc_id, interest_id) do update
         set
@@ -687,13 +687,13 @@ async function main() {
     ));
 
     await waitFor(
-      "matched article visibility for viewport smoke",
+      "matched signal_candidate visibility for viewport smoke",
       async () =>
         queryPostgres(
           env,
           `
             select processing_state
-            from articles
+            from signal_candidates
             where doc_id = ${sqlLiteral(docId)};
           `
         ),
@@ -703,7 +703,7 @@ async function main() {
       "system-selected collection row for viewport smoke",
       async () =>
         fetchJson(
-          `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(articleTitle)}`
+          `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(signalCandidateTitle)}`
         ),
       (payload) =>
         Array.isArray(payload?.items) &&
@@ -763,7 +763,7 @@ async function main() {
       firstResultLine(queryPostgres(
         env,
         `
-          update articles
+          update signal_candidates
           set
             processing_state = 'matched',
             published_at = now(),
@@ -824,7 +824,7 @@ async function main() {
             0.97,
             'notify',
             jsonb_build_object('source', 'web-viewports-seed-reassert', 'runId', ${sqlLiteral(runId)})
-          from articles a
+          from signal_candidates a
           where a.doc_id = ${sqlLiteral(docId)}::uuid
           on conflict (doc_id, interest_id) do update
           set
@@ -844,7 +844,7 @@ async function main() {
       await runViewportScenario({
         viewport,
         webCookie,
-        articleTitle,
+        signalCandidateTitle,
         contentItemId,
         interestDescription,
       });
@@ -857,7 +857,7 @@ async function main() {
           userId,
           channelId,
           contentItemId,
-          articleTitle,
+          signalCandidateTitle,
           viewports: VIEWPORTS.map((viewport) => viewport.name),
         },
         null,

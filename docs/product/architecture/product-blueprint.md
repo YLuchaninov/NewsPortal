@@ -39,7 +39,7 @@ PostgreSQL владеет долговечными бизнес-данными:
 - users, roles, sessions and preferences;
 - source channels and provider config;
 - raw/document observations;
-- articles and website resources;
+- signal_candidates and website resources;
 - deduplicated documents, clusters and verification;
 - selection, matching and notification rows;
 - Discovery vNext runs, artifacts, candidates, source inventory, policies, adapter backlog, replay and rollback;
@@ -61,9 +61,9 @@ PostgreSQL владеет долговечными бизнес-данными:
 
 `apps/web` показывает system-selected collection, personalized matches, saved/following surfaces и notification-related user flows.
 
-`apps/admin` дает оператору channels, rules/templates, articles, clusters, resources, reindex, discovery, observability и BFF writes.
+`apps/admin` дает оператору channels, rules/templates, signal_candidates, clusters, resources, reindex, discovery, observability и BFF writes.
 
-`services/fetchers` опрашивает источники, нормализует provider-specific вход, сохраняет observations/resources/articles и пишет outbox events.
+`services/fetchers` опрашивает источники, нормализует provider-specific вход, сохраняет observations/resources/signal-candidates и пишет outbox events.
 
 `services/relay` читает `outbox_events`, применяет routing contracts и публикует тонкие jobs в BullMQ.
 
@@ -79,7 +79,7 @@ PostgreSQL владеет долговечными бизнес-данными:
 
 Система работает не только со “статьями”.
 
-RSS и editorial website rows могут материализоваться как `articles`. Website path дополнительно сохраняет `web_resources`: найденные страницы, документы, newsroom items, downloads и другие resource-level факты.
+RSS и editorial website rows могут материализоваться как `signal_candidates`. Website path дополнительно сохраняет `web_resources`: найденные страницы, документы, newsroom items, downloads и другие resource-level факты.
 
 Это важно, потому что не каждый полезный website resource обязан быть полноценной новостной статьей. Оператор должен видеть resource-level truth, browser/static provenance и enrichment/projection status.
 
@@ -131,7 +131,7 @@ outbox event or operator action
 -> durable result in PostgreSQL
 ```
 
-Sequence runtime нужен не ради “плагинов”, а ради наблюдаемости и переиспользования: article processing, discovery, reindex/backfill, enrichment and bounded operator-created sequences могут использовать один механизм.
+Sequence runtime нужен не ради “плагинов”, а ради наблюдаемости и переиспользования: signal_candidate processing, discovery, reindex/backfill, enrichment and bounded operator-created sequences могут использовать один механизм.
 
 Принципы:
 
@@ -164,7 +164,7 @@ Declarative adapters are intentionally bounded: JSON/NDJSON API sources, GET or 
 
 - health источников и overdue/failure state;
 - последние fetch runs;
-- resources и articles отдельно;
+- resources и signal_candidates отдельно;
 - selection reasons and diagnostics;
 - LLM usage and budget;
 - reindex/backfill progress;

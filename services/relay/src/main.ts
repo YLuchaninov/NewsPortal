@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     {
       ...priorityRepair
     },
-    "Relay repaired pending q.sequence article-ingest priorities."
+    "Relay repaired pending q.sequence signal_candidate-ingest priorities."
   );
   await relay.pollOnce();
 

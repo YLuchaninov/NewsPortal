@@ -45,8 +45,8 @@ const compiledRuntimePackages = new Map([
   [
     "services/fetchers/package.json",
     [
-      "article-yield:diagnostics",
-      "article-yield:remediate",
+      "signal-candidate-yield:diagnostics",
+      "signal-candidate-yield:remediate",
       "replay:website-projections",
       "run:once",
       "start",

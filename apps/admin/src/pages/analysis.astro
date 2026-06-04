@@ -128,14 +128,14 @@ const contentAnalysisJobViews = contentAnalysisJobs.map((job) => {
       <div class={ADMIN_SECTION_CARD_CLASS}>
         <h2 class="text-base font-semibold">Backfill existing content</h2>
         <p class="mt-1 text-sm text-muted-foreground">
-          Queue replay for stored articles and web resources. The job writes analysis evidence and skips retro notifications.
+          Queue replay for stored signal_candidates and web resources. The job writes analysis evidence and skips retro notifications.
         </p>
         <form method="post" action={backfillBffPath} class="mt-4 grid gap-4">
           <input type="hidden" name="redirectTo" value={currentPath} />
           <div class="grid gap-2 sm:grid-cols-3">
             <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
-              <input type="checkbox" name="subjectArticle" value="true" checked class="h-4 w-4 rounded border-input" />
-              Articles
+              <input type="checkbox" name="subjectSignalCandidate" value="true" checked class="h-4 w-4 rounded border-input" />
+              Signal Candidates
             </label>
             <label class="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
               <input type="checkbox" name="subjectWebResource" value="true" checked class="h-4 w-4 rounded border-input" />

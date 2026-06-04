@@ -49,7 +49,7 @@ async def fetch_recent_notification_history(
             interest_id = %s
             or (%s::uuid is not null and event_cluster_id = %s::uuid)
             or (%s::uuid is not null and doc_id in (
-              select doc_id from articles where family_id = %s::uuid
+              select doc_id from signal_candidates where family_id = %s::uuid
             ))
           )
           and created_at >= now() - interval '24 hours'
@@ -68,7 +68,7 @@ async def compute_novelty_score(
     interest_id: uuid.UUID,
     cluster_id: uuid.UUID | None,
     family_id: uuid.UUID | None,
-    article_features: Mapping[str, Sequence[str]],
+    signal_candidate_features: Mapping[str, Sequence[str]],
 ) -> tuple[float, bool]:
     history = await fetch_recent_notification_history(
         cursor,
@@ -101,9 +101,9 @@ async def compute_novelty_score(
         existing_entities=coerce_text_list(cluster_row.get("top_entities")),
         existing_places=coerce_text_list(cluster_row.get("top_places")),
         existing_numbers=[],
-        incoming_entities=coerce_text_list(article_features.get("entities")),
-        incoming_places=coerce_text_list(article_features.get("places")),
-        incoming_numbers=coerce_text_list(article_features.get("numbers")),
+        incoming_entities=coerce_text_list(signal_candidate_features.get("entities")),
+        incoming_places=coerce_text_list(signal_candidate_features.get("places")),
+        incoming_numbers=coerce_text_list(signal_candidate_features.get("numbers")),
     )
     if major_update:
         return 0.4, True
@@ -437,7 +437,7 @@ async def fetch_scheduled_digest_items(
         """
         with ranked_matches as (
           select
-            'editorial:' || a.doc_id::text as content_item_id,
+            'signal_candidate:' || a.doc_id::text as content_item_id,
             a.title,
             a.url,
             a.lead,
@@ -451,7 +451,7 @@ async def fetch_scheduled_digest_items(
                 a.doc_id
             ) as family_rank
           from interest_match_results imr
-          join articles a on a.doc_id = imr.doc_id
+          join signal_candidates a on a.doc_id = imr.doc_id
           join source_channels sc on sc.channel_id = a.channel_id
           left join final_selection_results fsr on fsr.doc_id = a.doc_id
           left join system_feed_results sfr on sfr.doc_id = a.doc_id
@@ -484,7 +484,7 @@ async def fetch_scheduled_digest_items(
     return [
         DigestItem(
             content_item_id=str(row.get("content_item_id") or ""),
-            title=str(row.get("title") or "Untitled article"),
+            title=str(row.get("title") or "Untitled signal_candidate"),
             url=str(row.get("url") or "").strip() or None,
             summary=str(row.get("lead") or "").strip() or None,
             source_name=str(row.get("source_name") or "").strip() or None,

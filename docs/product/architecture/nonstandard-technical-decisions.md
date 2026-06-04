@@ -146,15 +146,15 @@ The framing is intentionally both technical and business-oriented:
 
 ## 10. Website Resources As First-Class Truth
 
-**Local decision:** website ingest persists `web_resources` separately from `articles`; editorial resources may project to articles, while documents/listings/entities can remain resource-only.
+**Local decision:** website ingest persists `web_resources` separately from `signal_candidates`; editorial resources may project to signal_candidates, while documents/listings/entities can remain resource-only.
 
-**Technical uniqueness:** the model does not force every URL into an article shape. Resource kind, projection state, document evidence and source provenance can remain visible.
+**Technical uniqueness:** the model does not force every URL into a signal candidate shape. Resource kind, projection state, document evidence and source provenance can remain visible.
 
-**Business meaning:** many high-value signals live in PDFs, listings, downloads, tender pages, static resources or mixed portals. Treating them as resource truth preserves future conversion value and avoids misleading article rows.
+**Business meaning:** many high-value signals live in PDFs, listings, downloads, tender pages, static resources or mixed portals. Treating them as resource truth preserves future conversion value and avoids misleading signal_candidate rows.
 
 **Implemented around:** website fetchers, `services/fetchers/src/resource-pdf-extraction.ts`, `/admin/resources`, `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`, `.aidp/contracts/content-model.md`.
 
-**Tradeoff:** operators must inspect Resources and Articles separately; the model is more honest for mixed websites.
+**Tradeoff:** operators must inspect Resources and Signal Candidates separately; the model is more honest for mixed websites.
 
 **Comparable approaches:** connector ecosystems distinguish source records, schemas and target outputs rather than forcing all source data into one display shape. See [Singer spec via Meltano Hub](https://hub.meltano.com/singer/spec) and [Airbyte documentation](https://docs.airbyte.com/).
 
@@ -174,7 +174,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Local decision:** `final_selection_results` and system-selected content are separate from user-personalized matches.
 
-**Technical uniqueness:** public selected content is owned by final selection, not by raw articles, resources, user interest matches or content kind. Personalization consumes already-gated content.
+**Technical uniqueness:** public selected content is owned by final selection, not by raw signal_candidates, resources, user interest matches or content kind. Personalization consumes already-gated content.
 
 **Business meaning:** this keeps the customer-facing feed credible. A user interest cannot accidentally turn vendor noise, wrapper pages or weak matches into public "signals."
 
@@ -192,7 +192,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this is a rare but important product stance: the system optimizes for trustworthy signal yield, not vanity counts. It can tell a customer "we found sources but need conversion work" instead of selling noise as leads.
 
-**Implemented around:** `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools.ts`, `services/api/app/article_list_read_model.py`, `services/api/app/content_selection_read_model.py`, `infra/scripts/test-discovery-vnext-mcp-live-*.mjs`.
+**Implemented around:** `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools.ts`, `services/api/app/signal_candidate_list_read_model.py`, `services/api/app/content_selection_read_model.py`, `infra/scripts/test-discovery-vnext-mcp-live-*.mjs`.
 
 **Tradeoff:** demos can look less flashy when broad discovery finds no selected items; long-term trust is higher.
 
@@ -248,7 +248,7 @@ The framing is intentionally both technical and business-oriented:
 
 Most news/content systems optimize for one of three simpler models:
 
-1. fetch known feeds and rank articles;
+1. fetch known feeds and rank signal_candidates;
 2. crawl/search broadly and show many matches;
 3. build custom scrapers for one vertical.
 

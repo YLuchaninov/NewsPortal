@@ -1,6 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 
-export type HtmlSanitizerProfile = "article";
+export type HtmlSanitizerProfile = "signal_candidate";
 
 export interface SanitizeHtmlFragmentOptions {
   baseUrl?: string | null;

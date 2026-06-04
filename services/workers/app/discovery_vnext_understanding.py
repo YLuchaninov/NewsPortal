@@ -27,7 +27,7 @@ ARTIFACT_FRESHNESS_WEIGHTS = {
     "dataset_or_registry": 0.75,
     "community_thread": 0.55,
     "documentation_or_guide": 0.40,
-    "evergreen_article": 0.30,
+    "evergreen_signal_candidate": 0.30,
     "static_service_page": 0.15,
     "unknown": 0.25,
 }
@@ -249,12 +249,12 @@ def _artifact_fit(discovery_brief: dict[str, Any], probe_report: dict[str, Any],
     if expectations and expectations.intersection(observed_types):
         score = max(score, 0.78)
     if any(isinstance(item, dict) and int(item.get("sampleEntryCount") or 0) > 0 for item in observations):
-        score = max(score, 0.82 if "article" in expectations or "changelog" in expectations else 0.72)
+        score = max(score, 0.82 if "signal_candidate" in expectations or "changelog" in expectations else 0.72)
     if any(isinstance(item, dict) and int(item.get("listingCountEstimate") or 0) > 0 for item in observations):
         score = max(score, 0.78 if "listing" in expectations else 0.62)
     if any(isinstance(item, dict) and int(item.get("documentCountEstimate") or 0) > 0 for item in observations):
         score = max(score, 0.78 if expectations.intersection({"document", "report", "dataset"}) else 0.58)
-    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_article"}:
+    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_signal_candidate"}:
         score = min(score, 0.42)
     if role_context["signalProductionMode"] == "unlikely":
         score = min(score, 0.28)
@@ -494,7 +494,7 @@ def _negative_role_evidence(role_context: dict[str, Any], source_scope_resolutio
         evidence.append(f"{scope_type} scopes are evidence or context, not recurring source channels.")
     if role_context["sourceVoice"] in {"seller_or_vendor", "third_party_commentary"}:
         evidence.append(f"{role_context['sourceVoice']} voice is not authoritative enough for auto-registration.")
-    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_article", "documentation_or_guide"}:
+    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_signal_candidate", "documentation_or_guide"}:
         evidence.append("Static/evergreen artifacts are useful context but weak recurring signal sources.")
     return evidence[:5]
 
@@ -563,7 +563,7 @@ def _observed_artifact_types(probe_report: dict[str, Any]) -> list[str]:
         if not isinstance(observation, dict):
             continue
         if int(observation.get("sampleEntryCount") or 0) > 0:
-            observed.append("article")
+            observed.append("signal_candidate")
         if int(observation.get("listingCountEstimate") or 0) > 0:
             observed.append("listing")
         if int(observation.get("documentCountEstimate") or 0) > 0:
@@ -617,7 +617,7 @@ def _artifact_freshness(hints: dict[str, bool], observed_types: list[str], probe
     if hints.get("sellerOrVendorLikely"):
         return "static_service_page"
     if hints.get("staticEvergreenLikely"):
-        return "evergreen_article"
+        return "evergreen_signal_candidate"
     if "document" in observed_types:
         return "documentation_or_guide"
     return "unknown"
@@ -635,7 +635,7 @@ def _signal_production_mode(source_voice: str, freshness: str, hints: dict[str, 
         return "source_directory"
     if source_voice == "community_or_ugc" or freshness == "community_thread":
         return "precursor_context"
-    if source_voice in {"seller_or_vendor", "third_party_commentary"} and freshness in {"static_service_page", "evergreen_article", "documentation_or_guide"}:
+    if source_voice in {"seller_or_vendor", "third_party_commentary"} and freshness in {"static_service_page", "evergreen_signal_candidate", "documentation_or_guide"}:
         return "secondary_context" if source_voice == "third_party_commentary" else "unlikely"
     if hints.get("secondaryExplainerLikely"):
         return "secondary_context"
@@ -676,7 +676,7 @@ def _counter_evidence(role_context: dict[str, Any], probe_report: dict[str, Any]
     evidence: list[str] = []
     if role_context["signalProductionMode"] in {"secondary_context", "unlikely"}:
         evidence.append("Source role is context-only or structurally unlikely to produce primary events.")
-    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_article"}:
+    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_signal_candidate"}:
         evidence.append("Observed artifact freshness is static/evergreen rather than recurring.")
     if probe_report.get("accessPattern") in {"requires_auth", "captcha_blocked", "blocked"}:
         evidence.append("Access pattern prevents safe automatic monitoring.")
@@ -699,7 +699,7 @@ def _reason_not_to_auto_register(role_context: dict[str, Any], access_pattern: s
         return "Source voice is context/vendor/commentary, not an eligible primary signal producer."
     if role_context["signalProductionMode"] in {"secondary_context", "unlikely", "unknown"}:
         return "Signal production mode is not eligible for automatic channel registration."
-    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_article", "documentation_or_guide", "unknown"}:
+    if role_context["artifactFreshnessKind"] in {"static_service_page", "evergreen_signal_candidate", "documentation_or_guide", "unknown"}:
         return "Artifact freshness does not prove recurring or official-update monitoring value."
     if clamp_score(risk.get("riskScore")) > 0.35:
         return "Risk score exceeds automatic registration limit."

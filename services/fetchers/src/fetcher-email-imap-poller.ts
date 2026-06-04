@@ -12,7 +12,7 @@ import {
 import type {
   ChannelPollCompletion,
   CursorMap,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow
 } from "./fetcher-persistence";
 
@@ -20,7 +20,7 @@ interface EmailImapChannelPollerDependencies {
   loadCursorMap: (channelId: string) => Promise<CursorMap>;
   persistInputsWithPreflight: (
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ) => Promise<{ ingestedCount: number; duplicateCount: number }>;
   markChannelSuccess: (
     channel: SourceChannelRow,
@@ -99,7 +99,7 @@ function buildImapFetchRange(
   return Object.keys(query).length === 1 && query.all === true ? "1:*" : query;
 }
 
-function buildEmailExternalArticleId(
+function buildEmailExternalSignalCandidateId(
   messageId: string | null,
   uidValidity: string | null,
   uid: number
@@ -128,7 +128,7 @@ export async function pollEmailImapProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: `IMAP channel ${channel.channelId} is missing host/username/password.`
@@ -246,9 +246,9 @@ export async function pollEmailImapProviderChannel(
       .reverse();
 
     const inputs = selectedMessages
-      .map((message): PersistArticleInput => ({
+      .map((message): PersistSignalCandidateInput => ({
         channel,
-        externalArticleId: buildEmailExternalArticleId(message.messageId, uidValidity, message.uid),
+        externalSignalCandidateId: buildEmailExternalSignalCandidateId(message.messageId, uidValidity, message.uid),
         url: buildEmailItemUrl(imapConfig.host, imapConfig.mailbox, uidValidity, message.uid),
         publishedAt: message.publishedAt,
         title: message.subject,
@@ -284,7 +284,7 @@ export async function pollEmailImapProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: selectedMessages.length,
-      newArticleCount: ingestedCount,
+      newSignalCandidateCount: ingestedCount,
       duplicateSuppressedCount: duplicateCount,
       cursorChanged: uidValidityChanged || String(maxUid) !== String(previousLastUid),
       errorMessage: null,
@@ -318,7 +318,7 @@ export async function pollEmailImapProviderChannel(
       httpStatus: null,
       retryAfterSeconds: null,
       fetchedItemCount: 0,
-      newArticleCount: 0,
+      newSignalCandidateCount: 0,
       duplicateSuppressedCount: 0,
       cursorChanged: false,
       errorMessage: message

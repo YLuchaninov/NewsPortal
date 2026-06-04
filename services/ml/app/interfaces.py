@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
-class ArticleFeatureSet:
+class SignalCandidateFeatureSet:
     numbers: list[str]
     short_tokens: list[str]
     places: list[str]
@@ -41,7 +41,7 @@ class FeatureExtractor(Protocol):
     feature_version: int
     search_vector_version: int
 
-    def extract(self, title: str, lead: str, body: str) -> ArticleFeatureSet:
+    def extract(self, title: str, lead: str, body: str) -> SignalCandidateFeatureSet:
         ...
 
 

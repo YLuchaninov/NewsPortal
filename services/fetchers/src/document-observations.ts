@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 
-export async function upsertArticleObservation(
+export async function upsertSignalCandidateObservation(
   client: PoolClient,
   docId: string,
 ): Promise<void> {
@@ -19,17 +19,17 @@ export async function upsertArticleObservation(
         observation_state
       )
       select
-        'article',
+        'signal_candidate',
         a.doc_id,
         a.channel_id,
-        a.source_article_id,
+        a.source_signal_candidate_id,
         a.url,
         a.published_at,
         a.ingested_at,
         null,
         'pending',
         'pending_canonicalization'
-      from articles a
+      from signal_candidates a
       where a.doc_id = $1::uuid
       on conflict (origin_type, origin_id) do update
       set

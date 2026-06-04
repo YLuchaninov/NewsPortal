@@ -198,7 +198,7 @@ community_noise: contributors | community interest | open source | testers | col
 - internal hiring;
 - recruiter content;
 - thought leadership;
-- best-practice articles;
+- best-practice signal candidates;
 - community discussions without active sourcing.
 
 Это особенно важно для noisy Google News и HN corpora, где topic similarity часто есть, а buyer intent отсутствует.

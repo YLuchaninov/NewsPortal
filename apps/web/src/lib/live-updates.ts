@@ -25,8 +25,8 @@ export interface LiveRepairJobSnapshot {
   reindexJobId: string;
   status: string;
   interestId: string | null;
-  processedArticles: number | null;
-  totalArticles: number | null;
+  processedSignalCandidates: number | null;
+  totalSignalCandidates: number | null;
   finishedAt: string | null;
   errorText: string | null;
 }

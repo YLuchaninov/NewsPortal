@@ -15,13 +15,13 @@ class ApiSequenceManagementTests(unittest.TestCase):
     def test_sequence_maintenance_routes_are_registered(self) -> None:
         paths = {route.path for route in api_main.app.routes}
 
-        self.assertIn("/maintenance/articles/{doc_id}/enrichment/retry", paths)
-        self.assertIn("/maintenance/articles", paths)
-        self.assertIn("/maintenance/articles/selection-summary", paths)
-        self.assertIn("/maintenance/articles/residuals", paths)
-        self.assertIn("/maintenance/articles/residuals/summary", paths)
-        self.assertIn("/maintenance/articles/{doc_id}", paths)
-        self.assertIn("/maintenance/articles/{doc_id}/explain", paths)
+        self.assertIn("/maintenance/signal-candidates/{doc_id}/enrichment/retry", paths)
+        self.assertIn("/maintenance/signal-candidates", paths)
+        self.assertIn("/maintenance/signal-candidates/selection-summary", paths)
+        self.assertIn("/maintenance/signal-candidates/residuals", paths)
+        self.assertIn("/maintenance/signal-candidates/residuals/summary", paths)
+        self.assertIn("/maintenance/signal-candidates/{doc_id}", paths)
+        self.assertIn("/maintenance/signal-candidates/{doc_id}/explain", paths)
         self.assertIn("/maintenance/llm-budget-summary", paths)
         self.assertIn("/collections/system-selected", paths)
         self.assertIn("/content-items", paths)
@@ -88,7 +88,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
                 "taskGraph": [
                     {
                         "key": "normalize",
-                        "module": "article.normalize",
+                        "module": "signal_candidate.normalize",
                         "options": {},
                     }
                 ],
@@ -114,7 +114,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
                 "taskGraph": [
                     {
                         "key": "normalize",
-                        "module": "article.normalize",
+                        "module": "signal_candidate.normalize",
                         "options": {},
                         "retry": {"attempts": 2, "delayMs": 1500},
                         "timeoutMs": 45_000,
@@ -133,7 +133,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
                     "taskGraph": [
                         {
                             "key": "normalize",
-                            "module": "article.normalize",
+                            "module": "signal_candidate.normalize",
                             "options": {},
                             "unexpected": True,
                         }
@@ -210,19 +210,19 @@ class ApiSequenceManagementTests(unittest.TestCase):
         result = api_main.get_sequence_plugins()
         modules = {item["module"] for item in result}
 
-        self.assertIn("enrichment.article_extract", modules)
-        self.assertIn("article.normalize", modules)
-        self.assertIn("article.notify", modules)
+        self.assertIn("enrichment.signal_candidate_extract", modules)
+        self.assertIn("signal_candidate.normalize", modules)
+        self.assertIn("signal_candidate.notify", modules)
         self.assertIn("maintenance.reindex", modules)
 
-    def test_request_article_enrichment_retry_reuses_active_article_sequence(self) -> None:
+    def test_request_signal_candidate_enrichment_retry_reuses_active_signal_candidate_sequence(self) -> None:
         with (
             patch.object(
                 api_main,
                 "query_one",
                 side_effect=[
                     {"doc_id": "doc-1"},
-                    {"sequence_id": "sequence-article", "status": "active"},
+                    {"sequence_id": "sequence-signal_candidate", "status": "active"},
                 ],
             ) as query_one,
             patch.object(
@@ -230,11 +230,11 @@ class ApiSequenceManagementTests(unittest.TestCase):
                 "create_sequence_run_request_for_trigger",
                 return_value={"run_id": "run-1", "status": "pending"},
             ) as create_run,
-            patch.object(api_main, "ensure_published_article_retry_event") as ensure_event,
+            patch.object(api_main, "ensure_published_signal_candidate_retry_event") as ensure_event,
         ):
-            result = api_main.request_article_enrichment_retry(
+            result = api_main.request_signal_candidate_enrichment_retry(
                 "doc-1",
-                api_main.ArticleEnrichmentRetryPayload.model_validate(
+                api_main.SignalCandidateEnrichmentRetryPayload.model_validate(
                     {"requestedBy": "operator-1"}
                 ),
             )
@@ -250,7 +250,7 @@ class ApiSequenceManagementTests(unittest.TestCase):
         self.assertEqual(args["context_json"]["event_id"], event_id)
         self.assertTrue(args["context_json"]["force_enrichment"])
         self.assertEqual(args["trigger_meta"]["requestedBy"], "operator-1")
-        self.assertEqual(args["trigger_meta"]["source"], "maintenance_article_enrichment_retry")
+        self.assertEqual(args["trigger_meta"]["source"], "maintenance_signal_candidate_enrichment_retry")
         self.assertEqual(args["trigger_type"], "manual")
 
     def test_llm_budget_summary_uses_precise_usd_comparison(self) -> None:
@@ -276,12 +276,12 @@ class ApiSequenceManagementTests(unittest.TestCase):
     def test_request_content_item_enrichment_retry_reuses_editorial_retry_flow(self) -> None:
         with patch.object(
             api_main,
-            "request_article_enrichment_retry_route",
+            "request_signal_candidate_enrichment_retry_route",
             return_value={"run_id": "run-2", "status": "pending"},
         ) as request_retry:
             result = api_main.request_content_item_enrichment_retry_route(
-                "editorial:00000000-0000-4000-8000-000000000002",
-                api_main.ArticleEnrichmentRetryPayload.model_validate({"requestedBy": "operator-1"}),
+                "signal_candidate:00000000-0000-4000-8000-000000000002",
+                api_main.SignalCandidateEnrichmentRetryPayload.model_validate({"requestedBy": "operator-1"}),
             )
 
         self.assertEqual(result, {"run_id": "run-2", "status": "pending"})

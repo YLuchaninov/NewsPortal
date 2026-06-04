@@ -6,9 +6,9 @@ from .embedding import (
     normalize_vector,
     truncate_text_for_embedding,
 )
-from .feature_extractor import HeuristicArticleFeatureExtractor
+from .feature_extractor import HeuristicSignalCandidateFeatureExtractor
 from .interfaces import (
-    ArticleFeatureSet,
+    SignalCandidateFeatureSet,
     CompiledRepresentation,
     CriterionCompiler,
     EmbeddingProvider,
@@ -19,14 +19,14 @@ from .interfaces import (
 )
 
 __all__ = [
-    "ArticleFeatureSet",
+    "SignalCandidateFeatureSet",
     "CompiledRepresentation",
     "CriterionBaselineCompiler",
     "CriterionCompiler",
     "DEFAULT_SENTENCE_TRANSFORMER_MODEL",
     "EmbeddingProvider",
     "FeatureExtractor",
-    "HeuristicArticleFeatureExtractor",
+    "HeuristicSignalCandidateFeatureExtractor",
     "HnswIndexStore",
     "HnswSnapshotStore",
     "InterestBaselineCompiler",

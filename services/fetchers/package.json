@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "article-yield:diagnostics": "node dist/cli/article-yield-diagnostics.mjs",
-    "article-yield:remediate": "node dist/cli/article-yield-remediate.mjs",
+    "signal-candidate-yield:diagnostics": "node dist/cli/signal-candidate-yield-diagnostics.mjs",
+    "signal-candidate-yield:remediate": "node dist/cli/signal-candidate-yield-remediate.mjs",
     "build": "tsc -p tsconfig.json --noEmit && pnpm build:runtime",
     "build:runtime": "node ../../infra/tooling/build-node-runtime.mjs --service=fetchers",
     "replay:website-projections": "node dist/cli/replay-website-projections.mjs",

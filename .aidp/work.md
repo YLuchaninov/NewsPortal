@@ -2,6 +2,132 @@
 
 ## Active Item
 
+- id: `SIGNALOPS-DOMAIN-TERMS-RENAME-SWEEP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `domain-terminology-breaking-rename`
+- status: `done`
+- risk: `high`
+- approval: approved by operator request on 2026-06-04 to implement the accepted plan for a full domain terminology breaking rename without legacy aliases.
+- planning required: yes, because this is a broad breaking rename across database schema, API/BFF routes, SDK, MCP tools/resources, queue/event/module contracts, UI, docs, tests and proof harnesses.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-provided domain terminology rename plan from 2026-06-04.
+
+## Scope
+
+Rename product-owned domain terminology so former article entities become signal candidates and product-owned news wording becomes signal wording, while preserving external/library/source semantics.
+
+In scope:
+
+- rename product-owned storage/data model surfaces from the legacy content-candidate table family to `signal_candidates` / `signal_candidate_*`;
+- rename product-owned columns and counters such as `source_signal_candidate_id`, `external_signal_candidate_id`, `new_signal_candidate_count`, `projected_signal_candidate_id` and duplicate signal_candidate counters to signal-candidate equivalents;
+- rename product-owned runtime/API/contracts: `/maintenance/signal-candidates`, admin `/signal-candidates`, SDK `SignalCandidate*`, MCP `signal_candidates.*`, `signalops://signal-candidates/*`, queue/events/modules `signal_candidate.*`, and content item prefix `signal_candidate:` to signal-candidate equivalents;
+- rename product-owned UI/docs/tests/proof harnesses from legacy content-candidate/news wording to Signal Candidates/signal wording;
+- update current AIDP canon for the new domain terminology while preserving historical archive evidence as historical.
+
+Out of scope:
+
+- changing external/provider/source protocol terms such as `Google News`, `Hacker News`, DuckDuckGo/SearXNG `news` result type, URL paths like `/news`, Schema.org structured-data content types, `@extractus/article-extractor`, HTML/feed source-url literals, and third-party package/import names;
+- renaming Discovery `discovery_candidates`, `discovery.candidates.*`, `candidateSignals` or generic local variable `candidate` when they refer to existing Discovery/source-candidate concepts rather than former signal_candidate rows;
+- preserving old DB/API/SDK/MCP/event aliases;
+- production deployment or external-state migration;
+- physically renaming the repository folder path.
+
+Allowed paths:
+
+- `.aidp/**`
+- `.env.example`
+- `.env.dev`
+- `package.json`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
+- `tsconfig*.json`
+- `playwright.config.mjs`
+- `apps/**`
+- `packages/**`
+- `services/**`
+- `infra/**`
+- `database/**`
+- `tests/**`
+- `docs/**`
+- `README.md`
+
+Protected boundaries:
+
+- PostgreSQL remains business source of truth; this rename may rebuild local disposable state but must not introduce a second state owner.
+- Fetchers still own acquisition/raw persistence, workers still own processing/selection/notifications/discovery, relay still routes thin jobs, and API/admin/web/MCP expose declared surfaces.
+- External news/article semantics remain source/provider/library semantics, not SignalOps product identity.
+- AIDP runtime truth stays in `.aidp/*`; root routers remain thin.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route, pre-write active item and canonicalization rules.
+- `.aidp/routes.md`: `sweep` route, high-risk approval and proof obligations.
+- `.aidp/blueprint.md`: data/state ownership, API/control-plane, source/content pipeline, selection/personalization and AIDP/process boundaries checked.
+- `.aidp/engineering.md`: route-aware sweep discipline, breaking contract/deprecation rules and runtime/config naming discipline.
+- `.aidp/verification.md`: high-risk sweep proof, migration/runtime/API/MCP/queue proof and release verification gates.
+- accepted tool-native plan in the operator message from 2026-06-04.
+
+## Implementation Expectations
+
+- Perform a repo-wide terminology sweep, then repair semantic fallout around SQL migrations, generated query aliases, SDK/MCP contracts, route paths, content item IDs, event/module names, tests and docs.
+- Do not keep compatibility aliases for old `signal_candidates`, `/signal-candidates`, `signal_candidates.*`, `signal_candidate.*`, old SDK names or old event names.
+- Preserve external/library/source `news`/`article` terms exactly when they describe third-party protocols, URLs, schemas or package APIs.
+- Treat old AIDP proof artifact paths and historical item ids as historical evidence only.
+
+## Proof Gates
+
+Required gates:
+
+- static sweeps for former product-owned article/news terminology with allowed external/historical residuals only;
+- `pnpm install --lockfile-only` if manifest/package script changes require lockfile regeneration;
+- `pnpm check:env-sync`;
+- `pnpm check:scaffold`;
+- `pnpm check:runtime-artifacts`;
+- `pnpm check:test-layout`;
+- `pnpm check:secret-leaks`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm unit_tests`;
+- `pnpm test:migrations:smoke`;
+- `pnpm test:mcp:http:matrix`;
+- `pnpm test:website:compose`;
+- `pnpm test:website:admin:compose`;
+- `pnpm test:product:local:core`;
+- `pnpm release:verify`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- static no-hit sweep passed for legacy content-candidate column, counter and event tokens listed in the operator test plan.
+- static no-hit sweep passed for the old content item prefix listed in the operator test plan.
+- static no-hit sweep passed for old product-owned active-news and yield-script labels listed in the operator test plan.
+- broad legacy content-candidate sweep passed with only allowed external/library/schema residuals in code/tests: Google News wrapper URLs, IMF source URLs, Hacker News source-url literals, structured-data content types, and extractor library type names.
+- broad `news` sweep reviewed; remaining current hits are external/source/search-protocol/fixture/doc-example semantics such as Google News, Hacker News, DuckDuckGo/SearXNG `news`, third-party `/news` URLs and historical AIDP references.
+- `pnpm check:env-sync` passed.
+- `pnpm check:scaffold` passed.
+- `pnpm check:runtime-artifacts` passed.
+- `pnpm check:test-layout` passed.
+- `pnpm check:secret-leaks` passed.
+- `pnpm lint` passed.
+- `pnpm typecheck` passed.
+- `pnpm unit_tests` passed.
+- `pnpm test:migrations:smoke` passed after recreating disposable local Docker/Postgres state.
+- `pnpm test:mcp:http:matrix` passed.
+- `pnpm test:website:compose` passed.
+- `pnpm test:website:admin:compose` passed.
+- `pnpm test:product:local:core` passed with `/tmp/signalops-product-local-core-b63a0d81.*` artifacts.
+- `pnpm release:verify` passed with summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-14015942/release-verify-summary.json`; full live website residuals were classified as truthful external unsupported/blocked or partial shapes, not rename regressions.
+- `git diff --check` passed.
+
+## Cleanup Notes
+
+- Existing local Docker/Postgres state using former `signal_candidates` schema/defaults is treated as disposable and may need recreation during proof.
+- Current proof artifacts should use `/tmp/signalops-*` prefixes and signal-candidate terminology where product-owned.
+
+## Historical Archive: Previous Completed Item
+
 - id: `SIGNALOPS-PROJECT-RENAME-SWEEP-1`
 - lifecycle: `normal`
 - route: `sweep`
@@ -363,18 +489,18 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - fixed the generic MCP proof harnesses so both `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs` and `infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs` call `discovery.scope.resolve_apply`, pass the resulting `SourceScopeResolution` into `discovery.understand.preview`, persist `sourceScopeResolutionArtifactId`, and route using the resolved source URL rather than the raw candidate URL;
   - live-signal proof after the harness fix ran with strict scope gates: artifact `/tmp/newsportal-discovery-vnext-mcp-live-signal-flow-98409141-73b7-436c-ae9d-10aea8333a71.json`; result remained `downstream_selection_gap`, but the run persisted `SourceScopeResolution` artifacts and correctly kept sampled item/detail/context/wrapper candidates in inventory, inventory_context or adapter_backlog instead of auto-registering unsafe channels;
   - wide live-gap proof passed: `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-gap-flow -- --skip-build`, artifact `/tmp/newsportal-discovery-vnext-mcp-live-gap-flow-155dd967-2196-4940-bded-c07aad863059.json`, with 5/5 packs producing candidates, 100 query attempts, SourceScopeResolution artifacts, and routed inventory outcomes without gaps;
-  - MCP-only backfill replay completed after the wide live-gap run: job `7e78b48d-2f95-424f-9776-964b8f928859`, `jobKind=backfill`, `retroNotifications=skip`, processed 1281 articles, found 87108 criteria matches, and recorded 0 LLM review failures/timeouts; dashboard showed one weak/noisy selected row before adapter proof, confirming selected-content gates were still strict rather than forced open;
+  - MCP-only backfill replay completed after the wide live-gap run: job `7e78b48d-2f95-424f-9776-964b8f928859`, `jobKind=backfill`, `retroNotifications=skip`, processed 1281 signal_candidates, found 87108 criteria matches, and recorded 0 LLM review failures/timeouts; dashboard showed one weak/noisy selected row before adapter proof, confirming selected-content gates were still strict rather than forced open;
   - fixed a generic fetchers startup/runtime bug in PDF extraction: `pdfjs-dist` is now lazy-loaded after Node-safe DOMMatrix/ImageData/Path2D fallbacks are installed, avoiding the prior fetchers crash-loop from PDF.js top-level `DOMMatrix` access while keeping PDF extraction fetcher-owned and without adding native canvas or OCR dependencies;
-  - item-level live proof passed after the fetchers fix: `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=250 node infra/scripts/run-ted-api-adapter-mcp-proof.mjs`, artifact `/tmp/newsportal-ted-api-adapter-mcp-proof-cc3511be-9c0b-4362-ae6c-4c962ad5278b.json`, with 5 dry-run official API items, 10 fetched articles, 1 selected visible content item, and `operator.report.verify selection` reporting `highQualityCount=1` and no weak/noise selected warning;
+  - item-level live proof passed after the fetchers fix: `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=250 node infra/scripts/run-ted-api-adapter-mcp-proof.mjs`, artifact `/tmp/newsportal-ted-api-adapter-mcp-proof-cc3511be-9c0b-4362-ae6c-4c962ad5278b.json`, with 5 dry-run official API items, 10 fetched signal_candidates, 1 selected visible content item, and `operator.report.verify selection` reporting `highQualityCount=1` and no weak/noise selected warning;
   - proof gates passed: `python3 -m py_compile services/workers/app/discovery_vnext_artifacts.py services/workers/app/discovery_vnext_scope_resolution.py services/workers/app/discovery_vnext_understanding.py services/workers/app/discovery_vnext_routing.py services/workers/app/discovery_vnext_candidates.py services/workers/app/discovery_vnext_megaloop.py services/workers/app/discovery_vnext_probe.py services/workers/app/discovery_vnext_handoff.py services/api/app/discovery_vnext_api.py`, `node --check infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`, `node --check infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs`, `pnpm unit_tests:py -- tests/unit/python/test_discovery_vnext_foundation.py` (376/376), `pnpm unit_tests:ts -- tests/unit/ts/discovery-vnext-contracts.test.ts tests/unit/ts/mcp-control-plane.test.ts` (repo TS suite 417/417), `pnpm --filter @newsportal/fetchers typecheck`, `pnpm unit_tests:ts -- tests/unit/ts/resource-enrichment-website.test.ts tests/unit/ts/document-observations.test.ts` (repo TS suite 417/417), `pnpm lint:ts`, `pnpm lint:py`, `pnpm typecheck` (existing Astro hints only, no errors), `pnpm test:migrations:smoke`, `pnpm test:discovery:vnext-flow` with report `/tmp/newsportal-discovery-vnext-flow-dvf-e9850815-cf3.json`, and `pnpm test:mcp:http:discovery` with artifacts `/tmp/newsportal-mcp-http-deterministic-f5e614bc-c0ca-4b6a-bab5-787f9c220889.json` and `.md`;
   - conclusion: the full funnel is proven for at least one item-level official buyer signal through MCP/runtime paths; remaining zero-selected outcomes in broad source-discovery runs are quality/conversion outcomes, not evidence to weaken selected-content gates or add domain-specific core shortcuts.
 - passed locally on 2026-06-03 for `strict-rss-source-gate`:
   - implemented domain-neutral productive RSS semantics: `validFeed` remains parseable feed metadata, while `productiveFeed` requires sample entries and is now required for RSS auto-register/probation handoff;
   - routing/handoff proof: parseable empty RSS feeds route away from channel creation and direct handoff returns `rss_feed_not_productive`; RSS handoff uses validated `feedFinalUrl` as the operational channel/feed URL when available;
-  - harness proof: live-signal report now records channel provider, channel URL, fetch run adapter/status/count summaries, RSS downstream evidence via `articles.list`, and RSS zero-output as `rss_feed_not_productive`;
+  - harness proof: live-signal report now records channel provider, channel URL, fetch run adapter/status/count summaries, RSS downstream evidence via `signal_candidates.list`, and RSS zero-output as `rss_feed_not_productive`;
   - targeted proof passed: `python3 -m py_compile services/workers/app/discovery_vnext_probe.py services/workers/app/discovery_vnext_understanding.py services/workers/app/discovery_vnext_routing.py services/workers/app/discovery_vnext_handoff.py tests/unit/python/test_discovery_vnext_foundation.py`, `pnpm unit_tests:py -- tests/unit/python/test_discovery_vnext_foundation.py` (376/376), `node --check infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`, `pnpm lint:ts`, and `git diff --check` for touched files;
   - full rebuilt live MCP proof completed: `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`, artifacts `/tmp/newsportal-discovery-vnext-mcp-live-signal-flow-b499d52c-102b-4354-8cd1-12a876899f43.json` and `.md`; result still failed only on `downstream_selection_gap`, but RSS source readiness passed with 2 fetched content families, 10 explainable items, productive RSS fetch counts 20/20 and 10/10, and no empty-RSS downstream timeout gap;
-  - DB read-back confirmed operational RSS channel URLs were validated feed URLs (`https://www.yazoul.net/advisory/rss.xml`, `https://www.regcompliancewatch.com/feed/`), not raw article/candidate URLs.
+  - DB read-back confirmed operational RSS channel URLs were validated feed URLs (`https://www.yazoul.net/advisory/rss.xml`, `https://www.regcompliancewatch.com/feed/`), not raw signal_candidate/candidate URLs.
 - passed locally on 2026-06-03 for `discovery-vnext-p0-p1-hardening`:
   - implementation scope closed: expanded `SourceScopeResolution` contract and deterministic structural resolver, resolved-scope routing/handoff gates, fail-visible full-run status/warning summary, individual hypothesis-aware candidate identity and probe caps, generic item-observation mapping helpers, canonical `SourceUnderstanding` v2 envelope, coverage-policy MegaLoop request support, post-scope QueryQuality categories, and bounded source-scope re-resolution with reversible pause/demote audit support and no delete path;
   - migration proof passed: `pnpm test:migrations:smoke` applied 63 migrations and verified Discovery constraints/indexes, including migration `0062_discovery_vnext_p0_p1_hardening.sql`;
@@ -436,7 +562,7 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - reindex chunks: `weak_selected_seller_vendor_service_pages` job `b4f6a72c-215f-4ca7-b41f-20bba7ea6708` for 9 docIds, and `context_wrapper_portfolio_pages` job `85809dfa-fc2e-4a29-b328-ed7016d28cf8` for 16 docIds; both used `retroNotifications=skip`;
   - verification: `operator.selection.precision_audit`, `operator.report.verify` for `selection`, `selection_hold_quality`, `funnel_calibration`, and `operator.effect.verify` were run after bounded replay;
   - decision: `llm_templates.update` and system code fixes were deferred because repeated evidence supports feedback + `system_interests.update` calibration first; code changes are warranted only if later MCP evidence shows seller/vendor/wrapper SourceUnderstanding still routes to auto-register;
-  - residual gap: MCP `articles.holds.list` returned no buyer/project/vendor-search hold bucket, so no `buyer_hold` replay chunk was queued in this pass.
+  - residual gap: MCP `signal_candidates.holds.list` returned no buyer/project/vendor-search hold bucket, so no `buyer_hold` replay chunk was queued in this pass.
 - MCP tool gap closed on 2026-06-01:
   - added read-only `operator.selection.reindex_plan` to build bounded `weak_selected`, `buyer_hold`, and `context_only` docId buckets plus `maintenance.reindex.request` templates with `retroNotifications=skip`;
   - reason: the calibration run had enough primitive tools, but bucket planning for historical replay still required an external script;
@@ -447,8 +573,8 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - markdown report: `/tmp/newsportal-mcp-backfill-reindex-7c2a1740-a22e-4b94-bf66-2e237a94c509.md`;
   - reindex job: `a5c52fc0-67a4-4f8d-9950-466f0ff53369`;
   - status: `completed`; MCP calls: 11;
-  - payload: `indexName=interest_centroids`, `jobKind=backfill`, `batchSize=100`, `replayExistingArticles=true`, `includeEnrichment=false`, `forceEnrichment=false`, `retroNotifications=skip`;
-  - job read-back: processed 196 historical articles, criteria matches 980, LLM review failures/timeouts 0, retro notifications skipped;
+  - payload: `indexName=interest_centroids`, `jobKind=backfill`, `batchSize=100`, `replayExistingSignal Candidates=true`, `includeEnrichment=false`, `forceEnrichment=false`, `retroNotifications=skip`;
+  - job read-back: processed 196 historical signal_candidates, criteria matches 980, LLM review failures/timeouts 0, retro notifications skipped;
   - verification: `operator.report.verify` for `selection` and `selection_hold_quality`, plus `operator.effect.verify domain=selection`;
   - runtime note: `operator.selection.reindex_plan` was not listed in the currently running MCP container, so this run used canonical `maintenance.reindex.request`; source code and tests for the missing planner already exist and require MCP container rebuild to expose at runtime.
 - MCP runtime rebuild and planner verification passed locally on 2026-06-02:
@@ -459,26 +585,26 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - MCP `tools/list` exposed `operator.selection.reindex_plan` in a 220-tool surface;
   - `operator.selection.reindex_plan` read-only call passed and returned buckets `weak_selected=0`, `buyer_hold=0`, `context_only=0`, with `retroNotifications=skip` request template support;
   - interpretation: no bounded replay chunks are currently recommended after the full backfill, but the missing MCP planner tool is now available at runtime.
-- Raw-article versus selected-signal count clarification implemented locally on 2026-06-02:
-  - added API/SDK summary surface `/maintenance/articles/selection-summary` / `getArticleSelectionSummary` to distinguish raw `articles` observations from `final_selection_results` selected signals;
-  - added read-only MCP tool `operator.selection.dashboard` so MCP operators can verify why a raw article total such as 185 can coexist with zero selected/public lead signals;
-  - updated admin Articles triage to show global counters for article observations, selected article signals, visible content items, rejected rows, held/gray-zone rows and pending rows before page-local triage views;
+- Raw-signal_candidate versus selected-signal count clarification implemented locally on 2026-06-02:
+  - added API/SDK summary surface `/maintenance/signal-candidates/selection-summary` / `getSignalCandidateSelectionSummary` to distinguish raw `signal_candidates` observations from `final_selection_results` selected signals;
+  - added read-only MCP tool `operator.selection.dashboard` so MCP operators can verify why a raw signal_candidate total such as 185 can coexist with zero selected/public lead signals;
+  - updated admin Signal Candidates triage to show global counters for signal_candidate observations, selected signal_candidate signals, visible content items, rejected rows, held/gray-zone rows and pending rows before page-local triage views;
   - proof: `pnpm unit_tests:py -- tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed 364/364;
   - proof: `pnpm unit_tests:ts -- mcp-control-plane` passed 409/409;
   - proof: `pnpm unit_tests:ts -- sdk-pagination` passed 410/410;
   - proof: `pnpm --filter @newsportal/mcp typecheck` passed;
   - proof: `pnpm --filter @newsportal/sdk typecheck` passed;
   - proof: `pnpm --filter @newsportal/admin typecheck` passed with 0 errors and existing Astro hints;
-  - proof: `python3 -m py_compile services/api/app/article_list_read_model.py services/api/app/main.py services/api/app/routes/content_routes.py services/api/app/route_deps.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed;
-  - proof: `git diff --check -- services/api/app/article_list_read_model.py services/api/app/main.py services/api/app/routes/content_routes.py services/api/app/route_deps.py packages/sdk/src/index.ts services/mcp/src/operating-intelligence.ts services/mcp/src/tools.ts apps/admin/src/pages/articles.astro tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py tests/unit/ts/mcp-control-plane.test.ts tests/unit/ts/sdk-pagination.test.ts` passed.
+  - proof: `python3 -m py_compile services/api/app/signal_candidate_list_read_model.py services/api/app/main.py services/api/app/routes/content_routes.py services/api/app/route_deps.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed;
+  - proof: `git diff --check -- services/api/app/signal_candidate_list_read_model.py services/api/app/main.py services/api/app/routes/content_routes.py services/api/app/route_deps.py packages/sdk/src/index.ts services/mcp/src/operating-intelligence.ts services/mcp/src/tools.ts apps/admin/src/pages/signal-candidates.astro tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py tests/unit/ts/mcp-control-plane.test.ts tests/unit/ts/sdk-pagination.test.ts` passed.
   - runtime proof: `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml up -d --build api admin mcp nginx` completed and affected containers became healthy;
-  - runtime proof: `curl -sS http://127.0.0.1:8000/maintenance/articles/selection-summary` returned `rawArticleObservations=196`, `selectedArticleSignals=0`, `rejectedRows=196`, proving the 185/196 display is raw corpus, not selected signal yield;
-  - runtime proof: `curl -sS -I http://127.0.0.1:4322/articles` returned the expected admin auth redirect, `curl -sS http://127.0.0.1:4300/health` returned `{"service":"mcp","status":"ok"}`, and `docker exec docker-mcp-1 ... grep` confirmed `operator.selection.dashboard` is present in built MCP runtime.
+  - runtime proof: `curl -sS http://127.0.0.1:8000/maintenance/signal-candidates/selection-summary` returned `rawSignalCandidateObservations=196`, `selectedSignalCandidateSignals=0`, `rejectedRows=196`, proving the 185/196 display is raw corpus, not selected signal yield;
+  - runtime proof: `curl -sS -I http://127.0.0.1:4322/signal-candidates` returned the expected admin auth redirect, `curl -sS http://127.0.0.1:4300/health` returned `{"service":"mcp","status":"ok"}`, and `docker exec docker-mcp-1 ... grep` confirmed `operator.selection.dashboard` is present in built MCP runtime.
 - Public web selected-content bug fixed locally on 2026-06-02:
   - root cause: public web already used `/collections/system-selected`, but resource/listing rows entered that collection by active-interest content kind (`kind_enabled`) without a real `final_selection_results.is_selected=true` decision;
-  - contract checked: `.aidp/contracts/content-model.md` and `.aidp/contracts/content-analysis-and-gating.md` define raw `articles`/resources as observations and `final_selection_results`/content items as the public selected surface;
-  - fix: resource content items now require `web_resources.projected_article_id -> articles -> final_selection_results`, visible projected article, active kind, and `coalesce(fsr.is_selected, false)=true`; direct public `resource:*` detail uses the same selected gate;
-  - guard fix: public content item ids are UUID-validated before DB access so invalid `editorial:*` ids return 404 instead of leaking a database cast error as 500;
+  - contract checked: `.aidp/contracts/content-model.md` and `.aidp/contracts/content-analysis-and-gating.md` define raw `signal_candidates`/resources as observations and `final_selection_results`/content items as the public selected surface;
+  - fix: resource content items now require `web_resources.projected_signal_candidate_id -> signal_candidates -> final_selection_results`, visible projected signal_candidate, active kind, and `coalesce(fsr.is_selected, false)=true`; direct public `resource:*` detail uses the same selected gate;
+  - guard fix: public content item ids are UUID-validated before DB access so invalid `signal_candidate:*` ids return 404 instead of leaking a database cast error as 500;
   - proof: `pnpm unit_tests:py -- tests/unit/python/test_api_feed_dedup.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed 367/367;
   - proof: `python3 -m py_compile services/api/app/content_selection_read_model.py services/api/app/content_detail_read_model.py services/api/app/main.py tests/unit/python/test_api_feed_dedup.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed;
   - proof: `git diff --check -- services/api/app/content_selection_read_model.py services/api/app/content_detail_read_model.py services/api/app/main.py tests/unit/python/test_api_feed_dedup.py tests/unit/python/test_api_zero_shot_operator_surfaces.py tests/unit/python/test_api_sequence_management.py` passed;
@@ -499,28 +625,28 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - command: `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=250 node infra/scripts/run-ted-api-adapter-mcp-proof.mjs`;
   - artifact: `/tmp/newsportal-ted-api-adapter-mcp-proof-22c962e2-f7e2-47c0-b384-0705cb7da12c.json`;
   - markdown report: `/tmp/newsportal-ted-api-adapter-mcp-proof-22c962e2-f7e2-47c0-b384-0705cb7da12c.md`;
-  - status: `passed`; MCP calls: `34`; dry-run TED API items: `5`; fetched articles: `10`; selected public content items: `5`; read-after-write proof: true;
+  - status: `passed`; MCP calls: `34`; dry-run TED API items: `5`; fetched signal_candidates: `10`; selected public content items: `5`; read-after-write proof: true;
   - MCP-created/updated adapter: `api.ted_eu_software_tender_search`;
   - MCP-created channel: `16aee162-9318-4fb2-a852-aa49dc651b8d`, bound through `ingress.bindings.set` with `selectionMode=mcp`;
   - MCP-created calibration interest: `f2ba3dfe-419a-475b-9292-637f7f376b5e`, `TED EU software procurement buyer signals [22c962e2]`;
   - bounded MCP backfill job: `034a43a3-e20d-4180-acfc-98608fce5735`, `jobKind=backfill`, `retroNotifications=skip`, completed before selection readback;
   - public user-facing proof: `curl -sS 'http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=10'` returned `total=5`, and `curl -sS http://127.0.0.1:4321/` rendered `5 content items in the system-selected collection`;
-  - selection dashboard after proof: raw article observations `326`, selected article signals `5`, visible content items `5`, rejected rows `307`, gray-zone rows `14`, pending rows `0`;
+  - selection dashboard after proof: raw signal_candidate observations `326`, selected signal_candidate signals `5`, visible content items `5`, rejected rows `307`, gray-zone rows `14`, pending rows `0`;
   - selected examples include item-level official buyer/project evidence from TED: Netherlands Rotterdam VRI software programming, Cyprus Department of Insolvency integrated system/IaaS implementation, Liechtenstein digital project leadership, Germany GTAI ECMS hosting/development/support, Norway real-time workplace availability system;
   - system fixes applied to support this proof: `places=["global"]` now behaves as worldwide wildcard instead of a literal place, and final selection can promote clean item-level `buyer_intent`/`project_intent` candidate-signal consensus to selected while preserving document-level technical vetoes for wrapper/directory/jobs/repo noise;
   - proof: `PYTHONPATH=. python3 -m unittest tests.unit.python.test_candidate_signal_text tests.unit.python.test_scoring tests.unit.python.test_worker_hard_filters tests.unit.python.test_final_selection` passed 56/56;
   - proof: `python3 -m py_compile services/workers/app/candidate_signal_text.py services/workers/app/scoring.py services/workers/app/final_selection.py tests/unit/python/test_candidate_signal_text.py tests/unit/python/test_scoring.py tests/unit/python/test_worker_hard_filters.py tests/unit/python/test_final_selection.py` passed;
   - proof: `node --check infra/scripts/run-ted-api-adapter-mcp-proof.mjs` passed and `git diff --check -- services/workers/app/scoring.py services/workers/app/final_selection.py tests/unit/python/test_scoring.py tests/unit/python/test_worker_hard_filters.py tests/unit/python/test_final_selection.py infra/scripts/run-ted-api-adapter-mcp-proof.mjs .aidp/work.md` passed before this `.aidp/work.md` sync;
-  - residual risk: live Gemini criterion review rows still showed provider `HTTP Error 404: Not Found` in the article explain evidence, but deterministic item-level procurement evidence selected the items without pending LLM rows; LLM provider configuration should be checked separately so future quality-polishing loops can use LLM review instead of relying only on deterministic candidate-signal consensus.
+  - residual risk: live Gemini criterion review rows still showed provider `HTTP Error 404: Not Found` in the signal candidate explain evidence, but deterministic item-level procurement evidence selected the items without pending LLM rows; LLM provider configuration should be checked separately so future quality-polishing loops can use LLM review instead of relying only on deterministic candidate-signal consensus.
 - MCP discovery/web/API expansion for the outsourcing buyer-signal funnel continued locally on 2026-06-02:
   - World Bank official procurement API adapter proof added and run through MCP:
     - script: `infra/scripts/run-worldbank-procurement-mcp-proof.mjs`;
     - artifact: `/tmp/newsportal-worldbank-procurement-mcp-proof-40b62bb0-bbe8-46ad-854c-125455057e75.json`;
     - markdown report: `/tmp/newsportal-worldbank-procurement-mcp-proof-40b62bb0-bbe8-46ad-854c-125455057e75.md`;
-    - result: `needs_selection_followup`; MCP-created channel `d9ae7114-ffd7-4372-85af-8b69afdda928`; MCP-created interest `58a36bb4-157e-4d08-b9fd-3bc87674b7c9`; reindex job `b5dcbcb0-9378-494e-b52d-efb22f1fc937`; 10 article observations, 0 channel-selected items, global selected remained 5;
+    - result: `needs_selection_followup`; MCP-created channel `d9ae7114-ffd7-4372-85af-8b69afdda928`; MCP-created interest `58a36bb4-157e-4d08-b9fd-3bc87674b7c9`; reindex job `b5dcbcb0-9378-494e-b52d-efb22f1fc937`; 10 signal_candidate observations, 0 channel-selected items, global selected remained 5;
     - follow-up tuning artifact: `/tmp/newsportal-worldbank-procurement-mcp-followup-c9f2be4e-36f3-4518-b798-ff1475e6ecae.json`;
     - follow-up markdown: `/tmp/newsportal-worldbank-procurement-mcp-followup-c9f2be4e-36f3-4518-b798-ff1475e6ecae.md`;
-    - follow-up result: `needs_source_or_selection_followup`; MCP calls 26; read-after-write true; bounded reindex job `5d43fb55-8575-4f57-adad-55f7e25f6540` completed; World Bank channel selected stayed 0; `articles.feedback.submit`/`content_items.feedback.submit` remains an MCP tool gap for article-level useful/noise feedback.
+    - follow-up result: `needs_source_or_selection_followup`; MCP calls 26; read-after-write true; bounded reindex job `5d43fb55-8575-4f57-adad-55f7e25f6540` completed; World Bank channel selected stayed 0; `signal_candidates.feedback.submit`/`content_items.feedback.submit` remains an MCP tool gap for signal_candidate-level useful/noise feedback.
   - generic API adapter runtime support expanded for item URL templates:
     - changed `ApiChannelConfig`/schema/declarative resolver/runtime to support `urlTemplate`;
     - proof: `pnpm unit_tests:ts -- ingress-adapter-contracts` passed, `node --check infra/scripts/run-worldbank-procurement-mcp-proof.mjs` passed, and `git diff --check` passed for the touched adapter/runtime/test/script files before this `.aidp/work.md` sync.
@@ -537,8 +663,8 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
     - script: `infra/scripts/run-uk-contractsfinder-api-adapter-mcp-proof.mjs`;
     - successful ingestion artifact after URL dedupe fix: `/tmp/newsportal-uk-contractsfinder-mcp-proof-e17fd328-fb58-44f1-9acb-32d1487bf76d.json`;
     - markdown report: `/tmp/newsportal-uk-contractsfinder-mcp-proof-e17fd328-fb58-44f1-9acb-32d1487bf76d.md`;
-    - result: `needs_selection_followup`; MCP calls 30; MCP-created channel `b73e3daf-60cf-45ab-96df-9404e439291d`; MCP-created interest `04125ae3-a3e3-444b-90b3-89fdb3c7ab0d`; bounded reindex job `003c9bbe-4f5e-4e4e-9b9d-893872330d5f` completed; 19 article observations; 0 channel-selected items; global selected remained 5;
-    - residual evidence: early UK result was deduped to 1 article because the URL template used a fragment; the script now uses query-string `ocid` URLs so releases stay unique;
+    - result: `needs_selection_followup`; MCP calls 30; MCP-created channel `b73e3daf-60cf-45ab-96df-9404e439291d`; MCP-created interest `04125ae3-a3e3-444b-90b3-89fdb3c7ab0d`; bounded reindex job `003c9bbe-4f5e-4e4e-9b9d-893872330d5f` completed; 19 signal_candidate observations; 0 channel-selected items; global selected remained 5;
+    - residual evidence: early UK result was deduped to 1 signal_candidate because the URL template used a fragment; the script now uses query-string `ocid` URLs so releases stay unique;
     - residual evidence: many current CPV 72000000 items are award/training/hardware/non-software records and are correctly rejected; a subsequent place-tuning rerun was blocked by provider throttling `429 Too Many Requests`, so the `places=["global"]` follow-up must wait for the endpoint rate-limit window or use a narrower official query/source;
     - residual adapter gap: current declarative path reader cannot extract OCDS array fields such as `tender.documents.0.url`; add numeric array path support or a first-document URL mapping before relying on Contracts Finder HTML/detail URLs.
 - A fresh MCP-only discovery run with new outsourcing buyer-signal hypotheses completed locally on 2026-06-02:
@@ -548,11 +674,11 @@ Residual live-provider gaps must be recorded honestly if live provider credentia
   - markdown report: `/tmp/newsportal-outsourcing-buyer-signal-rescue-b6726b10-588d-4468-b45a-cd359489795d.md`;
   - result: `needs_followup`; MCP calls `346`; 5/5 new source families produced live candidates/provider evidence; 5/5 reached routing/backlog evidence; public selected stayed `5/8`;
   - reindex: bounded `maintenance.reindex.request jobKind=backfill` job `a0677299-8f1f-498e-a9fa-a35884968664` completed with `retroNotifications=skip`, processing 10 docIds;
-  - public/MCP readback after the run: raw article observations increased `435 -> 569`, selected article signals stayed `5`, visible content items stayed `5`, rejected rows `544`, gray-zone rows `20`, pending rows `0`, source inventory `116`, adapter backlog `30`;
+  - public/MCP readback after the run: raw signal_candidate observations increased `435 -> 569`, selected signal_candidate signals stayed `5`, visible content items stayed `5`, rejected rows `544`, gray-zone rows `20`, pending rows `0`, source inventory `116`, adapter backlog `30`;
   - promising discovery candidates now include City of Selma bid detail, City of Monroe permitting PDF, City of Crestwood permitting/licensing software PDF, Durham Oracle ERP implementation partner PDF, OHR ERP RFP, Snoqualmie ERP implementation PDF, DCOE website redesign/CMS services, CoveredCA website redesign PDF, ISBH website redesign RFP, Owosso website redesign/hosting PDF, Lone Star EHR RFP, Hawaii HANDS attachment, Emergence Health EHR services PDF, BHCC LMS RFP, and MCCS LMS RFP;
   - routed/probation evidence included channels for City of Selma `71d94996-70b6-4fa3-bc23-571adfad9a55`, OHR ERP RFP `214e191c-6f51-491b-9e0f-0a7f2c098d9c`, ISBH website redesign `a2889c3e-e8e7-4713-8386-95997828890d`, CMS interoperability context `755c0ad3-9f24-469e-874b-b0487ebe7e66`, SAM.gov opportunities `395d9adb-d38c-401b-8e18-007c5461113d`, and Nonprofit Newsfeed RFP databases `87cfcc41-35c3-4668-8a06-71b22f3215ef`;
   - interpretation: the new hypotheses materially improved discovery recall and found more plausible buyer/project item URLs, but fetch/channel monitoring still collapses many sources into wrapper, directory, search, or context pages; current selection correctly rejects those rather than inflating public lead signals;
-  - MCP `articles.explain` samples after the run showed `LGBTQIA+ Commission` rejected by `document_level_technical_filter` / `wrapper_directory_noise`, and `Find RFP Security & Safety Bids` rejected by `must_not:search`, despite project-intent candidate tiers; this supports adapter/source extraction work rather than relaxing selected-content semantics;
+  - MCP `signal_candidates.explain` samples after the run showed `LGBTQIA+ Commission` rejected by `document_level_technical_filter` / `wrapper_directory_noise`, and `Find RFP Security & Safety Bids` rejected by `must_not:search`, despite project-intent candidate tiers; this supports adapter/source extraction work rather than relaxing selected-content semantics;
   - next actionable gap: build MCP-created/updated item extractors/adapters for specific high-signal PDF/API-style sources or add generic document/PDF item handling, then replay bounded backfill; do not count source homepages, category pages, paid aggregators, or context pages as selected signals.
 - External review snapshot document was created on 2026-06-02:
   - path: `document/outsourcing-mcp-discovery-review.md`;

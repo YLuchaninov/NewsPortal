@@ -6,14 +6,14 @@ from services.api.app import web_resource_read_model as _web_resource_read_model
 SEQUENCE_DEFINITION_STATUSES = {"draft", "active", "archived"}
 SEQUENCE_RUN_CANCELLABLE_STATUSES = {"pending"}
 
-CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
+CONTENT_ITEM_ORIGINS = {"signal_candidate", "resource"}
 WEB_RESOURCE_EXTRACTION_STATES = _web_resource_read_model.WEB_RESOURCE_EXTRACTION_STATES
 WEB_CONTENT_LIST_SORTS = _content_query.WEB_CONTENT_LIST_SORTS
 WEB_RESOURCE_KINDS = _web_resource_read_model.WEB_RESOURCE_KINDS
 WEB_RESOURCE_PROJECTION_FILTERS = _web_resource_read_model.WEB_RESOURCE_PROJECTION_FILTERS
 
 CONTENT_ANALYSIS_SUBJECT_TYPES = {
-    "article",
+    "signal_candidate",
     "web_resource",
     "canonical_document",
     "story_cluster",

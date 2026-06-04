@@ -24,7 +24,7 @@ from .content_analysis import (
 )
 from .reindex_backfill import (
     HistoricalBackfillDependencies,
-    replay_historical_articles as replay_historical_articles_with_snapshot,
+    replay_historical_signal_candidates as replay_historical_signal_candidates_with_snapshot,
 )
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .worker_queues import (
@@ -109,8 +109,8 @@ async def process_llm_review(job: Any, job_token: str) -> dict[str, Any]:
     return await _worker_main().process_llm_review(job, job_token)
 
 
-async def process_article_extract(job: Any, job_token: str) -> dict[str, Any]:
-    return await _worker_main().process_article_extract(job, job_token)
+async def process_signal_candidate_extract(job: Any, job_token: str) -> dict[str, Any]:
+    return await _worker_main().process_signal_candidate_extract(job, job_token)
 
 
 async def process_normalize(job: Any, job_token: str) -> dict[str, Any]:
@@ -137,8 +137,8 @@ async def process_match_interests(job: Any, job_token: str) -> dict[str, Any]:
     return await _worker_main().process_match_interests(job, job_token)
 
 
-async def is_article_eligible_for_personalization(*args: Any, **kwargs: Any) -> bool:
-    return await _worker_main().is_article_eligible_for_personalization(*args, **kwargs)
+async def is_signal_candidate_eligible_for_personalization(*args: Any, **kwargs: Any) -> bool:
+    return await _worker_main().is_signal_candidate_eligible_for_personalization(*args, **kwargs)
 
 
 async def insert_outbox_event(*args: Any, **kwargs: Any) -> None:
@@ -235,34 +235,34 @@ async def prepare_historical_backfill_snapshot(
                 enrichment_clause = ""
                 if include_enrichment:
                     enrichment_clause = """
-                      and coalesce(articles.url, '') ~* '^https?://'
+                      and coalesce(signal_candidates.url, '') ~* '^https?://'
                     """
                     if not force_enrichment:
                         enrichment_clause += """
-                          and coalesce(articles.enrichment_state, 'pending') in ('pending', 'failed', 'skipped')
+                          and coalesce(signal_candidates.enrichment_state, 'pending') in ('pending', 'failed', 'skipped')
                         """
                 if doc_ids:
                     system_feed_clause = ""
                     if system_feed_only:
                         system_feed_clause = """
-                          and articles.visibility_state = 'visible'
+                          and signal_candidates.visibility_state = 'visible'
                           and (
                             exists (
                               select 1
                               from final_selection_results fsr
-                              where fsr.doc_id = articles.doc_id
+                              where fsr.doc_id = signal_candidates.doc_id
                                 and fsr.is_selected = true
                             )
                             or (
                               not exists (
                                 select 1
                                 from final_selection_results fsr_missing
-                                where fsr_missing.doc_id = articles.doc_id
+                                where fsr_missing.doc_id = signal_candidates.doc_id
                               )
                               and exists (
                                 select 1
                                 from system_feed_results sfr
-                                where sfr.doc_id = articles.doc_id
+                                where sfr.doc_id = signal_candidates.doc_id
                                   and coalesce(sfr.eligible_for_feed, false) = true
                               )
                             )
@@ -277,9 +277,9 @@ async def prepare_historical_backfill_snapshot(
                         )
                         select
                           %s,
-                          row_number() over (order by articles.created_at asc, articles.doc_id asc),
-                          articles.doc_id
-                        from articles
+                          row_number() over (order by signal_candidates.created_at asc, signal_candidates.doc_id asc),
+                          signal_candidates.doc_id
+                        from signal_candidates
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           and doc_id = any(%s::uuid[])
                           {system_feed_clause}
@@ -292,24 +292,24 @@ async def prepare_historical_backfill_snapshot(
                     system_feed_clause = ""
                     if system_feed_only:
                         system_feed_clause = """
-                          and articles.visibility_state = 'visible'
+                          and signal_candidates.visibility_state = 'visible'
                           and (
                             exists (
                               select 1
                               from final_selection_results fsr
-                              where fsr.doc_id = articles.doc_id
+                              where fsr.doc_id = signal_candidates.doc_id
                                 and fsr.is_selected = true
                             )
                             or (
                               not exists (
                                 select 1
                                 from final_selection_results fsr_missing
-                                where fsr_missing.doc_id = articles.doc_id
+                                where fsr_missing.doc_id = signal_candidates.doc_id
                               )
                               and exists (
                                 select 1
                                 from system_feed_results sfr
-                                where sfr.doc_id = articles.doc_id
+                                where sfr.doc_id = signal_candidates.doc_id
                                   and coalesce(sfr.eligible_for_feed, false) = true
                               )
                             )
@@ -324,9 +324,9 @@ async def prepare_historical_backfill_snapshot(
                         )
                         select
                           %s,
-                          row_number() over (order by articles.created_at asc, articles.doc_id asc),
-                          articles.doc_id
-                        from articles
+                          row_number() over (order by signal_candidates.created_at asc, signal_candidates.doc_id asc),
+                          signal_candidates.doc_id
+                        from signal_candidates
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           {system_feed_clause}
                           {enrichment_clause}
@@ -466,7 +466,7 @@ async def replay_gray_zone_reviews_for_doc(
     return {"completed": replay_count, "failed": failed_count, "timedOut": timeout_count}
 
 
-async def replay_historical_articles(
+async def replay_historical_signal_candidates(
     *,
     reindex_job_id: str,
     batch_size: int,
@@ -477,7 +477,7 @@ async def replay_historical_articles(
     include_enrichment: bool = False,
     force_enrichment: bool = False,
 ) -> dict[str, Any]:
-    return await replay_historical_articles_with_snapshot(
+    return await replay_historical_signal_candidates_with_snapshot(
         reindex_job_id=reindex_job_id,
         batch_size=batch_size,
         doc_ids=list(doc_ids) if doc_ids is not None else None,
@@ -491,14 +491,14 @@ async def replay_historical_articles(
             list_target_batch=list_historical_backfill_snapshot_batch,
             update_job_options=update_reindex_job_options,
             publish_outbox_event=ensure_published_outbox_event,
-            process_article_extract=process_article_extract,
+            process_signal_candidate_extract=process_signal_candidate_extract,
             process_normalize=process_normalize,
             process_dedup=process_dedup,
             process_embed=process_embed,
             process_cluster=process_cluster,
             process_match_criteria=process_match_criteria,
             process_match_interests=process_match_interests,
-            is_article_eligible_for_personalization=is_article_eligible_for_personalization,
+            is_signal_candidate_eligible_for_personalization=is_signal_candidate_eligible_for_personalization,
             replay_gray_zone_reviews_for_doc=replay_gray_zone_reviews_for_doc,
             is_cancel_requested=is_reindex_job_cancel_requested,
         ),
@@ -517,7 +517,7 @@ CONTENT_ANALYSIS_BACKFILL_MODULES = {
 DEFAULT_CONTENT_ANALYSIS_BACKFILL_MODULES = CONTENT_ANALYSIS_BACKFILL_MODULES.difference(
     {"structured_extraction"}
 )
-CONTENT_ANALYSIS_BACKFILL_SUBJECT_TYPES = {"article", "web_resource", "story_cluster"}
+CONTENT_ANALYSIS_BACKFILL_SUBJECT_TYPES = {"signal_candidate", "web_resource", "story_cluster"}
 
 
 def normalize_content_analysis_backfill_modules(value: Any) -> set[str]:
@@ -535,7 +535,7 @@ def normalize_content_analysis_backfill_subject_types(value: Any) -> list[str]:
         for item in coerce_text_list(value)
         if item in CONTENT_ANALYSIS_BACKFILL_SUBJECT_TYPES
     ]
-    return requested or ["article", "web_resource", "story_cluster"]
+    return requested or ["signal_candidate", "web_resource", "story_cluster"]
 
 
 def build_content_analysis_backfill_progress_patch(
@@ -629,13 +629,13 @@ def build_content_analysis_missing_clause(
             )
             """
         )
-    if subject_type == "article" and "system_interest_labels" in modules:
+    if subject_type == "signal_candidate" and "system_interest_labels" in modules:
         clauses.append(
             f"""
             not exists (
               select 1
               from content_labels cl
-              where cl.subject_type = 'article'
+              where cl.subject_type = 'signal_candidate'
                 and cl.subject_id = {alias}
                 and cl.label_type = 'system_interest'
             )
@@ -669,7 +669,7 @@ async def count_content_analysis_backfill_targets(
 ) -> int:
     subject_filter_clause = ""
     subject_filter_params: list[Any] = []
-    if subject_type == "article":
+    if subject_type == "signal_candidate":
         if subject_ids:
             subject_filter_clause = "and a.doc_id = any(%s::uuid[])"
             subject_filter_params.append(list(subject_ids))
@@ -685,7 +685,7 @@ async def count_content_analysis_backfill_targets(
         )
         sql = f"""
             select count(*)::int as total
-            from articles a
+            from signal_candidates a
             where coalesce(a.visibility_state, 'visible') != 'blocked'
               and coalesce(a.title, '') || coalesce(a.lead, '') || coalesce(a.body, '') <> ''
               {subject_filter_clause}
@@ -763,7 +763,7 @@ async def list_content_analysis_backfill_targets(
     after_params: list[Any] = []
     subject_filter_clause = ""
     subject_filter_params: list[Any] = []
-    if subject_type == "article":
+    if subject_type == "signal_candidate":
         if subject_ids:
             subject_filter_clause = "and a.doc_id = any(%s::uuid[])"
             subject_filter_params.append(list(subject_ids))
@@ -782,7 +782,7 @@ async def list_content_analysis_backfill_targets(
         )
         sql = f"""
             select a.doc_id::text as subject_id
-            from articles a
+            from signal_candidates a
             where coalesce(a.visibility_state, 'visible') != 'blocked'
               and coalesce(a.title, '') || coalesce(a.lead, '') || coalesce(a.body, '') <> ''
               {subject_filter_clause}
@@ -900,7 +900,7 @@ async def replay_content_analysis_subject(
             subject,
             max_text_chars=max_text_chars,
         )
-    if subject_type == "article" and "system_interest_labels" in modules:
+    if subject_type == "signal_candidate" and "system_interest_labels" in modules:
         result["systemInterestLabels"] = await asyncio.to_thread(
             project_system_interest_labels,
             subject_id,
@@ -1098,7 +1098,7 @@ def build_interest_auto_repair_job_options(
     return {
         "batchSize": 100,
         "retroNotifications": "skip",
-        "replayExistingArticles": True,
+        "replayExistingSignalCandidates": True,
         "systemFeedOnly": True,
         "userId": user_id,
         "interestId": interest_id,

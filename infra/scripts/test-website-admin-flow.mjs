@@ -159,7 +159,7 @@ const server = createServer((request, response) => {
   const sitemapTitle = \`Website sitemap story \${runId}\`;
   const feedTitle = \`Website feed story \${runId}\`;
   const entityTitle = \`Website entity \${runId}\`;
-  const apiArticleUrl = \`\${baseUrl}/records/api-story-\${runId}\`;
+  const apiSignalCandidateUrl = \`\${baseUrl}/records/api-story-\${runId}\`;
 
   if (request.url === "/" || request.url === "") {
     response.writeHead(200, {
@@ -246,7 +246,7 @@ const server = createServer((request, response) => {
           title: \`API fixture story \${runId}\`,
           lead: \`API fixture summary \${runId}\`,
           body: \`API fixture body \${runId} with operator proof text and enough detail for deterministic ingest.\`,
-          url: apiArticleUrl,
+          url: apiSignalCandidateUrl,
           publishedAt: "2026-03-30T14:00:00Z",
           language: "en",
         },
@@ -675,21 +675,21 @@ async function main() {
         payload.items.some(
           (item) =>
             String(item.resource_kind ?? "") === "entity" &&
-            item.projected_article_id &&
+            item.projected_signal_candidate_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
         ) &&
         payload.items.some(
           (item) =>
             String(item.resource_kind ?? "") === "document" &&
-            item.projected_article_id &&
+            item.projected_signal_candidate_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
         ) &&
         payload.items.some(
           (item) =>
             String(item.resource_kind ?? "") === "editorial" &&
-            item.projected_article_id &&
+            item.projected_signal_candidate_id &&
             String(item.extraction_state ?? "") === "enriched" &&
             String(item.title ?? "").trim().length > 0
         ),
@@ -706,7 +706,7 @@ async function main() {
                   extraction_error: item.extraction_error ?? item.extractionError ?? null,
                   projection_state: item.projection_state ?? item.projectionState ?? null,
                   projection_error: item.projection_error ?? item.projectionError ?? null,
-                  projected_article_id: item.projected_article_id ?? null,
+                  projected_signal_candidate_id: item.projected_signal_candidate_id ?? null,
                   title: item.title ?? null,
                 }))
               : payload?.items,
@@ -724,7 +724,7 @@ async function main() {
       (item) => String(item.resource_kind ?? "") === "document"
     );
     const projectedEditorial = latestResourcesPayload.items.find(
-      (item) => String(item.resource_kind ?? "") === "editorial" && item.projected_article_id
+      (item) => String(item.resource_kind ?? "") === "editorial" && item.projected_signal_candidate_id
     );
 
     if (!entityResource || !documentResource || !projectedEditorial) {
@@ -747,8 +747,8 @@ async function main() {
       `http://127.0.0.1:4322/resources/${encodeURIComponent(String(entityResource.resource_id ?? ""))}`,
       [
         String(entityResource.title ?? ""),
-        "Projected into article",
-        `/articles/${encodeURIComponent(String(entityResource.projected_article_id ?? ""))}`,
+        "Projected into signal candidate",
+        `/signal-candidates/${encodeURIComponent(String(entityResource.projected_signal_candidate_id ?? ""))}`,
       ],
       { cookie: adminCookie }
     );
@@ -757,19 +757,19 @@ async function main() {
       `http://127.0.0.1:4322/resources/${encodeURIComponent(String(projectedEditorial.resource_id ?? ""))}`,
       [
         String(projectedEditorial.title ?? ""),
-        "Projected into article",
-        `/articles/${encodeURIComponent(String(projectedEditorial.projected_article_id ?? ""))}`,
+        "Projected into signal candidate",
+        `/signal-candidates/${encodeURIComponent(String(projectedEditorial.projected_signal_candidate_id ?? ""))}`,
       ],
       { cookie: adminCookie }
     );
 
-    const projectedArticle = await waitFor(
-      "projected editorial article detail",
+    const projectedSignalCandidate = await waitFor(
+      "projected editorial signal_candidate detail",
       async () =>
         fetchJson(
-          `http://127.0.0.1:8000/maintenance/articles/${encodeURIComponent(String(projectedEditorial.projected_article_id ?? ""))}`
+          `http://127.0.0.1:8000/maintenance/signal-candidates/${encodeURIComponent(String(projectedEditorial.projected_signal_candidate_id ?? ""))}`
         ),
-      (payload) => String(payload?.doc_id ?? "") === String(projectedEditorial.projected_article_id ?? "")
+      (payload) => String(payload?.doc_id ?? "") === String(projectedEditorial.projected_signal_candidate_id ?? "")
     );
 
     console.log(
@@ -781,8 +781,8 @@ async function main() {
           resourceCount: resourcesPayload.items.length,
           entityResourceId: entityResource.resource_id,
           documentResourceId: documentResource.resource_id,
-          projectedArticleId: projectedEditorial.projected_article_id,
-          projectedArticleTitle: projectedArticle.title,
+          projectedSignalCandidateId: projectedEditorial.projected_signal_candidate_id,
+          projectedSignalCandidateTitle: projectedSignalCandidate.title,
           providerChannelsVerified: ["website"],
           providerProofNote: "API and Email IMAP ingestion are covered by pnpm test:providers:compose.",
           outOfScopeLanes: ["telegram", "youtube"],

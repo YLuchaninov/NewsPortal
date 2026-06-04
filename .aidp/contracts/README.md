@@ -19,7 +19,7 @@
 
 ## Текущие AIDP contracts
 
-- `.aidp/contracts/article-pipeline-core.md` — ingest-to-selection ownership, canonical reuse, final-selection truth, compatibility projections and reset/preserve discipline.
+- `.aidp/contracts/signal_candidate-pipeline-core.md` — ingest-to-selection ownership, canonical reuse, final-selection truth, compatibility projections and reset/preserve discipline.
 - `.aidp/contracts/auth-session-boundary.md` — Firebase web/admin identity, local PostgreSQL roles, cookies, allowlist and nginx `/admin` boundary.
 - `.aidp/contracts/browser-assisted-websites.md` — JS-heavy website fallback, fetchers-owned browser runtime, auth header safety, provenance and hard-site proof.
 - `.aidp/contracts/content-analysis-and-gating.md` — persisted content analysis, NER/entities, labels, content filter policies, gate results, admin/API/MCP analysis surfaces and safe enforce rollout rules.

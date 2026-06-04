@@ -232,7 +232,7 @@ values
         'module', 'discovery.content_sampler',
         'options', jsonb_build_object(
           'sources_field', 'probed_feeds',
-          'article_count', 3,
+          'signal_candidate_count', 3,
           'max_chars', 2000
         )
       ),
@@ -304,7 +304,7 @@ values
         'module', 'discovery.content_sampler',
         'options', jsonb_build_object(
           'sources_field', 'probed_websites',
-          'article_count', 3,
+          'signal_candidate_count', 3,
           'max_chars', 2000
         )
       ),

@@ -47,7 +47,7 @@ function readHeader(headers, name) {
 const adminActionTokenCache = new Map();
 const webActionTokenCache = new Map();
 const adminActionScopes = new Map([
-  ["/bff/admin/articles/enrichment-retry", "articles.enrichment-retry"],
+  ["/bff/admin/signal-candidates/enrichment-retry", "signal_candidates.enrichment-retry"],
   ["/bff/admin/automation", "automation"],
   ["/bff/admin/channels", "channels"],
   ["/bff/admin/channels/bulk", "channels.bulk"],
@@ -405,7 +405,7 @@ function syncDeterministicFollowedStory(env, { docId, userId }) {
         event_cluster_id,
         now(),
         now()
-      from articles
+      from signal_candidates
       where doc_id = ${sqlLiteral(docId)}::uuid
         and event_cluster_id is not null
       on conflict (user_id, event_cluster_id) do update
@@ -424,7 +424,7 @@ function upsertDeterministicInterestMatch(env, { docId, userId, interestId, runI
   queryPostgres(
     env,
     `
-      update articles
+      update signal_candidates
       set
         processing_state = 'matched',
         visibility_state = 'visible',
@@ -458,7 +458,7 @@ function upsertDeterministicInterestMatch(env, { docId, userId, interestId, runI
         0.96,
         'notify',
         jsonb_build_object('source', 'mvp-internal-seed', 'runId', ${sqlLiteral(runId)})
-      from articles a
+      from signal_candidates a
       where a.doc_id = ${sqlLiteral(docId)}::uuid
       on conflict (doc_id, interest_id) do update
       set
@@ -481,19 +481,19 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
   queryPostgres(
     env,
     `
-      with article_cluster as (
+      with signal_candidate_cluster as (
         select
           doc_id,
           coalesce(event_cluster_id, gen_random_uuid()) as cluster_id,
           title,
           published_at
-        from articles
+        from signal_candidates
         where doc_id = ${sqlLiteral(docId)}::uuid
       ),
       upsert_cluster as (
         insert into event_clusters (
           cluster_id,
-          article_count,
+          signal_candidate_count,
           primary_title,
           min_published_at,
           max_published_at
@@ -504,10 +504,10 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
           title,
           published_at,
           published_at
-        from article_cluster
+        from signal_candidate_cluster
         on conflict (cluster_id) do update
         set
-          article_count = greatest(event_clusters.article_count, 1),
+          signal_candidate_count = greatest(event_clusters.signal_candidate_count, 1),
           primary_title = coalesce(event_clusters.primary_title, excluded.primary_title),
           min_published_at = coalesce(event_clusters.min_published_at, excluded.min_published_at),
           max_published_at = coalesce(event_clusters.max_published_at, excluded.max_published_at),
@@ -517,25 +517,25 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
       upsert_member as (
         insert into event_cluster_members (cluster_id, doc_id)
         select cluster_id, doc_id
-        from article_cluster
+        from signal_candidate_cluster
         on conflict (doc_id) do update
         set cluster_id = excluded.cluster_id
         returning doc_id
       )
-      update articles a
+      update signal_candidates a
       set
         processing_state = 'matched',
         visibility_state = 'visible',
         canonical_doc_id = null,
-        family_id = article_cluster.doc_id,
+        family_id = signal_candidate_cluster.doc_id,
         is_exact_duplicate = false,
         is_near_duplicate = false,
-        event_cluster_id = article_cluster.cluster_id,
+        event_cluster_id = signal_candidate_cluster.cluster_id,
         published_at = now(),
         ingested_at = now(),
         updated_at = now()
-      from article_cluster
-      where a.doc_id = article_cluster.doc_id;
+      from signal_candidate_cluster
+      where a.doc_id = signal_candidate_cluster.doc_id;
 
       insert into canonical_documents (
         canonical_document_id,
@@ -580,7 +580,7 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
         coalesce(a.ingested_at, now()),
         now(),
         1
-      from articles a
+      from signal_candidates a
       left join source_channels sc on sc.channel_id = a.channel_id
       where a.doc_id = ${sqlLiteral(docId)}::uuid
       on conflict (canonical_document_id) do update
@@ -614,17 +614,17 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
         observation_state
       )
       select
-        'article',
+        'signal_candidate',
         a.doc_id,
         a.channel_id,
-        a.source_article_id,
+        a.source_signal_candidate_id,
         a.url,
         a.published_at,
         coalesce(a.ingested_at, now()),
         a.doc_id,
         'canonical',
         'canonicalized'
-      from articles a
+      from signal_candidates a
       where a.doc_id = ${sqlLiteral(docId)}::uuid
       on conflict (origin_type, origin_id) do update
       set
@@ -742,7 +742,7 @@ function materializeDeterministicMvpMatch(env, { docId, userId, userInterestId, 
         0.97,
         'notify',
         jsonb_build_object('source', 'mvp-internal-seed', 'runId', ${sqlLiteral(runId)})
-      from articles a
+      from signal_candidates a
       where a.doc_id = ${sqlLiteral(docId)}::uuid
       on conflict (doc_id, interest_id) do update
       set
@@ -871,10 +871,10 @@ async function main() {
   });
   const adminPassword = `SignalOps!${runId}`;
   const notificationEmail = `internal-user-${runId}@example.test`;
-  const articleTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
-  const articleSourceUrl = `https://example.test/content/${encodeURIComponent(`editorial:${runId}`)}`;
+  const signalCandidateTitle = `EU AI policy update reaches Brussels and Warsaw ${runId}`;
+  const signalCandidateSourceUrl = `https://example.test/content/${encodeURIComponent(`signal_candidate:${runId}`)}`;
   const adminFreshRunId = `${runId}-admin-fresh`;
-  const adminFreshArticleTitle = `EU AI policy update reaches Brussels and Warsaw ${adminFreshRunId}`;
+  const adminFreshSignalCandidateTitle = `EU AI policy update reaches Brussels and Warsaw ${adminFreshRunId}`;
   let stackStarted = false;
 
   try {
@@ -1557,15 +1557,15 @@ async function main() {
       adminChannelId
     );
 
-    const articleRow = await waitFor(
-      "ingested article row",
+    const signalCandidateRow = await waitFor(
+      "ingested signal_candidate row",
       async () => {
         const row = queryPostgres(
           env,
           `
             select doc_id::text, processing_state, visibility_state
-            from articles
-            where title = ${sqlLiteral(articleTitle)}
+            from signal_candidates
+            where title = ${sqlLiteral(signalCandidateTitle)}
             order by ingested_at desc
             limit 1;
           `
@@ -1574,7 +1574,7 @@ async function main() {
       },
       (row) => Array.isArray(row) && row.length === 3
     );
-    const docId = articleRow[0];
+    const docId = signalCandidateRow[0];
     materializeDeterministicMvpMatch(env, {
       docId,
       userId,
@@ -1592,21 +1592,21 @@ async function main() {
     );
 
     await waitFor(
-      "article match lifecycle state",
+      "signal_candidate match lifecycle state",
       async () =>
         queryPostgres(
           env,
           `
             select processing_state
-            from articles
+            from signal_candidates
             where doc_id = ${sqlLiteral(docId)};
           `
         ),
       (value) => value === "matched" || value === "notified"
     );
 
-    const editorialContentItemId = `editorial:${docId}`;
-    const articleQuery = encodeURIComponent(articleTitle);
+    const editorialContentItemId = `signal_candidate:${docId}`;
+    const signalCandidateQuery = encodeURIComponent(signalCandidateTitle);
     materializeDeterministicMvpMatch(env, {
       docId,
       userId,
@@ -1623,29 +1623,29 @@ async function main() {
     if (!publicCollectionItem) {
       throw new Error(`Expected /collections/system-selected to include content item ${editorialContentItemId}.`);
     }
-    if (String(publicCollectionItem.url ?? "") !== articleSourceUrl) {
+    if (String(publicCollectionItem.url ?? "") !== signalCandidateSourceUrl) {
       throw new Error(
-        `Expected /collections/system-selected item ${editorialContentItemId} to expose source url ${articleSourceUrl}, got ${String(publicCollectionItem.url ?? "<none>")}.`
+        `Expected /collections/system-selected item ${editorialContentItemId} to expose source url ${signalCandidateSourceUrl}, got ${String(publicCollectionItem.url ?? "<none>")}.`
       );
     }
     await assertHtmlContains(
-      `http://127.0.0.1:4321/?q=${articleQuery}`,
-      [articleTitle],
+      `http://127.0.0.1:4321/?q=${signalCandidateQuery}`,
+      [signalCandidateTitle],
       { cookie: webCookie }
     );
     await assertHtmlContains(
-      `http://127.0.0.1:4321/matches?q=${articleQuery}`,
-      [articleTitle, "My Matches"],
+      `http://127.0.0.1:4321/matches?q=${signalCandidateQuery}`,
+      [signalCandidateTitle, "My Matches"],
       { cookie: webCookie }
     );
     await assertHtmlContains(
       `http://127.0.0.1:4321/content/${encodeURIComponent(editorialContentItemId)}`,
-      [articleTitle, articleSourceUrl, "Mark unread", "Save", "Follow story"],
+      [signalCandidateTitle, signalCandidateSourceUrl, "Mark unread", "Save", "Follow story"],
       { cookie: webCookie }
     );
     await assertHtmlDoesNotContain(
       "http://127.0.0.1:4321/",
-      [`/articles/${docId}/explain`],
+      [`/signal-candidates/${docId}/explain`],
       { cookie: webCookie }
     );
     if (
@@ -1721,7 +1721,7 @@ async function main() {
       userId,
     });
 
-    await assertHtmlContains("http://127.0.0.1:4321/saved", [articleTitle, "Preview selected digest"], {
+    await assertHtmlContains("http://127.0.0.1:4321/saved", [signalCandidateTitle, "Preview selected digest"], {
       cookie: webCookie
     });
     materializeDeterministicMvpMatch(env, {
@@ -1734,17 +1734,17 @@ async function main() {
       docId,
       userId,
     });
-    await assertHtmlContains("http://127.0.0.1:4321/following", [articleTitle], {
+    await assertHtmlContains("http://127.0.0.1:4321/following", [signalCandidateTitle], {
       cookie: webCookie
     });
     await assertHtmlContains(
       "http://127.0.0.1:4321/notifications",
-      [articleTitle, "Notification History"],
+      [signalCandidateTitle, "Notification History"],
       { cookie: webCookie }
     );
     await assertHtmlContains(
       `http://127.0.0.1:4321/saved/digest?item=${encodeURIComponent(editorialContentItemId)}`,
-      [articleTitle, "Download HTML", "Send to email"],
+      [signalCandidateTitle, "Download HTML", "Send to email"],
       { cookie: webCookie }
     );
 
@@ -1762,8 +1762,8 @@ async function main() {
     if (!readHeader(exportDigestResponse.headers, "content-disposition").includes("saved-digest.html")) {
       throw new Error("Saved digest export should include a saved-digest.html attachment filename.");
     }
-    if (!exportDigestResponse.text.includes(articleTitle)) {
-      throw new Error("Saved digest export did not render the selected article.");
+    if (!exportDigestResponse.text.includes(signalCandidateTitle)) {
+      throw new Error("Saved digest export did not render the selected signal_candidate.");
     }
 
     const manualDigestMailCountBefore = (await fetchMailMessages()).length;
@@ -1814,7 +1814,7 @@ async function main() {
         messages.length > manualDigestMailCountBefore &&
         messages.some((message) => {
           const serialized = JSON.stringify(message);
-          return serialized.includes("Saved digest") && serialized.includes(articleTitle);
+          return serialized.includes("Saved digest") && serialized.includes(signalCandidateTitle);
         })
     );
 
@@ -1879,7 +1879,7 @@ async function main() {
         messages.length > scheduledDigestMailCountBefore &&
         messages.some((message) => {
           const serialized = JSON.stringify(message);
-          return serialized.includes("every 3 days") && serialized.includes(articleTitle);
+          return serialized.includes("every 3 days") && serialized.includes(signalCandidateTitle);
         })
     );
     if (
@@ -1992,8 +1992,8 @@ async function main() {
       }
     );
     await waitFor(
-      "blocked article visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/maintenance/articles/${docId}`),
+      "blocked signal_candidate visibility",
+      async () => fetchJson(`http://127.0.0.1:8000/maintenance/signal-candidates/${docId}`),
       (payload) => payload?.visibility_state === "blocked"
     );
 
@@ -2009,8 +2009,8 @@ async function main() {
       }
     );
     await waitFor(
-      "unblocked article visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/maintenance/articles/${docId}`),
+      "unblocked signal_candidate visibility",
+      async () => fetchJson(`http://127.0.0.1:8000/maintenance/signal-candidates/${docId}`),
       (payload) => payload?.visibility_state === "visible"
     );
 
@@ -2020,8 +2020,8 @@ async function main() {
         `
           select count(*)::int
           from audit_log
-          where action_type = 'article_moderation'
-            and entity_type = 'article'
+          where action_type = 'signal_candidate_moderation'
+            and entity_type = 'signal_candidate'
             and entity_id = ${sqlLiteral(docId)};
         `
       )
@@ -2091,7 +2091,7 @@ async function main() {
     });
     if (historicalNotificationCountBeforeBackfill !== 0) {
       throw new Error(
-        `Expected historical auto-sync to skip retro notifications for article ${docId} and interest ${adminManagedInterestId}, got ${historicalNotificationCountBeforeBackfill}.`
+        `Expected historical auto-sync to skip retro notifications for signal_candidate ${docId} and interest ${adminManagedInterestId}, got ${historicalNotificationCountBeforeBackfill}.`
       );
     }
     const historicalSuppressionCountBeforeBackfill = countSuppressions(env, {
@@ -2100,7 +2100,7 @@ async function main() {
     });
     if (historicalSuppressionCountBeforeBackfill !== 0) {
       throw new Error(
-        `Expected historical auto-sync to skip retro suppressions for article ${docId} and interest ${adminManagedInterestId}, got ${historicalSuppressionCountBeforeBackfill}.`
+        `Expected historical auto-sync to skip retro suppressions for signal_candidate ${docId} and interest ${adminManagedInterestId}, got ${historicalSuppressionCountBeforeBackfill}.`
       );
     }
 
@@ -2133,15 +2133,15 @@ async function main() {
       adminFreshChannelId
     );
 
-    const freshArticleRow = await waitFor(
-      "fresh article row for admin-managed interest",
+    const freshSignalCandidateRow = await waitFor(
+      "fresh signal_candidate row for admin-managed interest",
       async () => {
         const row = queryPostgres(
           env,
           `
             select doc_id::text, processing_state, visibility_state
-            from articles
-            where title = ${sqlLiteral(adminFreshArticleTitle)}
+            from signal_candidates
+            where title = ${sqlLiteral(adminFreshSignalCandidateTitle)}
             order by ingested_at desc
             limit 1;
           `
@@ -2150,7 +2150,7 @@ async function main() {
       },
       (row) => Array.isArray(row) && row.length === 3
     );
-    const freshDocId = freshArticleRow[0];
+    const freshDocId = freshSignalCandidateRow[0];
 
     upsertDeterministicInterestMatch(env, {
       docId: freshDocId,
@@ -2168,13 +2168,13 @@ async function main() {
       );
     }
     await waitFor(
-      "fresh article lifecycle state",
+      "fresh signal_candidate lifecycle state",
       async () =>
         queryPostgres(
           env,
           `
             select processing_state
-            from articles
+            from signal_candidates
             where doc_id = ${sqlLiteral(freshDocId)};
           `
         ),
@@ -2186,7 +2186,7 @@ async function main() {
         channelType: "email_digest"
       }) !== 0
     ) {
-      throw new Error(`Fresh article ${freshDocId} should not create immediate email_digest notification rows.`);
+      throw new Error(`Fresh signal_candidate ${freshDocId} should not create immediate email_digest notification rows.`);
     }
 
     const freshAdminMatchCountBeforeBackfill = countInterestMatches(env, {
@@ -2243,7 +2243,7 @@ async function main() {
     });
     if (historicalAdminMatchCountAfterBackfill !== historicalAdminMatchCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to keep historical article ${docId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${historicalAdminMatchCountBeforeBackfill}, after=${historicalAdminMatchCountAfterBackfill}.`
+        `Expected backfill to keep historical signal_candidate ${docId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${historicalAdminMatchCountBeforeBackfill}, after=${historicalAdminMatchCountAfterBackfill}.`
       );
     }
 
@@ -2253,7 +2253,7 @@ async function main() {
     });
     if (historicalNotificationCountAfterBackfill !== historicalNotificationCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to avoid retro notifications for historical article ${docId}; before=${historicalNotificationCountBeforeBackfill}, after=${historicalNotificationCountAfterBackfill}.`
+        `Expected backfill to avoid retro notifications for historical signal_candidate ${docId}; before=${historicalNotificationCountBeforeBackfill}, after=${historicalNotificationCountAfterBackfill}.`
       );
     }
 
@@ -2263,7 +2263,7 @@ async function main() {
     });
     if (historicalSuppressionCountAfterBackfill !== historicalSuppressionCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to avoid retro suppression rows for historical article ${docId}; before=${historicalSuppressionCountBeforeBackfill}, after=${historicalSuppressionCountAfterBackfill}.`
+        `Expected backfill to avoid retro suppression rows for historical signal_candidate ${docId}; before=${historicalSuppressionCountBeforeBackfill}, after=${historicalSuppressionCountAfterBackfill}.`
       );
     }
 
@@ -2273,7 +2273,7 @@ async function main() {
     });
     if (freshAdminMatchCountAfterBackfill !== freshAdminMatchCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to keep fresh article ${freshDocId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshAdminMatchCountBeforeBackfill}, after=${freshAdminMatchCountAfterBackfill}.`
+        `Expected backfill to keep fresh signal_candidate ${freshDocId} match cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshAdminMatchCountBeforeBackfill}, after=${freshAdminMatchCountAfterBackfill}.`
       );
     }
 
@@ -2284,7 +2284,7 @@ async function main() {
     });
     if (freshNotificationCountAfterBackfill !== freshNotificationCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to avoid retro notifications for fresh article ${freshDocId}; before=${freshNotificationCountBeforeBackfill}, after=${freshNotificationCountAfterBackfill}.`
+        `Expected backfill to avoid retro notifications for fresh signal_candidate ${freshDocId}; before=${freshNotificationCountBeforeBackfill}, after=${freshNotificationCountAfterBackfill}.`
       );
     }
 
@@ -2294,14 +2294,14 @@ async function main() {
     });
     if (freshSuppressionCountAfterBackfill !== freshSuppressionCountBeforeBackfill) {
       throw new Error(
-        `Expected backfill to keep fresh article ${freshDocId} suppression cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshSuppressionCountBeforeBackfill}, after=${freshSuppressionCountAfterBackfill}.`
+        `Expected backfill to keep fresh signal_candidate ${freshDocId} suppression cardinality stable for admin-managed interest ${adminManagedInterestId}; before=${freshSuppressionCountBeforeBackfill}, after=${freshSuppressionCountAfterBackfill}.`
       );
     }
 
-    log("Verifying the admin article detail surface and enrichment retry flow on the fresh article.");
+    log("Verifying the admin signal_candidate detail surface and enrichment retry flow on the fresh signal_candidate.");
     await assertHtmlContains(
-      `http://127.0.0.1:4322/articles/${freshDocId}`,
-      [adminFreshArticleTitle, "Retry enrichment", "Raw enrichment debug"],
+      `http://127.0.0.1:4322/signal-candidates/${freshDocId}`,
+      [adminFreshSignalCandidateTitle, "Retry enrichment", "Raw enrichment debug"],
       { cookie: adminCookie }
     );
     const enrichmentRetryAuditBefore = countNotifications(env, {
@@ -2313,16 +2313,16 @@ async function main() {
       `
         select count(*)::int
         from audit_log
-        where action_type = 'article_enrichment_retry'
-          and entity_type = 'article'
+        where action_type = 'signal_candidate_enrichment_retry'
+          and entity_type = 'signal_candidate'
           and entity_id = ${sqlLiteral(freshDocId)};
       `
     );
     const retryResponse = await postBrowserForm(
-      "http://127.0.0.1:4322/bff/admin/articles/enrichment-retry",
+      "http://127.0.0.1:4322/bff/admin/signal-candidates/enrichment-retry",
       {
         docId: freshDocId,
-        redirectTo: `/articles/${freshDocId}`,
+        redirectTo: `/signal-candidates/${freshDocId}`,
       },
       {
         cookie: adminCookie
@@ -2330,28 +2330,28 @@ async function main() {
     );
     assertFlashRedirect(retryResponse, {
       origin: "http://127.0.0.1:4322",
-      pathname: `/articles/${freshDocId}`,
-      section: "articles",
+      pathname: `/signal-candidates/${freshDocId}`,
+      section: "signal_candidates",
       status: "success",
       message: "Enrichment retry queued"
     });
     await waitFor(
-      "fresh article enrichment retry audit row",
+      "fresh signal_candidate enrichment retry audit row",
       async () =>
         queryPostgresInt(
           env,
           `
             select count(*)::int
             from audit_log
-            where action_type = 'article_enrichment_retry'
-              and entity_type = 'article'
+            where action_type = 'signal_candidate_enrichment_retry'
+              and entity_type = 'signal_candidate'
               and entity_id = ${sqlLiteral(freshDocId)};
           `
         ),
       (count) => count >= retryAuditCountBefore + 1
     );
     await waitFor(
-      "fresh article manual enrichment retry sequence run",
+      "fresh signal_candidate manual enrichment retry sequence run",
       async () =>
         queryPostgres(
           env,
@@ -2372,12 +2372,12 @@ async function main() {
     });
     if (freshNotificationCountAfterRetry < enrichmentRetryAuditBefore) {
       throw new Error(
-        `Expected fresh article retry to avoid deleting notification history for ${freshDocId}; before=${enrichmentRetryAuditBefore}, after=${freshNotificationCountAfterRetry}.`
+        `Expected fresh signal_candidate retry to avoid deleting notification history for ${freshDocId}; before=${enrichmentRetryAuditBefore}, after=${freshNotificationCountAfterRetry}.`
       );
     }
 
     log(
-      `Internal MVP acceptance passed for user ${userId}, admin ${adminEmail}, historical article ${docId}, fresh article ${freshDocId}, and admin-managed interest ${adminManagedInterestId}.`
+      `Internal MVP acceptance passed for user ${userId}, admin ${adminEmail}, historical signal_candidate ${docId}, fresh signal_candidate ${freshDocId}, and admin-managed interest ${adminManagedInterestId}.`
     );
   } finally {
     log("Cleaning up allowlisted Firebase admin identity.");

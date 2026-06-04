@@ -83,7 +83,7 @@ function formatFetchRunSummary(run: R): string {
       asInt(hits.llms, 0);
     return `${staticAccepted} static / +${browserOnly} browser / ${finalAccepted} final / ${total304} 304`;
   }
-  return `${String(run.fetched_item_count ?? 0)} fetched / ${String(run.new_article_count ?? 0)} new / ${String(run.duplicate_suppressed_count ?? 0)} dupes`;
+  return `${String(run.fetched_item_count ?? 0)} fetched / ${String(run.new_signal_candidate_count ?? 0)} new / ${String(run.duplicate_suppressed_count ?? 0)} dupes`;
 }
 const llmUsage24h = asRecord<R>((llmUsageSummary as R)["24h"]);
 const llmUsage7d = asRecord<R>((llmUsageSummary as R)["7d"]);
@@ -138,7 +138,7 @@ const fetchRunsRevision = buildAdminLiveRevision([
   fetchRuns.items[0]?.channel_id ?? "",
   fetchRuns.items[0]?.started_at ?? "",
   fetchRuns.items[0]?.outcome_kind ?? "",
-  fetchRuns.items[0]?.new_article_count ?? "",
+  fetchRuns.items[0]?.new_signal_candidate_count ?? "",
 ]);
 const llmReviewsRevision = buildAdminLiveRevision([
   llmReviews.total,
@@ -222,11 +222,11 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
           </div>
           <div class="rounded-md border border-border bg-card p-2.5">
             <p class="font-medium text-foreground text-[11px] mb-0.5">AI review &amp; budget mode</p>
-            <p class="text-[11px]">Use this mode when spend, quota, or review latency looks off. It is about gray-zone review pressure, not about whether an article should be moderated.</p>
+            <p class="text-[11px]">Use this mode when spend, quota, or review latency looks off. It is about gray-zone review pressure, not about whether a signal candidate should be moderated.</p>
           </div>
           <div class="rounded-md border border-border bg-card p-2.5">
             <p class="font-medium text-foreground text-[11px] mb-0.5">Escalate elsewhere</p>
-            <p class="text-[11px]">For canonical evidence, verification, and final selection use <a href={appPath("/articles")} class="text-primary hover:underline">Articles</a>. For vNext source understanding, routing, and source inventory use <a href={appPath("/discovery")} class="text-primary hover:underline">Discovery</a>.</p>
+            <p class="text-[11px]">For canonical evidence, verification, and final selection use <a href={appPath("/signal-candidates")} class="text-primary hover:underline">Signal Candidates</a>. For vNext source understanding, routing, and source inventory use <a href={appPath("/discovery")} class="text-primary hover:underline">Discovery</a>.</p>
           </div>
         </div>
       </div>
@@ -375,7 +375,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
           <table class="admin-table w-full text-sm">
             <thead>
               <tr class="border-b border-border">
-                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Article</th>
+                <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">SignalCandidate</th>
                 <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Decision</th>
                 <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Tokens</th>
                 <th class="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Latency</th>
@@ -390,7 +390,7 @@ const resolveViewHref = createViewHrefResolver(Astro.url, { defaultView: "fetch"
                 <tr class="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td class="px-4 py-2.5">
                     <div class="admin-table-meta">
-                      <div class="text-xs font-medium line-clamp-1">{String(r.article_title ?? r.doc_id ?? "—")}</div>
+                      <div class="text-xs font-medium line-clamp-1">{String(r.signal_candidate_title ?? r.doc_id ?? "—")}</div>
                       <div class="text-[10px] text-muted-foreground">{formatTimestamp(r.created_at, { includeYear: false })}</div>
                     </div>
                   </td>

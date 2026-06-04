@@ -92,7 +92,7 @@ function adapterPayload(status = "active") {
     description:
       "Declarative World Bank Procurement Notices API adapter for digital platform/software implementation buyer signals.",
     providerType: "api",
-    outputMode: "articles",
+    outputMode: "signal_candidates",
     status,
     priority: 880,
     matchRules: {
@@ -324,18 +324,18 @@ async function main() {
     report.evidence.fetchRun = await waitFor("World Bank channel fetch run", async () => {
       const fetchRuns = await mcp(report, harness, token, "fetch_runs.list", { channelId, page: 1, pageSize: 5 });
       const latest = rows(fetchRuns)[0];
-      if (latest?.outcome === "new_content" || Number(latest?.new_article_count ?? latest?.newArticleCount ?? 0) > 0) {
+      if (latest?.outcome === "new_content" || Number(latest?.new_signal_candidate_count ?? latest?.newSignalCandidateCount ?? 0) > 0) {
         return latest;
       }
       return null;
     });
-    report.evidence.articles = await waitFor("World Bank channel articles", async () => {
-      const articles = await mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 10 });
-      return rows(articles).length > 0 ? articles : null;
+    report.evidence.signal_candidates = await waitFor("World Bank channel signal_candidates", async () => {
+      const signal_candidates = await mcp(report, harness, token, "signal_candidates.list", { channelId, page: 1, pageSize: 10 });
+      return rows(signal_candidates).length > 0 ? signal_candidates : null;
     });
-    const articleRows = rows(report.evidence.articles);
-    const docIds = articleRows
-      .map((article) => idFrom(article, ["doc_id", "docId", "id", "entityId"]))
+    const signalCandidateRows = rows(report.evidence.signal_candidates);
+    const docIds = signalCandidateRows
+      .map((signal_candidate) => idFrom(signal_candidate, ["doc_id", "docId", "id", "entityId"]))
       .filter(Boolean)
       .slice(0, 10);
     report.evidence.reindex = await mcp(report, harness, token, "maintenance.reindex.request", {
@@ -361,9 +361,9 @@ async function main() {
       });
     }
 
-    report.evidence.articleExplains = [];
+    report.evidence.signalCandidateExplains = [];
     for (const docId of docIds.slice(0, 5)) {
-      report.evidence.articleExplains.push(await mcp(report, harness, token, "articles.explain", { docId }));
+      report.evidence.signalCandidateExplains.push(await mcp(report, harness, token, "signal_candidates.explain", { docId }));
     }
     report.evidence.selectionDashboard = await mcp(report, harness, token, "operator.selection.dashboard", {});
     report.evidence.contentItems = await mcp(report, harness, token, "content_items.list", { channelId, page: 1, pageSize: 10 });
@@ -378,10 +378,10 @@ async function main() {
     report.counts = {
       mcpCalls: report.mcpCalls.length,
       dryRunItems: rows(report.evidence.dryRun?.itemsPreview).length,
-      articles: articleRows.length,
-      articleExplains: report.evidence.articleExplains.length,
+      signal_candidates: signalCandidateRows.length,
+      signalCandidateExplains: report.evidence.signalCandidateExplains.length,
       selectedContentItems: contentRows.length,
-      globalSelectedArticleSignals: report.evidence.selectionDashboard?.counts?.selectedArticleSignals ?? null,
+      globalSelectedSignalCandidateSignals: report.evidence.selectionDashboard?.counts?.selectedSignalCandidateSignals ?? null,
       readAfterWriteOk: report.readAfterWrite.every((entry) => entry.ok === true),
     };
   } catch (error) {
@@ -404,9 +404,9 @@ async function main() {
         `- Channel ID: ${report.evidence.channelId ?? "n/a"}`,
         `- MCP calls: ${report.mcpCalls.length}`,
         `- Dry-run items: ${rows(report.evidence.dryRun?.itemsPreview).length}`,
-        `- Articles: ${rows(report.evidence.articles).length}`,
+        `- Signal Candidates: ${rows(report.evidence.signal_candidates).length}`,
         `- Selected content items on channel: ${rows(report.evidence.contentItems).length}`,
-        `- Global selected article signals: ${report.evidence.selectionDashboard?.counts?.selectedArticleSignals ?? "n/a"}`,
+        `- Global selected signal_candidate signals: ${report.evidence.selectionDashboard?.counts?.selectedSignalCandidateSignals ?? "n/a"}`,
         `- JSON: ${jsonPath}`,
       ].join("\n"),
       "utf8"

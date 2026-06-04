@@ -35,7 +35,7 @@ test("reindex cancellation key ignores runtime result fields and batch size", ()
     jobKind: "backfill",
     optionsJson: {
       batchSize: 25,
-      progress: { processedArticles: 10 },
+      progress: { processedSignalCandidates: 10 },
       docIds: ["b", "a"],
       includeEnrichment: false,
     },
@@ -45,7 +45,7 @@ test("reindex cancellation key ignores runtime result fields and batch size", ()
     jobKind: "backfill",
     optionsJson: {
       batchSize: 500,
-      backfill: { processedArticles: 99 },
+      backfill: { processedSignalCandidates: 99 },
       docIds: ["a", "b"],
       includeEnrichment: false,
     },

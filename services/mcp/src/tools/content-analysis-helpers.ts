@@ -7,7 +7,7 @@ import {
   readOptionalString,
 } from "./shared";
 
-const CONTENT_ANALYSIS_SUBJECT_TYPES = ["article", "web_resource", "story_cluster"] as const;
+const CONTENT_ANALYSIS_SUBJECT_TYPES = ["signal_candidate", "web_resource", "story_cluster"] as const;
 const CONTENT_ANALYSIS_MODULES = [
   "ner",
   "sentiment",

@@ -57,10 +57,10 @@ function readProgressLabel(job: ReindexRow): string | null {
   }
   const progressRecord = progress as Record<string, unknown>;
   const processed = Number(
-    progressRecord.processedArticles ?? progressRecord.processedContentItems ?? NaN
+    progressRecord.processedSignalCandidates ?? progressRecord.processedContentItems ?? NaN
   );
   const total = Number(
-    progressRecord.totalArticles ?? progressRecord.totalContentItems ?? NaN
+    progressRecord.totalSignalCandidates ?? progressRecord.totalContentItems ?? NaN
   );
   if (!Number.isFinite(processed) || !Number.isFinite(total) || total <= 0) {
     return null;
@@ -132,11 +132,11 @@ const initialJobs = {
     const progress = optionsJson && typeof optionsJson === "object"
       ? ((optionsJson as Record<string, unknown>).progress as Record<string, unknown> | undefined)
       : undefined;
-    const processedArticles = progress
-      ? Number(progress.processedArticles ?? progress.processedContentItems ?? NaN)
+    const processedSignalCandidates = progress
+      ? Number(progress.processedSignalCandidates ?? progress.processedContentItems ?? NaN)
       : NaN;
-    const totalArticles = progress
-      ? Number(progress.totalArticles ?? progress.totalContentItems ?? NaN)
+    const totalSignalCandidates = progress
+      ? Number(progress.totalSignalCandidates ?? progress.totalContentItems ?? NaN)
       : NaN;
     return {
       reindexJobId: String(job.reindex_job_id ?? ""),
@@ -146,9 +146,9 @@ const initialJobs = {
       cancellable: ["queued", "running", "cancel_requested"].includes(String(job.status)),
       createdAt: job.created_at ? String(job.created_at) : null,
       createdAtLabel: job.created_at ? String(job.created_at) : null,
-      processedArticles:
-        Number.isFinite(processedArticles) ? processedArticles : null,
-      totalArticles: Number.isFinite(totalArticles) ? totalArticles : null,
+      processedSignalCandidates:
+        Number.isFinite(processedSignalCandidates) ? processedSignalCandidates : null,
+      totalSignalCandidates: Number.isFinite(totalSignalCandidates) ? totalSignalCandidates : null,
       progressLabel: readProgressLabel(job),
       selectionProfileSnapshot: readSelectionProfileSnapshot(job),
       selectionProfileSummary: readSelectionProfileSummary(job),
@@ -216,7 +216,7 @@ const initialJobs = {
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Optional</p>
         <h2 class="mt-2 text-base font-semibold">Prepend enrichment replay</h2>
         <p class="mt-2 text-sm text-muted-foreground">
-          Run editorial articles back through fetchers-owned enrichment before the repair path.
+          Run editorial signal_candidates back through fetchers-owned enrichment before the repair path.
         </p>
         <p class="mt-3 text-xs text-muted-foreground">Keep force rerun off unless you intentionally want to revisit already enriched rows.</p>
       </article>
@@ -255,16 +255,16 @@ const initialJobs = {
           <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
             <input id="includeEnrichment" name="includeEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
             <span class="space-y-1">
-              <span class="block text-sm font-medium">Also rerun fetchers-owned article enrichment</span>
+              <span class="block text-sm font-medium">Also rerun fetchers-owned signal_candidate enrichment</span>
               <span class="block text-xs text-muted-foreground">
-                Only affects <strong>Rebuild + repair existing content</strong>. The repair replays editorial articles through enrichment before normalize/dedup/embed/match steps and still skips retro notifications.
+                Only affects <strong>Rebuild + repair existing content</strong>. The repair replays editorial signal_candidates through enrichment before normalize/dedup/embed/match steps and still skips retro notifications.
               </span>
             </span>
           </label>
           <label class="flex items-start gap-2 rounded-md border border-border/60 p-3">
             <input id="forceEnrichment" name="forceEnrichment" type="checkbox" value="true" class="mt-0.5 h-4 w-4 rounded border-input" />
             <span class="space-y-1">
-              <span class="block text-sm font-medium">Force rerun even already enriched articles</span>
+              <span class="block text-sm font-medium">Force rerun even already enriched signal_candidates</span>
               <span class="block text-xs text-muted-foreground">
                 Leave this off for the normal repair path. Use it only when you intentionally want to rerun enrichment on rows that already have `enriched` state.
               </span>

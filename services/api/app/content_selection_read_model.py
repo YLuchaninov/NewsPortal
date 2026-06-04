@@ -18,7 +18,7 @@ from services.api.app.json_read_model import (
     as_json_str,
 )
 
-CONTENT_ITEM_ORIGINS = {"editorial", "resource"}
+CONTENT_ITEM_ORIGINS = {"signal_candidate", "resource"}
 
 
 def normalize_system_interest_selection_profile_payload(
@@ -61,7 +61,7 @@ def normalize_system_interest_selection_profile_payload(
     return normalized
 
 
-def processed_article_clause(alias: str = "a") -> str:
+def processed_signal_candidate_clause(alias: str = "a") -> str:
     return (
         "("
         f"{alias}.processing_state in ('matched', 'notified')"
@@ -80,24 +80,24 @@ def processed_article_clause(alias: str = "a") -> str:
 
 
 def final_selection_join_clause(
-    article_alias: str = "a",
+    signal_candidate_alias: str = "a",
     final_alias: str = "fsr",
 ) -> str:
-    return f"left join final_selection_results {final_alias} on {final_alias}.doc_id = {article_alias}.doc_id"
+    return f"left join final_selection_results {final_alias} on {final_alias}.doc_id = {signal_candidate_alias}.doc_id"
 
 
-def system_feed_join_clause(article_alias: str = "a", system_alias: str = "sfr") -> str:
-    return f"left join system_feed_results {system_alias} on {system_alias}.doc_id = {article_alias}.doc_id"
+def system_feed_join_clause(signal_candidate_alias: str = "a", system_alias: str = "sfr") -> str:
+    return f"left join system_feed_results {system_alias} on {system_alias}.doc_id = {signal_candidate_alias}.doc_id"
 
 
-def article_observation_join_clause(
-    article_alias: str = "a",
+def signal_candidate_observation_join_clause(
+    signal_candidate_alias: str = "a",
     observation_alias: str = "obs",
 ) -> str:
     return (
         f"left join document_observations {observation_alias} "
-        f"on {observation_alias}.origin_type = 'article' "
-        f"and {observation_alias}.origin_id = {article_alias}.doc_id"
+        f"on {observation_alias}.origin_type = 'signal_candidate' "
+        f"and {observation_alias}.origin_id = {signal_candidate_alias}.doc_id"
     )
 
 
@@ -130,27 +130,27 @@ def effective_system_selection_decision_expr(
     """
 
 
-def canonical_article_family_expr(article_alias: str = "a") -> str:
-    return f"coalesce({article_alias}.canonical_doc_id, {article_alias}.doc_id)"
+def canonical_signal_candidate_family_expr(signal_candidate_alias: str = "a") -> str:
+    return f"coalesce({signal_candidate_alias}.canonical_doc_id, {signal_candidate_alias}.doc_id)"
 
 
-def canonical_article_family_order_clause(article_alias: str = "a") -> str:
-    family_expr = canonical_article_family_expr(article_alias)
+def canonical_signal_candidate_family_order_clause(signal_candidate_alias: str = "a") -> str:
+    family_expr = canonical_signal_candidate_family_expr(signal_candidate_alias)
     return (
-        f"case when {article_alias}.doc_id = {family_expr} then 0 else 1 end, "
-        f"{article_alias}.published_at desc nulls last, "
-        f"{article_alias}.ingested_at desc, "
-        f"{article_alias}.doc_id"
+        f"case when {signal_candidate_alias}.doc_id = {family_expr} then 0 else 1 end, "
+        f"{signal_candidate_alias}.published_at desc nulls last, "
+        f"{signal_candidate_alias}.ingested_at desc, "
+        f"{signal_candidate_alias}.doc_id"
     )
 
 
-def feed_eligible_article_clause(
-    article_alias: str = "a",
+def feed_eligible_signal_candidate_clause(
+    signal_candidate_alias: str = "a",
     final_alias: str = "fsr",
     system_alias: str = "sfr",
 ) -> str:
     return (
-        f"{article_alias}.visibility_state = 'visible' and "
+        f"{signal_candidate_alias}.visibility_state = 'visible' and "
         f"{effective_system_selected_expr(final_alias, system_alias)} = true"
     )
 
@@ -201,23 +201,23 @@ def system_interest_kind_enabled_clause(kind_expr: str) -> str:
 
 
 def primary_media_join_clause(
-    article_alias: str = "a",
+    signal_candidate_alias: str = "a",
     media_alias: str = "pma",
 ) -> str:
-    return f"left join article_media_assets {media_alias} on {media_alias}.asset_id = {article_alias}.primary_media_asset_id"
+    return f"left join signal_candidate_media_assets {media_alias} on {media_alias}.asset_id = {signal_candidate_alias}.primary_media_asset_id"
 
 
-def article_preview_projection(
-    article_alias: str = "a",
+def signal_candidate_preview_projection(
+    signal_candidate_alias: str = "a",
     channel_alias: str = "sc",
     media_alias: str = "pma",
 ) -> str:
     return f"""
-          {article_alias}.has_media,
-          {article_alias}.enrichment_state,
-          coalesce({article_alias}.extracted_source_name, {channel_alias}.name) as source_name,
-          {article_alias}.extracted_author as author_name,
-          {article_alias}.extracted_ttr_seconds as read_time_seconds,
+          {signal_candidate_alias}.has_media,
+          {signal_candidate_alias}.enrichment_state,
+          coalesce({signal_candidate_alias}.extracted_source_name, {channel_alias}.name) as source_name,
+          {signal_candidate_alias}.extracted_author as author_name,
+          {signal_candidate_alias}.extracted_ttr_seconds as read_time_seconds,
           {media_alias}.asset_id::text as primary_media_asset_id,
           {media_alias}.media_kind as primary_media_kind,
           {media_alias}.storage_kind as primary_media_storage_kind,
@@ -277,10 +277,10 @@ def build_selection_explain_payload(
         if "canonicalReviewReusedCount" in final_explain
         else selection_like.get("final_selection_canonical_review_reused_count")
     )
-    duplicate_article_count_for_canonical = as_json_int(
-        final_explain.get("duplicateArticleCountForCanonical")
-        if "duplicateArticleCountForCanonical" in final_explain
-        else selection_like.get("final_selection_duplicate_article_count_for_canonical")
+    duplicate_signal_candidate_count_for_canonical = as_json_int(
+        final_explain.get("duplicateSignalCandidateCountForCanonical")
+        if "duplicateSignalCandidateCountForCanonical" in final_explain
+        else selection_like.get("final_selection_duplicate_signal_candidate_count_for_canonical")
     )
     canonical_selection_reused = as_json_bool(
         final_explain.get("canonicalSelectionReused")
@@ -293,7 +293,7 @@ def build_selection_explain_payload(
             if "selectionReuseSource" in final_explain
             else selection_like.get("final_selection_reuse_source")
         )
-        or "article_level"
+        or "signal_candidate_level"
     )
     selection_reason = (
         str(
@@ -366,7 +366,7 @@ def build_selection_explain_payload(
         "canonicalReviewReused": canonical_review_reused,
         "canonicalReviewReusedCount": canonical_review_reused_count,
         "canonicalSelectionReused": canonical_selection_reused,
-        "duplicateArticleCountForCanonical": duplicate_article_count_for_canonical,
+        "duplicateSignalCandidateCountForCanonical": duplicate_signal_candidate_count_for_canonical,
         "selectionReuseSource": selection_reuse_source,
         "reviewSource": (
             "reused_canonical_llm_review" if canonical_review_reused else None
@@ -402,7 +402,7 @@ def build_fallback_selection_blocker_payload(
 
     if system_criterion_rows == 0:
         return {
-            "downstreamLossBucket": "articles_missing_interest_filter_results",
+            "downstreamLossBucket": "signal_candidates_missing_interest_filter_results",
             "selectionBlockerStage": "interest_filtering",
             "selectionBlockerReason": "missing_interest_filter_results",
             "holdReason": None,
@@ -671,8 +671,8 @@ def build_content_kind_selection_explain_payload(
         "canonicalReviewReused": False,
         "canonicalReviewReusedCount": 0,
         "canonicalSelectionReused": False,
-        "duplicateArticleCountForCanonical": 0,
-        "selectionReuseSource": "article_level",
+        "duplicateSignalCandidateCountForCanonical": 0,
+        "selectionReuseSource": "signal_candidate_level",
         "reviewSource": None,
         "compatibilityDecision": None,
         "observationState": None,
@@ -690,7 +690,7 @@ def build_content_kind_selection_explain_payload(
 def build_resource_selection_explain_payload(
     *, resource_like: Mapping[str, Any]
 ) -> dict[str, Any]:
-    if resource_like.get("projected_article_id"):
+    if resource_like.get("projected_signal_candidate_id"):
         return build_selection_explain_payload(
             selection_like=resource_like,
             final_selection_result=None,
@@ -713,8 +713,8 @@ def build_resource_selection_explain_payload(
         "canonicalReviewReused": False,
         "canonicalReviewReusedCount": 0,
         "canonicalSelectionReused": False,
-        "duplicateArticleCountForCanonical": 0,
-        "selectionReuseSource": "article_level",
+        "duplicateSignalCandidateCountForCanonical": 0,
+        "selectionReuseSource": "signal_candidate_level",
         "reviewSource": None,
         "compatibilityDecision": None,
         "observationState": None,
@@ -765,8 +765,8 @@ def apply_resource_selection_payload(
     resource["selection_canonical_reused"] = selection_explain.get(
         "canonicalSelectionReused"
     )
-    resource["selection_duplicate_article_count_for_canonical"] = as_json_int(
-        selection_explain.get("duplicateArticleCountForCanonical")
+    resource["selection_duplicate_signal_candidate_count_for_canonical"] = as_json_int(
+        selection_explain.get("duplicateSignalCandidateCountForCanonical")
     )
     resource["selection_reuse_source"] = selection_explain.get("selectionReuseSource")
     resource["selection_review_source"] = selection_explain.get("reviewSource")
@@ -787,52 +787,52 @@ def apply_resource_selection_payload(
     return resource
 
 
-def apply_article_selection_payload(
-    article_like: Mapping[str, Any],
+def apply_signal_candidate_selection_payload(
+    signal_candidate_like: Mapping[str, Any],
     *,
     interest_filter_results: list[Mapping[str, Any]] | None = None,
     llm_reviews: list[Mapping[str, Any]] | None = None,
     notifications: list[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    article = dict(article_like)
+    signal_candidate = dict(signal_candidate_like)
     selection_explain = build_selection_explain_payload(
-        selection_like=article,
+        selection_like=signal_candidate,
         final_selection_result=None,
         system_feed_result=None,
     )
-    article["selection_source"] = selection_explain.get("source")
-    article["selection_decision"] = selection_explain.get("decision")
-    article["selection_mode"] = selection_explain.get("selectionMode")
-    article["selection_summary"] = selection_explain.get("selectionSummary")
-    article["selection_reason"] = selection_explain.get("selectionReason")
-    article["selection_hold_count"] = as_json_int(selection_explain.get("holdCount"))
-    article["selection_llm_review_pending_count"] = as_json_int(
+    signal_candidate["selection_source"] = selection_explain.get("source")
+    signal_candidate["selection_decision"] = selection_explain.get("decision")
+    signal_candidate["selection_mode"] = selection_explain.get("selectionMode")
+    signal_candidate["selection_summary"] = selection_explain.get("selectionSummary")
+    signal_candidate["selection_reason"] = selection_explain.get("selectionReason")
+    signal_candidate["selection_hold_count"] = as_json_int(selection_explain.get("holdCount"))
+    signal_candidate["selection_llm_review_pending_count"] = as_json_int(
         selection_explain.get("llmReviewPendingCount")
     )
-    article["selection_candidate_signal_uplift_count"] = as_json_int(
+    signal_candidate["selection_candidate_signal_uplift_count"] = as_json_int(
         selection_explain.get("candidateSignalUpliftCount")
     )
-    article["selection_candidate_recovery_state"] = selection_explain.get(
+    signal_candidate["selection_candidate_recovery_state"] = selection_explain.get(
         "candidateRecoveryState"
     )
-    article["selection_candidate_recovery_summary"] = selection_explain.get(
+    signal_candidate["selection_candidate_recovery_summary"] = selection_explain.get(
         "candidateRecoverySummary"
     )
-    article["selection_canonical_review_reused"] = selection_explain.get(
+    signal_candidate["selection_canonical_review_reused"] = selection_explain.get(
         "canonicalReviewReused"
     )
-    article["selection_canonical_review_reused_count"] = as_json_int(
+    signal_candidate["selection_canonical_review_reused_count"] = as_json_int(
         selection_explain.get("canonicalReviewReusedCount")
     )
-    article["selection_canonical_reused"] = selection_explain.get(
+    signal_candidate["selection_canonical_reused"] = selection_explain.get(
         "canonicalSelectionReused"
     )
-    article["selection_duplicate_article_count_for_canonical"] = as_json_int(
-        selection_explain.get("duplicateArticleCountForCanonical")
+    signal_candidate["selection_duplicate_signal_candidate_count_for_canonical"] = as_json_int(
+        selection_explain.get("duplicateSignalCandidateCountForCanonical")
     )
-    article["selection_reuse_source"] = selection_explain.get("selectionReuseSource")
-    article["selection_review_source"] = selection_explain.get("reviewSource")
-    article["selection_guidance"] = build_selection_guidance_payload(
+    signal_candidate["selection_reuse_source"] = selection_explain.get("selectionReuseSource")
+    signal_candidate["selection_review_source"] = selection_explain.get("reviewSource")
+    signal_candidate["selection_guidance"] = build_selection_guidance_payload(
         selection_explain=selection_explain
     )
     if (
@@ -840,19 +840,19 @@ def apply_article_selection_payload(
         and llm_reviews is not None
         and notifications is not None
     ):
-        article["selection_diagnostics"] = build_selection_diagnostics_payload(
+        signal_candidate["selection_diagnostics"] = build_selection_diagnostics_payload(
             selection_explain=selection_explain,
             interest_filter_results=interest_filter_results,
             llm_reviews=llm_reviews,
             notifications=notifications,
         )
-    return article
+    return signal_candidate
 
 
 
 def editorial_content_select_sql(*, include_internal_fields: bool = False) -> str:
-    family_expr = canonical_article_family_expr("a")
-    family_order = canonical_article_family_order_clause("a")
+    family_expr = canonical_signal_candidate_family_expr("a")
+    family_order = canonical_signal_candidate_family_order_clause("a")
     internal_projection = ""
     if include_internal_fields:
         internal_projection = """
@@ -895,9 +895,9 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
           {", ranked._normalized_title, ranked._search_text, ranked._channel_id" if include_internal_fields else ""}
         from (
           select
-            {repr('editorial:')} || a.doc_id::text as content_item_id,
+            {repr('signal_candidate:')} || a.doc_id::text as content_item_id,
             coalesce(a.content_kind, 'editorial')::text as content_kind,
-            'editorial'::text as origin_type,
+            'signal_candidate'::text as origin_type,
             a.doc_id::text as origin_id,
             a.url,
             a.title,
@@ -930,13 +930,13 @@ def editorial_content_select_sql(*, include_internal_fields: bool = False) -> st
               partition by {family_expr}
               order by {family_order}
             ) as family_rank
-          from articles a
+          from signal_candidates a
           join source_channels sc on sc.channel_id = a.channel_id
           {final_selection_join_clause("a", "fsr")}
           left join system_feed_results sfr on sfr.doc_id = a.doc_id
-          left join article_media_assets pma on pma.asset_id = a.primary_media_asset_id
-          left join article_reaction_stats ars on ars.doc_id = a.doc_id
-          where {feed_eligible_article_clause("a", "fsr", "sfr")}
+          left join signal_candidate_media_assets pma on pma.asset_id = a.primary_media_asset_id
+          left join signal_candidate_reaction_stats ars on ars.doc_id = a.doc_id
+          where {feed_eligible_signal_candidate_clause("a", "fsr", "sfr")}
         ) ranked
         where ranked.family_rank = 1
     """
@@ -986,7 +986,7 @@ def resource_content_select_sql(*, include_internal_fields: bool = False) -> str
           {internal_projection}
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
-        join articles pa on pa.doc_id = wr.projected_article_id
+        join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id
         join final_selection_results fsr on fsr.doc_id = pa.doc_id
         where wr.resource_kind <> 'editorial'
           and wr.extraction_state in ('enriched', 'skipped')
@@ -1010,13 +1010,13 @@ def combined_content_items_select_sql(*, include_internal_fields: bool = False) 
     """
 
 
-def build_editorial_content_item_preview_from_article(
-    article: Mapping[str, Any],
+def build_editorial_content_item_preview_from_signal_candidate(
+    signal_candidate: Mapping[str, Any],
 ) -> dict[str, Any]:
-    final_selection_decision = str(article.get("final_selection_decision") or "").strip()
-    system_feed_decision = str(article.get("system_feed_decision") or "").strip()
-    final_selection_selected = article.get("final_selection_selected")
-    system_feed_eligible = article.get("system_feed_eligible")
+    final_selection_decision = str(signal_candidate.get("final_selection_decision") or "").strip()
+    system_feed_decision = str(signal_candidate.get("system_feed_decision") or "").strip()
+    final_selection_selected = signal_candidate.get("final_selection_selected")
+    system_feed_eligible = signal_candidate.get("system_feed_eligible")
     system_selected = (
         bool(final_selection_selected)
         if final_selection_selected is not None
@@ -1039,33 +1039,32 @@ def build_editorial_content_item_preview_from_article(
         system_selection_decision = "unknown"
 
     return {
-        "content_item_id": build_content_item_id(
-            "editorial", str(article.get("doc_id") or "")
+        "content_item_id": build_content_item_id("signal_candidate", str(signal_candidate.get("doc_id") or "")
         ),
-        "content_kind": str(article.get("content_kind") or "editorial"),
-        "origin_type": "editorial",
-        "origin_id": str(article.get("doc_id") or ""),
-        "url": article.get("url"),
-        "title": article.get("title"),
-        "lead": article.get("lead"),
-        "lang": article.get("lang"),
-        "published_at": article.get("published_at"),
-        "ingested_at": article.get("ingested_at"),
-        "updated_at": article.get("updated_at"),
-        "source_name": article.get("source_name"),
-        "author_name": article.get("author_name"),
-        "read_time_seconds": article.get("read_time_seconds"),
+        "content_kind": str(signal_candidate.get("content_kind") or "editorial"),
+        "origin_type": "signal_candidate",
+        "origin_id": str(signal_candidate.get("doc_id") or ""),
+        "url": signal_candidate.get("url"),
+        "title": signal_candidate.get("title"),
+        "lead": signal_candidate.get("lead"),
+        "lang": signal_candidate.get("lang"),
+        "published_at": signal_candidate.get("published_at"),
+        "ingested_at": signal_candidate.get("ingested_at"),
+        "updated_at": signal_candidate.get("updated_at"),
+        "source_name": signal_candidate.get("source_name"),
+        "author_name": signal_candidate.get("author_name"),
+        "read_time_seconds": signal_candidate.get("read_time_seconds"),
         "system_selection_decision": system_selection_decision,
         "system_selected": system_selected,
-        "has_media": article.get("has_media"),
-        "primary_media_kind": article.get("primary_media_kind"),
-        "primary_media_url": article.get("primary_media_url"),
-        "primary_media_thumbnail_url": article.get("primary_media_thumbnail_url"),
-        "primary_media_source_url": article.get("primary_media_source_url"),
-        "primary_media_title": article.get("primary_media_title"),
-        "primary_media_alt_text": article.get("primary_media_alt_text"),
-        "like_count": article.get("like_count", 0),
-        "dislike_count": article.get("dislike_count", 0),
+        "has_media": signal_candidate.get("has_media"),
+        "primary_media_kind": signal_candidate.get("primary_media_kind"),
+        "primary_media_url": signal_candidate.get("primary_media_url"),
+        "primary_media_thumbnail_url": signal_candidate.get("primary_media_thumbnail_url"),
+        "primary_media_source_url": signal_candidate.get("primary_media_source_url"),
+        "primary_media_title": signal_candidate.get("primary_media_title"),
+        "primary_media_alt_text": signal_candidate.get("primary_media_alt_text"),
+        "like_count": signal_candidate.get("like_count", 0),
+        "dislike_count": signal_candidate.get("dislike_count", 0),
         "matched_interest_id": None,
         "matched_interest_description": None,
         "interest_match_score": None,

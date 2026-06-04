@@ -443,7 +443,7 @@ async function main() {
               count(*) filter (
                 where processing_state in (${SUCCESS_STATES.map((state) => sqlLiteral(state)).join(", ")})
               )::int
-            from articles
+            from signal_candidates
             where channel_id in (
               select channel_id
               from source_channels
@@ -453,17 +453,17 @@ async function main() {
         )[0] ?? ["0", "0"];
 
         return {
-          articleCount: Number.parseInt(rows[0] ?? "0", 10),
+          signalCandidateCount: Number.parseInt(rows[0] ?? "0", 10),
           progressedCount: Number.parseInt(rows[1] ?? "0", 10)
         };
       },
       (summary) =>
-        summary.articleCount === successfulCount && summary.progressedCount === successfulCount,
+        summary.signalCandidateCount === successfulCount && summary.progressedCount === successfulCount,
       {
         timeoutMs:
           options.channelCount >= SOAK_CHANNEL_COUNT ? SOAK_WORKER_PROGRESS_TIMEOUT_MS : undefined,
         describeLastValue: (summary) =>
-          `articleCount=${summary.articleCount}, progressedCount=${summary.progressedCount}, expected=${successfulCount}`
+          `signalCandidateCount=${summary.signalCandidateCount}, progressedCount=${summary.progressedCount}, expected=${successfulCount}`
       }
     );
 
@@ -473,7 +473,7 @@ async function main() {
         select
           (
             select count(*)::int
-            from articles
+            from signal_candidates
             where channel_id in (
               select channel_id
               from source_channels
@@ -484,34 +484,34 @@ async function main() {
             select count(*)::int
             from outbox_events
             where
-              aggregate_type = 'article'
+              aggregate_type = 'signal_candidate'
               and aggregate_id in (
                 select doc_id
-                from articles
+                from signal_candidates
                 where channel_id in (
                   select channel_id
                   from source_channels
                   where name like ${sqlLiteral(`RSS multi ${runId}%`)}
                 )
               )
-              and event_type = 'article.ingest.requested'
+              and event_type = 'signal_candidate.ingest.requested'
               and status = 'published'
           ),
           (
             select count(*)::int
             from outbox_events
             where
-              aggregate_type = 'article'
+              aggregate_type = 'signal_candidate'
               and aggregate_id in (
                 select doc_id
-                from articles
+                from signal_candidates
                 where channel_id in (
                   select channel_id
                   from source_channels
                   where name like ${sqlLiteral(`RSS multi ${runId}%`)}
                 )
               )
-              and event_type = 'article.normalized'
+              and event_type = 'signal_candidate.normalized'
               and status = 'published'
           ),
           (
@@ -521,10 +521,10 @@ async function main() {
               and event_id in (
                 select event_id
                 from outbox_events
-                where aggregate_type = 'article'
+                where aggregate_type = 'signal_candidate'
                   and aggregate_id in (
                     select doc_id
-                    from articles
+                    from signal_candidates
                     where channel_id in (
                       select channel_id
                       from source_channels
@@ -535,26 +535,26 @@ async function main() {
           )
       `
     )[0] ?? ["0", "0", "0", "0"];
-    const firstArticleCount = Number.parseInt(firstCycleCounts[0] ?? "0", 10);
+    const firstSignalCandidateCount = Number.parseInt(firstCycleCounts[0] ?? "0", 10);
     const ingestOutboxCount = Number.parseInt(firstCycleCounts[1] ?? "0", 10);
     const normalizedOutboxCount = Number.parseInt(firstCycleCounts[2] ?? "0", 10);
     const processedInboxCount = Number.parseInt(firstCycleCounts[3] ?? "0", 10);
     const publishedOutboxCount = ingestOutboxCount + normalizedOutboxCount;
 
-    if (firstArticleCount !== successfulCount) {
-      throw new Error(`Expected ${successfulCount} successful article rows, got ${firstArticleCount}.`);
+    if (firstSignalCandidateCount !== successfulCount) {
+      throw new Error(`Expected ${successfulCount} successful signal_candidate rows, got ${firstSignalCandidateCount}.`);
     }
     if (ingestOutboxCount < successfulCount) {
       throw new Error(
-        `Expected at least ${successfulCount} published article ingest outbox events, got ${ingestOutboxCount}.`
+        `Expected at least ${successfulCount} published signal_candidate ingest outbox events, got ${ingestOutboxCount}.`
       );
     }
-    // Sequence-runtime pipelines suppress downstream article.normalized outbox fanout while still
+    // Sequence-runtime pipelines suppress downstream signal_candidate.normalized outbox fanout while still
     // recording normalize/dedup inbox consumption for the original ingest event. Legacy fanout may
-    // still publish article.normalized, so accept either topology but reject partial normalized fanout.
+    // still publish signal_candidate.normalized, so accept either topology but reject partial normalized fanout.
     if (normalizedOutboxCount > 0 && normalizedOutboxCount < successfulCount) {
       throw new Error(
-        `Expected either no normalized outbox fanout or at least ${successfulCount} published article.normalized events, got ${normalizedOutboxCount}.`
+        `Expected either no normalized outbox fanout or at least ${successfulCount} published signal_candidate.normalized events, got ${normalizedOutboxCount}.`
       );
     }
     if (processedInboxCount < successfulCount * 2) {
@@ -613,7 +613,7 @@ async function main() {
     );
 
     await waitFor(
-      "stable article and outbox counts after second fetch",
+      "stable signal_candidate and outbox counts after second fetch",
       async () => {
         const rows = queryPostgresRows(
           env,
@@ -621,7 +621,7 @@ async function main() {
             select
               (
                 select count(*)::int
-                from articles
+                from signal_candidates
                 where channel_id in (
                   select channel_id
                   from source_channels
@@ -632,29 +632,29 @@ async function main() {
                 select count(*)::int
                 from outbox_events
                 where
-                  aggregate_type = 'article'
+                  aggregate_type = 'signal_candidate'
                   and aggregate_id in (
                     select doc_id
-                    from articles
+                    from signal_candidates
                     where channel_id in (
                       select channel_id
                       from source_channels
                       where name like ${sqlLiteral(`RSS multi ${runId}%`)}
                     )
                   )
-                  and event_type in ('article.ingest.requested', 'article.normalized')
+                  and event_type in ('signal_candidate.ingest.requested', 'signal_candidate.normalized')
                   and status = 'published'
               )
           `
         )[0] ?? ["0", "0"];
 
         return {
-          articleCount: Number.parseInt(rows[0] ?? "0", 10),
+          signalCandidateCount: Number.parseInt(rows[0] ?? "0", 10),
           outboxCount: Number.parseInt(rows[1] ?? "0", 10)
         };
       },
       (summary) =>
-        summary.articleCount === firstArticleCount &&
+        summary.signalCandidateCount === firstSignalCandidateCount &&
         summary.outboxCount === publishedOutboxCount
     );
 

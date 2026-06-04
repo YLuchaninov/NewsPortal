@@ -7,12 +7,12 @@ test("classifyDuplicatePreflightInputs drops items with known external ids", () 
   const decisions = classifyDuplicatePreflightInputs(
     [
       {
-        externalArticleId: "known-guid",
+        externalSignalCandidateId: "known-guid",
         url: "https://example.com/already-seen",
         label: "known"
       },
       {
-        externalArticleId: "fresh-guid",
+        externalSignalCandidateId: "fresh-guid",
         url: "https://example.com/fresh",
         label: "fresh"
       }
@@ -22,7 +22,7 @@ test("classifyDuplicatePreflightInputs drops items with known external ids", () 
   );
 
   assert.equal(decisions[0]?.shouldPersist, false);
-  assert.equal(decisions[0]?.duplicateReason, "externalArticleId");
+  assert.equal(decisions[0]?.duplicateReason, "externalSignalCandidateId");
   assert.equal(decisions[1]?.shouldPersist, true);
   assert.equal(decisions[1]?.duplicateReason, null);
 });
@@ -31,7 +31,7 @@ test("classifyDuplicatePreflightInputs drops items with known urls", () => {
   const decisions = classifyDuplicatePreflightInputs(
     [
       {
-        externalArticleId: "fresh-guid",
+        externalSignalCandidateId: "fresh-guid",
         url: "https://example.com/known-url",
         label: "known-url"
       }
@@ -48,17 +48,17 @@ test("classifyDuplicatePreflightInputs suppresses duplicates within the same pol
   const decisions = classifyDuplicatePreflightInputs(
     [
       {
-        externalArticleId: "fresh-1",
+        externalSignalCandidateId: "fresh-1",
         url: "https://example.com/news/1",
         label: "first-fresh"
       },
       {
-        externalArticleId: "fresh-1",
+        externalSignalCandidateId: "fresh-1",
         url: "https://example.com/news/2",
         label: "duplicate-by-external-id"
       },
       {
-        externalArticleId: "fresh-3",
+        externalSignalCandidateId: "fresh-3",
         url: "https://example.com/news/1",
         label: "duplicate-by-url"
       }
@@ -69,7 +69,7 @@ test("classifyDuplicatePreflightInputs suppresses duplicates within the same pol
 
   assert.equal(decisions[0]?.shouldPersist, true);
   assert.equal(decisions[1]?.shouldPersist, false);
-  assert.equal(decisions[1]?.duplicateReason, "externalArticleId");
+  assert.equal(decisions[1]?.duplicateReason, "externalSignalCandidateId");
   assert.equal(decisions[2]?.shouldPersist, false);
   assert.equal(decisions[2]?.duplicateReason, "url");
 });
@@ -78,22 +78,22 @@ test("classifyDuplicatePreflightInputs handles mixed new and duplicate inputs de
   const decisions = classifyDuplicatePreflightInputs(
     [
       {
-        externalArticleId: "fresh-1",
+        externalSignalCandidateId: "fresh-1",
         url: "https://example.com/news/1",
         label: "fresh"
       },
       {
-        externalArticleId: "known-guid",
+        externalSignalCandidateId: "known-guid",
         url: "https://example.com/news/known-id",
         label: "known-guid"
       },
       {
-        externalArticleId: "fresh-3",
+        externalSignalCandidateId: "fresh-3",
         url: "https://example.com/news/known-url",
         label: "known-url"
       },
       {
-        externalArticleId: "fresh-4",
+        externalSignalCandidateId: "fresh-4",
         url: "https://example.com/news/4",
         label: "fresh-2"
       }
@@ -117,7 +117,7 @@ test("classifyDuplicatePreflightInputs handles mixed new and duplicate inputs de
       {
         label: "known-guid",
         shouldPersist: false,
-        duplicateReason: "externalArticleId"
+        duplicateReason: "externalSignalCandidateId"
       },
       {
         label: "known-url",

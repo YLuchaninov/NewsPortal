@@ -20,7 +20,7 @@ interface SmokeOptions {
 }
 
 interface RssSmokeProcessingDiagnostics {
-  latestArticle: {
+  latestSignalCandidate: {
     docId: string;
     processingState: string | null;
     title: string | null;
@@ -56,7 +56,7 @@ const PROCESSING_STATE_ORDER: Record<string, number> = {
   matched: 5,
   notified: 6
 };
-const RSS_ARTICLE_PROCESSING_TIMEOUT_MS = 180000;
+const RSS_SIGNAL_CANDIDATE_PROCESSING_TIMEOUT_MS = 180000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -187,7 +187,7 @@ async function readProcessingDiagnostics(
   pool: Pool,
   channelId: string
 ): Promise<RssSmokeProcessingDiagnostics> {
-  const articleResult = await pool.query<{
+  const signalCandidateResult = await pool.query<{
     docId: string;
     processingState: string | null;
     title: string | null;
@@ -201,14 +201,14 @@ async function readProcessingDiagnostics(
         title,
         ingested_at as "ingestedAt",
         updated_at as "updatedAt"
-      from articles
+      from signal_candidates
       where channel_id = $1
       order by ingested_at desc
       limit 1
     `,
     [channelId]
   );
-  const latestArticle = articleResult.rows[0] ?? null;
+  const latestSignalCandidate = signalCandidateResult.rows[0] ?? null;
 
   const sequenceRunResult = await pool.query<{
     runId: string;
@@ -231,7 +231,7 @@ async function readProcessingDiagnostics(
       from sequence_runs
       where context_json ->> 'doc_id' in (
         select doc_id::text
-        from articles
+        from signal_candidates
         where channel_id = $1
       )
       order by coalesce(finished_at, started_at, created_at) desc
@@ -265,7 +265,7 @@ async function readProcessingDiagnostics(
         from sequence_runs
         where context_json ->> 'doc_id' in (
           select doc_id::text
-          from articles
+          from signal_candidates
           where channel_id = $1
         )
       )
@@ -276,20 +276,20 @@ async function readProcessingDiagnostics(
   );
 
   return {
-    latestArticle,
+    latestSignalCandidate,
     latestSequenceRun,
     latestTaskRun: taskRunResult.rows[0] ?? null
   };
 }
 
-async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<void> {
+async function waitForProcessedSignalCandidate(pool: Pool, channelId: string): Promise<void> {
   try {
     await waitForCondition(
       async () => {
         const result = await pool.query<{ processingState: string | null }>(
           `
             select processing_state as "processingState"
-            from articles
+            from signal_candidates
             where channel_id = $1
             order by ingested_at desc
             limit 1
@@ -303,14 +303,14 @@ async function waitForProcessedArticle(pool: Pool, channelId: string): Promise<v
         );
       },
       {
-        timeoutMs: RSS_ARTICLE_PROCESSING_TIMEOUT_MS,
+        timeoutMs: RSS_SIGNAL_CANDIDATE_PROCESSING_TIMEOUT_MS,
         pollIntervalMs: 500
       }
     );
   } catch (error) {
     const diagnostics = await readProcessingDiagnostics(pool, channelId);
     throw new Error(
-      `Timed out waiting for RSS smoke article to reach deduped or later. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${
+      `Timed out waiting for RSS smoke signal_candidate to reach deduped or later. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${
         error instanceof Error ? error.message : String(error)
       }`,
       { cause: error }
@@ -323,7 +323,7 @@ async function assertSmokeRows(
   channelId: string,
   options: SmokeOptions
 ): Promise<void> {
-  const articleResult = await pool.query<{
+  const signalCandidateResult = await pool.query<{
     processingState: string;
     canonicalDocId: string | null;
     familyId: string | null;
@@ -337,30 +337,30 @@ async function assertSmokeRows(
         family_id::text as "familyId",
         is_exact_duplicate as "isExactDuplicate",
         is_near_duplicate as "isNearDuplicate"
-      from articles
+      from signal_candidates
       where channel_id = $1
     `,
     [channelId]
   );
 
-  if (articleResult.rowCount !== 1) {
-    throw new Error(`Expected exactly one article row, found ${articleResult.rowCount}.`);
+  if (signalCandidateResult.rowCount !== 1) {
+    throw new Error(`Expected exactly one signal_candidate row, found ${signalCandidateResult.rowCount}.`);
   }
 
-  const article = articleResult.rows[0];
+  const signal_candidate = signalCandidateResult.rows[0];
 
-  if ((PROCESSING_STATE_ORDER[article.processingState] ?? 0) < PROCESSING_STATE_ORDER.deduped) {
+  if ((PROCESSING_STATE_ORDER[signal_candidate.processingState] ?? 0) < PROCESSING_STATE_ORDER.deduped) {
     throw new Error(
-      `Expected article.processing_state to reach deduped or later, got ${article.processingState}.`
+      `Expected signal_candidate.processing_state to reach deduped or later, got ${signal_candidate.processingState}.`
     );
   }
 
-  if (!options.duplicatePreflightOnly && (!article.canonicalDocId || !article.familyId)) {
+  if (!options.duplicatePreflightOnly && (!signal_candidate.canonicalDocId || !signal_candidate.familyId)) {
     throw new Error("Expected canonical_doc_id and family_id to be populated.");
   }
 
-  if (article.isExactDuplicate || article.isNearDuplicate) {
-    throw new Error("Expected the first smoke article to remain non-duplicate.");
+  if (signal_candidate.isExactDuplicate || signal_candidate.isNearDuplicate) {
+    throw new Error("Expected the first smoke signal_candidate to remain non-duplicate.");
   }
 
   if (!options.duplicatePreflightOnly) {
@@ -376,10 +376,10 @@ async function assertSmokeRows(
           observation_state as "observationState"
         from document_observations
         where
-          origin_type = 'article'
+          origin_type = 'signal_candidate'
           and origin_id in (
             select doc_id
-            from articles
+            from signal_candidates
             where channel_id = $1
           )
       `,
@@ -393,8 +393,8 @@ async function assertSmokeRows(
     }
 
     const observation = observationResult.rows[0];
-    if (observation.canonicalDocumentId !== article.canonicalDocId) {
-      throw new Error("Expected document_observations to point at the article canonical document.");
+    if (observation.canonicalDocumentId !== signal_candidate.canonicalDocId) {
+      throw new Error("Expected document_observations to point at the signal candidate canonical document.");
     }
     if (observation.duplicateKind !== "canonical") {
       throw new Error(
@@ -418,7 +418,7 @@ async function assertSmokeRows(
         from canonical_documents
         where canonical_document_id = $1::uuid
       `,
-      [article.canonicalDocId]
+      [signal_candidate.canonicalDocId]
     );
 
     if (canonicalDocumentResult.rowCount !== 1) {
@@ -429,11 +429,11 @@ async function assertSmokeRows(
 
     const canonicalDocument = canonicalDocumentResult.rows[0];
     if (
-      !canonicalDocument.canonicalUrl.startsWith("https://example.com/articles/smoke-article-") ||
+      !canonicalDocument.canonicalUrl.startsWith("https://example.com/signal-candidates/smoke-signal_candidate-") ||
       canonicalDocument.canonicalUrl.includes("?")
     ) {
       throw new Error(
-        `Expected canonical_documents.canonical_url to preserve the smoke article URL, got ${canonicalDocument.canonicalUrl}.`
+        `Expected canonical_documents.canonical_url to preserve the smoke signal_candidate URL, got ${canonicalDocument.canonicalUrl}.`
       );
     }
     if (canonicalDocument.observationCount !== "1") {
@@ -446,14 +446,14 @@ async function assertSmokeRows(
   const externalRefResult = await pool.query<{ count: string }>(
     `
       select count(*)::text as count
-      from article_external_refs
+      from signal_candidate_external_refs
       where channel_id = $1
     `,
     [channelId]
   );
 
   if (externalRefResult.rows[0]?.count !== "1") {
-    throw new Error("Expected one article_external_refs row for the smoke channel.");
+    throw new Error("Expected one signal_candidate_external_refs row for the smoke channel.");
   }
 
   const cursorResult = await pool.query<{ count: string }>(
@@ -476,20 +476,20 @@ async function assertSmokeRows(
       select count(*)::text as count
       from outbox_events
       where
-        aggregate_type = 'article'
+        aggregate_type = 'signal_candidate'
         and aggregate_id in (
           select doc_id
-          from articles
+          from signal_candidates
           where channel_id = $1
         )
-        and event_type = 'article.ingest.requested'
+        and event_type = 'signal_candidate.ingest.requested'
         and status = 'published'
     `,
     [channelId]
   );
 
   if (outboxResult.rows[0]?.count !== "1") {
-    throw new Error("Expected one published outbox row for article.ingest.requested.");
+    throw new Error("Expected one published outbox row for signal_candidate.ingest.requested.");
   }
 
   const suppressedIntermediateResult = await pool.query<{ count: string }>(
@@ -497,29 +497,29 @@ async function assertSmokeRows(
       select count(*)::text as count
       from outbox_events
       where
-        aggregate_type = 'article'
+        aggregate_type = 'signal_candidate'
         and aggregate_id in (
           select doc_id
-          from articles
+          from signal_candidates
           where channel_id = $1
         )
-        and event_type = 'article.normalized'
+        and event_type = 'signal_candidate.normalized'
     `,
     [channelId]
   );
 
   if (suppressedIntermediateResult.rows[0]?.count !== "0") {
-    throw new Error("Expected sequence-first runtime to suppress article.normalized outbox rows.");
+    throw new Error("Expected sequence-first runtime to suppress signal_candidate.normalized outbox rows.");
   }
 
   const sequenceRunResult = await pool.query<{ count: string }>(
     `
       select count(*)::text as count
       from sequence_runs
-      where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+      where trigger_meta ->> 'eventType' = 'signal_candidate.ingest.requested'
         and context_json ->> 'doc_id' in (
           select doc_id::text
-          from articles
+          from signal_candidates
           where channel_id = $1
         )
     `,
@@ -527,7 +527,7 @@ async function assertSmokeRows(
   );
 
   if (sequenceRunResult.rows[0]?.count !== "1") {
-    throw new Error("Expected one sequence_run for the RSS article ingest trigger.");
+    throw new Error("Expected one sequence_run for the RSS signal_candidate ingest trigger.");
   }
 
   const inboxResult = await pool.query<{ count: string }>(
@@ -549,7 +549,7 @@ async function assertIdempotentRefetch(
   channelId: string
 ): Promise<void> {
   const beforeCounts = await pool.query<{
-    articleCount: string;
+    signalCandidateCount: string;
     outboxCount: string;
     sequenceRunCount: string;
   }>(
@@ -557,29 +557,29 @@ async function assertIdempotentRefetch(
       select
         (
           select count(*)::text
-          from articles
+          from signal_candidates
           where channel_id = $1
-        ) as "articleCount",
+        ) as "signalCandidateCount",
         (
           select count(*)::text
           from outbox_events
           where
-            aggregate_type = 'article'
+            aggregate_type = 'signal_candidate'
             and aggregate_id in (
               select doc_id
-              from articles
+              from signal_candidates
               where channel_id = $1
             )
-            and event_type = 'article.ingest.requested'
+            and event_type = 'signal_candidate.ingest.requested'
             and status = 'published'
         ) as "outboxCount",
         (
           select count(*)::text
           from sequence_runs
-          where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+          where trigger_meta ->> 'eventType' = 'signal_candidate.ingest.requested'
             and context_json ->> 'doc_id' in (
               select doc_id::text
-              from articles
+              from signal_candidates
               where channel_id = $1
             )
         ) as "sequenceRunCount"
@@ -590,7 +590,7 @@ async function assertIdempotentRefetch(
   await service.pollChannel(channelId);
 
   const afterCounts = await pool.query<{
-    articleCount: string;
+    signalCandidateCount: string;
     outboxCount: string;
     sequenceRunCount: string;
   }>(
@@ -598,29 +598,29 @@ async function assertIdempotentRefetch(
       select
         (
           select count(*)::text
-          from articles
+          from signal_candidates
           where channel_id = $1
-        ) as "articleCount",
+        ) as "signalCandidateCount",
         (
           select count(*)::text
           from outbox_events
           where
-            aggregate_type = 'article'
+            aggregate_type = 'signal_candidate'
             and aggregate_id in (
               select doc_id
-              from articles
+              from signal_candidates
               where channel_id = $1
             )
-            and event_type = 'article.ingest.requested'
+            and event_type = 'signal_candidate.ingest.requested'
             and status = 'published'
         ) as "outboxCount",
         (
           select count(*)::text
           from sequence_runs
-          where trigger_meta ->> 'eventType' = 'article.ingest.requested'
+          where trigger_meta ->> 'eventType' = 'signal_candidate.ingest.requested'
             and context_json ->> 'doc_id' in (
               select doc_id::text
-              from articles
+              from signal_candidates
               where channel_id = $1
             )
         ) as "sequenceRunCount"
@@ -628,12 +628,12 @@ async function assertIdempotentRefetch(
     [channelId]
   );
 
-  if (afterCounts.rows[0]?.articleCount !== beforeCounts.rows[0]?.articleCount) {
-    throw new Error("Expected RSS refetch to avoid creating duplicate article rows.");
+  if (afterCounts.rows[0]?.signalCandidateCount !== beforeCounts.rows[0]?.signalCandidateCount) {
+    throw new Error("Expected RSS refetch to avoid creating duplicate signal_candidate rows.");
   }
 
   if (afterCounts.rows[0]?.outboxCount !== beforeCounts.rows[0]?.outboxCount) {
-    throw new Error("Expected RSS refetch to avoid creating duplicate article outbox rows.");
+    throw new Error("Expected RSS refetch to avoid creating duplicate signal_candidate outbox rows.");
   }
 
   if (afterCounts.rows[0]?.sequenceRunCount !== beforeCounts.rows[0]?.sequenceRunCount) {
@@ -661,22 +661,22 @@ async function main(): Promise<void> {
     await readFile(path.join(fixturesDirectory, "smoke-feed.xml"), "utf8")
   )
     .replaceAll("smoke-item-1", `smoke-item-${smokeRunId}`)
-    .replaceAll("Smoke Test Article", `Smoke Test Article ${smokeRunId}`)
-    .replaceAll("smoke-article", `smoke-article-${smokeRunId}`)
+    .replaceAll("Smoke Test SignalCandidate", `Smoke Test SignalCandidate ${smokeRunId}`)
+    .replaceAll("smoke-signal_candidate", `smoke-signal_candidate-${smokeRunId}`)
     .replaceAll(
-      "Smoke summary for the first phase 2 article.",
-      `Smoke summary for the first phase 2 article ${smokeRunId}.`
+      "Smoke summary for the first phase 2 signal_candidate.",
+      `Smoke summary for the first phase 2 signal_candidate ${smokeRunId}.`
     )
     .replaceAll(
-      "This article should move from raw to normalized and then deduped.",
-      `This article should move from raw to normalized and then deduped for run ${smokeRunId}.`
+      "This signal_candidate should move from raw to normalized and then deduped.",
+      `This signal_candidate should move from raw to normalized and then deduped for run ${smokeRunId}.`
     );
   const fixtureServer = await startFixtureServer(fixtureXml);
 
   try {
     const channelId = await seedSmokeChannel(pool, fixtureServer.url);
     await service.pollChannel(channelId);
-    await waitForProcessedArticle(pool, channelId);
+    await waitForProcessedSignalCandidate(pool, channelId);
     await assertSmokeRows(pool, channelId, options);
     await assertIdempotentRefetch(service, pool, channelId);
     const modeLabel = options.duplicatePreflightOnly ? "duplicate-preflight" : "full";

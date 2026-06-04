@@ -17,7 +17,7 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 Продукт должен давать пользователю и оператору управляемую новостную/content platform:
 
 - источники `rss`, `website`, `api`, `email_imap` можно добавлять и проверять через admin/operator surfaces;
-- ingest сохраняет raw/document observations и материализует пригодные для чтения content/article/resource rows;
+- ingest сохраняет raw/document observations и материализует пригодные для чтения content/signal_candidate/resource rows;
 - selection pipeline отделяет system-selected content от personalization;
 - пользовательские matches, saved/digest/following/notification surfaces строятся поверх уже допущенного системного слоя;
 - оператор видит health, discovery, fetch history, LLM usage, reindex и moderation/maintenance surfaces.
@@ -58,7 +58,7 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 ## Операционная схема
 
 1. Operators configure channels/sources in admin or through API/control-plane surfaces.
-2. Fetchers poll due channels, persist raw observations/resources/articles in PostgreSQL, and emit thin outbox events.
+2. Fetchers poll due channels, persist raw observations/resources/signal-candidates in PostgreSQL, and emit thin outbox events.
 3. Relay polls `outbox_events` and dispatches thin BullMQ jobs, currently including sequence-managed routing through `q.sequence`.
 4. Workers read thin jobs, load authoritative state from PostgreSQL, write derived processing results, preserve inbox idempotency, and emit follow-up outbox events when needed.
 5. API/admin/web read materialized truth from PostgreSQL and derived index snapshots when relevant.
@@ -71,7 +71,7 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 - Jobs should remain thin; workers load heavy payloads from PostgreSQL.
 - Outbox/inbox idempotency must remain visible for asynchronous side effects.
 - Firebase identifies web/admin users, but local PostgreSQL users/roles own authorization truth after bootstrap.
-- `web_resources` are first-class website/resource truth; they must not be silently converted into RSS/articles.
+- `web_resources` are first-class website/resource truth; they must not be silently converted into RSS/signal-candidates.
 - `final_selection_results` is primary selection implementation truth; compatibility projections must stay bounded and observable.
 - System-selected content and user-personalized matches are separate layers.
 - Historical replay/backfill must not silently send retro notifications.
@@ -99,7 +99,7 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 - Architecture/runtime surfaces: смотри `Техническая модель`, `Runtime-поверхности`, `Delivery/runtime baseline`.
 - Data/state ownership: смотри `Ключевые инварианты`, `PostgreSQL vs derived state`, `.aidp/contracts/runtime-migrations-and-derived-state.md`.
 - API/control-plane/admin writes: смотри `UI/BFF boundary`, `Public API vs admin/operator API`, `.aidp/contracts/mcp-control-plane.md`, `.aidp/contracts/auth-session-boundary.md`.
-- Source/content pipeline: смотри `Fetchers vs workers`, `Source model vs provider adapters`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/content-model.md`, `.aidp/contracts/article-pipeline-core.md`.
+- Source/content pipeline: смотри `Fetchers vs workers`, `Source model vs provider adapters`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/content-model.md`, `.aidp/contracts/signal_candidate-pipeline-core.md`.
 - Selection/personalization/discovery: смотри `System selection vs personalization`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`, `.aidp/contracts/discovery-agent.md`.
 - Notifications/digests: смотри `Notification/digest boundary`, `.aidp/contracts/notifications-and-digests.md`.
 - Test/runtime boundary: смотри `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/engineering.md` section `Разделение production source, tests и fixtures`.
@@ -183,7 +183,7 @@ aidp_blueprint_index:
         - "services/fetchers"
         - "services/workers"
         - ".aidp/contracts/discovery-agent.md"
-        - ".aidp/contracts/article-pipeline-core.md"
+        - ".aidp/contracts/signal_candidate-pipeline-core.md"
     - id: DELIVERY-RUNTIME
       name: "Delivery/runtime work"
       owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
@@ -223,8 +223,8 @@ aidp_blueprint_index:
 
 Durable capability lines that often need staged work:
 
-- Content ingestion: source/channel management, fetchers, raw observations, resource/article persistence and outbox emission.
-- Article/canonical pipeline: normalize, dedup, canonical documents, story clusters, verification and replay.
+- Content ingestion: source/channel management, fetchers, raw observations, resource/signal_candidate persistence and outbox emission.
+- SignalCandidate/canonical pipeline: normalize, dedup, canonical documents, story clusters, verification and replay.
 - Selection and personalization: selection profiles, interest filters, final selection, system feed compatibility, user-interest matches.
 - Notifications and digests: web push, Telegram, email digest, preferences, delivery logs and cleanup discipline.
 - Discovery acquisition: vNext runs, typed artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, adapter backlog, replay and rollback.
@@ -268,7 +268,7 @@ Durable capability lines that often need staged work:
 
 Текущие AIDP deep contracts:
 
-- `.aidp/contracts/article-pipeline-core.md`
+- `.aidp/contracts/signal_candidate-pipeline-core.md`
 - `.aidp/contracts/auth-session-boundary.md`
 - `.aidp/contracts/browser-assisted-websites.md`
 - `.aidp/contracts/content-analysis-and-gating.md`

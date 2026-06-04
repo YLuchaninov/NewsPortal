@@ -7,7 +7,7 @@ import {
 } from "./source";
 
 export const INGRESS_ADAPTER_RUNTIME_KINDS = ["declarative", "builtin"] as const;
-export const INGRESS_ADAPTER_OUTPUT_MODES = ["articles", "web_resources", "mixed"] as const;
+export const INGRESS_ADAPTER_OUTPUT_MODES = ["signal_candidates", "web_resources", "mixed"] as const;
 export const INGRESS_ADAPTER_STATUSES = ["active", "draft", "disabled", "archived"] as const;
 export const INGRESS_ADAPTER_SELECTION_MODES = [
   "manual",

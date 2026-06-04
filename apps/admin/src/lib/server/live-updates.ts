@@ -124,7 +124,7 @@ async function loadDashboardSnapshot(): Promise<AdminDashboardLiveSnapshot> {
 
   const latestFetchRun = fetchRunsPage.items[0] ?? null;
   const summary: AdminDashboardSummarySnapshot = {
-    activeNews: asInt(summaryRaw.active_news, 0),
+    activeSignals: asInt(summaryRaw.active_signals, 0),
     processedToday: asInt(summaryRaw.processed_today, 0),
     totalUsers: asInt(summaryRaw.total_users, 0),
     overdueChannels: asInt(summaryRaw.overdue_channels, 0),
@@ -145,7 +145,7 @@ async function loadDashboardSnapshot(): Promise<AdminDashboardLiveSnapshot> {
     llmAcceptGrayZoneOnBudgetExhaustion:
       summaryRaw.llm_accept_gray_zone_on_budget_exhaustion === true,
     revision: buildAdminLiveRevision([
-      summaryRaw.active_news,
+      summaryRaw.active_signals,
       summaryRaw.processed_today,
       summaryRaw.total_users,
       summaryRaw.overdue_channels,
@@ -168,7 +168,7 @@ async function loadDashboardSnapshot(): Promise<AdminDashboardLiveSnapshot> {
     "channel_id",
     "started_at",
     "outcome_kind",
-    "new_article_count",
+    "new_signal_candidate_count",
   ]);
 
   return {
@@ -241,7 +241,7 @@ async function loadObservabilitySnapshot(): Promise<AdminObservabilityLiveSnapsh
     "channel_id",
     "started_at",
     "outcome_kind",
-    "new_article_count",
+    "new_signal_candidate_count",
   ]);
   const llmReviews = buildCollectionSignal(
     llmReviewsPage.total,
@@ -269,35 +269,35 @@ async function loadObservabilitySnapshot(): Promise<AdminObservabilityLiveSnapsh
 }
 
 function readProgressValues(job: JsonRecord): {
-  processedArticles: number | null;
-  totalArticles: number | null;
+  processedSignalCandidates: number | null;
+  totalSignalCandidates: number | null;
   progressLabel: string | null;
 } {
   const options = asRecord(job.options_json);
   const progress = asRecord(options.progress);
-  const processedArticles = Number(
-    progress.processedArticles ?? progress.processedContentItems ?? NaN
+  const processedSignalCandidates = Number(
+    progress.processedSignalCandidates ?? progress.processedContentItems ?? NaN
   );
-  const totalArticles = Number(
-    progress.totalArticles ?? progress.totalContentItems ?? NaN
+  const totalSignalCandidates = Number(
+    progress.totalSignalCandidates ?? progress.totalContentItems ?? NaN
   );
 
   if (
-    !Number.isFinite(processedArticles) ||
-    !Number.isFinite(totalArticles) ||
-    totalArticles <= 0
+    !Number.isFinite(processedSignalCandidates) ||
+    !Number.isFinite(totalSignalCandidates) ||
+    totalSignalCandidates <= 0
   ) {
     return {
-      processedArticles: null,
-      totalArticles: null,
+      processedSignalCandidates: null,
+      totalSignalCandidates: null,
       progressLabel: null,
     };
   }
 
   return {
-    processedArticles,
-    totalArticles,
-    progressLabel: `${processedArticles}/${totalArticles} content items`,
+    processedSignalCandidates,
+    totalSignalCandidates,
+    progressLabel: `${processedSignalCandidates}/${totalSignalCandidates} content items`,
   };
 }
 
@@ -333,8 +333,8 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
     cancellable: ["queued", "running"].includes(normalizeText(job.status)),
     createdAt,
     createdAtLabel: createdAt,
-    processedArticles: progress.processedArticles,
-    totalArticles: progress.totalArticles,
+    processedSignalCandidates: progress.processedSignalCandidates,
+    totalSignalCandidates: progress.totalSignalCandidates,
     progressLabel: progress.progressLabel,
     selectionProfileSnapshot,
     selectionProfileSummary,
@@ -342,8 +342,8 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
       job.reindex_job_id,
       job.status,
       ["queued", "running"].includes(normalizeText(job.status)),
-      progress.processedArticles,
-      progress.totalArticles,
+      progress.processedSignalCandidates,
+      progress.totalSignalCandidates,
       selectionProfileSnapshot,
       selectionProfileSummary,
       job.updated_at,

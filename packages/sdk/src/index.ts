@@ -16,7 +16,7 @@ type OutboxEventsQuery = {
   aggregateId?: string;
   status?: string;
 };
-type ArticleListQuery = PaginationQuery & {
+type SignalCandidateListQuery = PaginationQuery & {
   channelId?: string;
   finalSelectionDecision?: string;
   selectionMode?: string;
@@ -24,7 +24,7 @@ type ArticleListQuery = PaginationQuery & {
   q?: string;
 };
 type SequenceListQuery = PaginationQuery;
-type ArticleResidualListQuery = PaginationQuery & {
+type SignalCandidateResidualListQuery = PaginationQuery & {
   downstreamLossBucket?: string;
   selectionBlockerStage?: string;
   selectionBlockerReason?: string;
@@ -238,9 +238,9 @@ export function createSignalOpsSdk(options: SignalOpsSdkOptions) {
       }),
     getSystemInterest: <T>(interestTemplateId: string) =>
       getJson<T>(`/system-interests/${interestTemplateId}`),
-    listArticles: <T>() => getJson<T>("/maintenance/articles"),
-    listArticlesPage: <T>(params?: ArticleListQuery) =>
-      getPaginated<T>("/maintenance/articles", {
+    listSignalCandidates: <T>() => getJson<T>("/maintenance/signal-candidates"),
+    listSignalCandidatesPage: <T>(params?: SignalCandidateListQuery) =>
+      getPaginated<T>("/maintenance/signal-candidates", {
         page: params?.page,
         pageSize: params?.pageSize,
         channelId: params?.channelId,
@@ -249,10 +249,10 @@ export function createSignalOpsSdk(options: SignalOpsSdkOptions) {
         visibilityState: params?.visibilityState,
         q: params?.q?.trim() || undefined,
       }),
-    getArticleSelectionSummary: <T>() =>
-      getJson<T>("/maintenance/articles/selection-summary"),
-    listArticleResidualsPage: <T>(params?: ArticleResidualListQuery) =>
-      getPaginated<T>("/maintenance/articles/residuals", {
+    getSignalCandidateSelectionSummary: <T>() =>
+      getJson<T>("/maintenance/signal-candidates/selection-summary"),
+    listSignalCandidateResidualsPage: <T>(params?: SignalCandidateResidualListQuery) =>
+      getPaginated<T>("/maintenance/signal-candidates/residuals", {
         page: params?.page,
         pageSize: params?.pageSize,
         downstreamLossBucket: params?.downstreamLossBucket,
@@ -265,8 +265,8 @@ export function createSignalOpsSdk(options: SignalOpsSdkOptions) {
         duplicateKind: params?.duplicateKind,
         q: params?.q?.trim() || undefined,
       }),
-    getArticleResidualSummary: <T>(params?: Omit<ArticleResidualListQuery, "page" | "pageSize">) =>
-      getJson<T>("/maintenance/articles/residuals/summary", {
+    getSignalCandidateResidualSummary: <T>(params?: Omit<SignalCandidateResidualListQuery, "page" | "pageSize">) =>
+      getJson<T>("/maintenance/signal-candidates/residuals/summary", {
         downstreamLossBucket: params?.downstreamLossBucket,
         selectionBlockerStage: params?.selectionBlockerStage,
         selectionBlockerReason: params?.selectionBlockerReason,
@@ -277,10 +277,10 @@ export function createSignalOpsSdk(options: SignalOpsSdkOptions) {
         duplicateKind: params?.duplicateKind,
         q: params?.q?.trim() || undefined,
       }),
-    getArticle: <T>(docId: string) => getJson<T>(`/maintenance/articles/${docId}`),
-    getArticleExplain: <T>(docId: string) => getJson<T>(`/maintenance/articles/${docId}/explain`),
-    retryArticleEnrichment: <T>(docId: string, payload?: unknown) =>
-      postJson<T>(`/maintenance/articles/${docId}/enrichment/retry`, payload ?? {}),
+    getSignalCandidate: <T>(docId: string) => getJson<T>(`/maintenance/signal-candidates/${docId}`),
+    getSignalCandidateExplain: <T>(docId: string) => getJson<T>(`/maintenance/signal-candidates/${docId}/explain`),
+    retrySignalCandidateEnrichment: <T>(docId: string, payload?: unknown) =>
+      postJson<T>(`/maintenance/signal-candidates/${docId}/enrichment/retry`, payload ?? {}),
     getDashboardSummary: <T>() => getJson<T>("/dashboard/summary"),
     listChannels: <T>() => getJson<T>("/channels"),
     listChannelsPage: <T>(params?: ChannelListQuery) =>

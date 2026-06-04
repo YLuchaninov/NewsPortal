@@ -2,8 +2,8 @@
   "name": "signalops",
   "private": true,
   "scripts": {
-    "article:yield:diagnostics": "pnpm build:node-runtime --service=fetchers && pnpm --filter @signalops/fetchers article-yield:diagnostics",
-    "article:yield:remediate": "pnpm build:node-runtime --service=fetchers && pnpm --filter @signalops/fetchers article-yield:remediate",
+    "signal-candidate:yield:diagnostics": "pnpm build:node-runtime --service=fetchers && pnpm --filter @signalops/fetchers signal-candidate-yield:diagnostics",
+    "signal-candidate:yield:remediate": "pnpm build:node-runtime --service=fetchers && pnpm --filter @signalops/fetchers signal-candidate-yield:remediate",
     "build": "pnpm -r --if-present build",
     "build:node-runtime": "node infra/tooling/build-node-runtime.mjs",
     "check:compliance": "node infra/scripts/check-compliance.mjs",

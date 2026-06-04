@@ -35,7 +35,7 @@ if (!session) {
 const pagePaths = {
   channels: appPath("/channels"),
   channelNew: appPath("/channels/new"),
-  articles: appPath("/articles"),
+  signal_candidates: appPath("/signal-candidates"),
   observability: appPath("/observability"),
   reindex: appPath("/reindex"),
   discovery: appPath("/discovery"),
@@ -67,14 +67,14 @@ function formatFetchRunDelta(run: R): string {
     const finalAccepted = asInt(metrics.finalAcceptedCount, 0);
     return `${staticAccepted} static / +${browserOnly} browser / ${finalAccepted} final`;
   }
-  return `+${String(run.new_article_count ?? 0)} new`;
+  return `+${String(run.new_signal_candidate_count ?? 0)} new`;
 }
 
 const kpiCards = !summary ? [] : [
   { label: "Needs attention", value: String(summary.attention_channels ?? 0), color: (summary.attention_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
   { label: "Overdue channels", value: String(summary.overdue_channels ?? 0), color: (summary.overdue_channels as number) > 0 ? "text-amber-500" : "text-muted-foreground" },
   { label: "Fetch failures 24h", value: String(summary.fetch_failures_24h ?? 0), color: (summary.fetch_failures_24h as number) > 0 ? "text-red-500" : "text-muted-foreground" },
-  { label: "System-selected", value: String(summary.active_news ?? 0), color: "text-emerald-500" },
+  { label: "System-selected", value: String(summary.active_signals ?? 0), color: "text-emerald-500" },
   { label: "New content 24h", value: String(summary.fetch_new_content_24h ?? 0), color: "text-cyan-500" },
   {
     label:
@@ -102,7 +102,7 @@ const liveUpdatesEndpoint = `${appPath("/bff/admin/live-updates")}?surface=dashb
 const initialDashboardSummary = !summary
   ? null
   : {
-      activeNews: asInt(summary.active_news, 0),
+      activeSignals: asInt(summary.active_signals, 0),
       processedToday: asInt(summary.processed_today, 0),
       totalUsers: asInt(summary.total_users, 0),
       overdueChannels: asInt(summary.overdue_channels, 0),
@@ -123,7 +123,7 @@ const initialDashboardSummary = !summary
       llmAcceptGrayZoneOnBudgetExhaustion:
         summary.llm_accept_gray_zone_on_budget_exhaustion === true,
       revision: buildAdminLiveRevision([
-        summary.active_news,
+        summary.active_signals,
         summary.processed_today,
         summary.total_users,
         summary.overdue_channels,
@@ -145,12 +145,12 @@ const fetchRunsRevision = buildAdminLiveRevision([
   fetchRuns?.items[0]?.channel_id ?? "",
   fetchRuns?.items[0]?.started_at ?? "",
   fetchRuns?.items[0]?.outcome_kind ?? "",
-  fetchRuns?.items[0]?.new_article_count ?? "",
+  fetchRuns?.items[0]?.new_signal_candidate_count ?? "",
 ]);
 const summaryAttentionChannels = asInt(summary?.attention_channels, 0);
 const summaryOverdueChannels = asInt(summary?.overdue_channels, 0);
 const summaryFetchFailures = asInt(summary?.fetch_failures_24h, 0);
-const summarySelected = asInt(summary?.active_news, 0);
+const summarySelected = asInt(summary?.active_signals, 0);
 const summaryLlmReviews = asInt(summary?.llm_review_count_24h, 0);
 const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
 ---
@@ -232,11 +232,11 @@ const summaryQueuedReindex = asInt(summary?.queued_reindex_jobs, 0);
                 body: "Review runs, typed artifacts, candidates, source inventory, replay, and rollback.",
               },
               {
-                href: pagePaths.articles,
+                href: pagePaths.signal_candidates,
                 title: "Content triage",
                 value: `${String(summarySelected)} selected / ${String(summaryLlmReviews)} LLM reviews`,
                 tone: "border-border",
-                body: "Inspect selected, held, or blocked article outcomes from one operations lane.",
+                body: "Inspect selected, held, or blocked signal_candidate outcomes from one operations lane.",
               },
               {
                 href: pagePaths.observability,

@@ -418,7 +418,7 @@ class WebsiteProbePlugin(ContextTaskPlugin):
                         key="document_urls",
                         default=[],
                     ),
-                    "detail_count_estimate": int(item.get("detail_count_estimate") or item.get("article_count_estimate") or 0),
+                    "detail_count_estimate": int(item.get("detail_count_estimate") or item.get("signal_candidate_count_estimate") or 0),
                     "listing_count_estimate": int(item.get("listing_count_estimate") or 0),
                     "document_count_estimate": int(item.get("document_count_estimate") or 0),
                     "sample_resources": _coerce_mapping_list(
@@ -433,7 +433,7 @@ class WebsiteProbePlugin(ContextTaskPlugin):
                         key="hidden_rss_urls",
                         default=[],
                     ),
-                    "article_count_estimate": int(item.get("article_count_estimate") or 0),
+                    "signal_candidate_count_estimate": int(item.get("signal_candidate_count_estimate") or 0),
                     "freshness": str(item.get("freshness") or "unknown"),
                     "date_patterns_found": bool(item.get("date_patterns_found")),
                     "category_urls": self._resolve_string_list(
@@ -442,9 +442,9 @@ class WebsiteProbePlugin(ContextTaskPlugin):
                         key="category_urls",
                         default=[],
                     ),
-                    "sample_articles": _coerce_mapping_list(
-                        item.get("sample_articles") or [],
-                        field_name="sample_articles",
+                    "sample_signal_candidates": _coerce_mapping_list(
+                        item.get("sample_signal_candidates") or [],
+                        field_name="sample_signal_candidates",
                     ),
                     "browser_assisted_recommended": bool(
                         item.get("browser_assisted_recommended")

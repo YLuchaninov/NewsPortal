@@ -11,7 +11,7 @@ from services.api.app.database import query_all, query_one
 from services.api.app.pagination import build_paginated_response, resolve_pagination
 
 CONTENT_ANALYSIS_SUBJECT_TYPES = {
-    "article",
+    "signal_candidate",
     "web_resource",
     "canonical_document",
     "story_cluster",

@@ -58,7 +58,7 @@ function caseRun(key: string) {
     baselineEvidence: [
       {
         fetchRuns: [{ outcomeKind: "success", httpStatus: 200 }],
-        articles: [{ docId: `${key}-doc`, title: "Selected article" }],
+        signal_candidates: [{ docId: `${key}-doc`, title: "Selected signal_candidate" }],
         interestFilterResults: [
           {
             semanticDecision: "approve",
@@ -135,7 +135,7 @@ test("sequence evidence summary requires success, cancel, failure and retry path
   });
 
   assert.equal(passing.resourceIngestSuccess.passed, true);
-  assert.equal(passing.articleIngestSuccess.passed, true);
+  assert.equal(passing.signalCandidateIngestSuccess.passed, true);
   assert.equal(passing.notificationDigestSuccess.passed, true);
   assert.equal(passing.cancelPath.passed, true);
   assert.equal(passing.failurePath.passed, true);
@@ -189,7 +189,7 @@ test("product mega-flow verdict passes only when all domains and child proof com
   assert.equal(failing.scenarioSummaries[0].status, "failed");
 });
 
-test("product mega-flow requires live selected article evidence, not only deterministic fixture display", () => {
+test("product mega-flow requires live selected signal_candidate evidence, not only deterministic fixture display", () => {
   const report = discoveryReport();
   report.caseRuns = [
     caseRun("example_a_job_board"),
@@ -198,7 +198,7 @@ test("product mega-flow requires live selected article evidence, not only determ
       baselineEvidence: [
         {
           fetchRuns: [{ outcomeKind: "success", httpStatus: 200 }],
-          articles: [{ docId: "example_b_dev_news-doc", title: "Live but not selected" }],
+          signal_candidates: [{ docId: "example_b_dev_news-doc", title: "Live but not selected" }],
           interestFilterResults: [{ semanticDecision: "approve", compatDecision: "approve" }],
           finalSelection: { total: 1, selected: 0 },
           systemFeed: { total: 1, eligible: 1 },
@@ -222,11 +222,11 @@ test("product mega-flow requires live selected article evidence, not only determ
   assert.equal(devNewsSummary?.status, "failed");
   assert.equal(devNewsSummary?.filterEvidence.selected.passed, true);
   assert.equal(devNewsSummary?.filterEvidence.selected.source, "deterministic-product-fixture-selection");
-  assert.equal(devNewsSummary?.liveSelectedArticleEvidence.passed, false);
-  assert.equal(devNewsSummary?.liveSelectedArticleEvidence.residualReason, "live_articles_not_selected_by_interest_policy");
+  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.passed, false);
+  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.residualReason, "live_signal_candidates_not_selected_by_interest_policy");
 });
 
-test("product mega-flow can satisfy live selection through replayed live article proof", () => {
+test("product mega-flow can satisfy live selection through replayed live signal_candidate proof", () => {
   const report = discoveryReport();
   report.caseRuns = [
     caseRun("example_a_job_board"),
@@ -235,7 +235,7 @@ test("product mega-flow can satisfy live selection through replayed live article
       baselineEvidence: [
         {
           fetchRuns: [{ outcomeKind: "success", httpStatus: 200 }],
-          articles: [{ docId: "example_b_dev_news-doc", title: "Live dev news" }],
+          signal_candidates: [{ docId: "example_b_dev_news-doc", title: "Live dev news" }],
           interestFilterResults: [{ semanticDecision: "no_match", compatDecision: "irrelevant" }],
           finalSelection: { total: 1, selected: 0 },
           systemFeed: { total: 1, eligible: 0 },
@@ -252,7 +252,7 @@ test("product mega-flow can satisfy live selection through replayed live article
     yieldProofReport: { finalVerdict: "pass" },
     liveSelectionProof: {
       example_b_dev_news: {
-        selectedArticles: [
+        selectedSignalCandidates: [
           {
             docId: "example_b_dev_news-doc",
             title: "Live dev news",
@@ -268,7 +268,7 @@ test("product mega-flow can satisfy live selection through replayed live article
   );
   assert.equal(passing.finalVerdict, "pass");
   assert.equal(devNewsSummary?.status, "passed");
-  assert.equal(devNewsSummary?.liveSelectedArticleEvidence.source, "live-proof-selection-replay");
+  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.source, "live-proof-selection-replay");
   assert.equal(devNewsSummary?.liveDiscovery.selectedFinalRows, 1);
   assert.equal(devNewsSummary?.liveDiscovery.discoverySelectedFinalRows, 0);
   assert.equal(devNewsSummary?.liveDiscovery.replaySelectedFinalRows, 1);

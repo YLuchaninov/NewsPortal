@@ -7,7 +7,7 @@ import {
 import type { AdaptedFeedEntry } from "./feed-ingress-adapters";
 import type { ParsedFeed } from "./feed-parser/index";
 import type {
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   PersistResourceInput,
   SourceChannelRow,
 } from "./fetcher-persistence";
@@ -20,13 +20,13 @@ export function buildRssPersistInput(
   item: AdaptedFeedEntry,
   fetchedAt: string,
   preferContentEncoded: boolean
-): PersistArticleInput | null {
+): PersistSignalCandidateInput | null {
   if (!item.url) {
     return null;
   }
 
   const canonicalUrl = canonicalizeUrl(item.url);
-  const externalArticleId = item.entry.guid?.trim() || canonicalUrl;
+  const externalSignalCandidateId = item.entry.guid?.trim() || canonicalUrl;
   const publishedAt = item.publishedAt ?? new Date().toISOString();
   const { lang, confidence } = pickLanguageHint(channel.language, parsedFeed.language);
   const title = normalizeWhitespace(item.entry.title);
@@ -36,7 +36,7 @@ export function buildRssPersistInput(
     : derivePlaintextBody(item.entry.summaryHtml, item.entry.contentHtml);
   return {
     channel,
-    externalArticleId,
+    externalSignalCandidateId,
     url: canonicalUrl,
     publishedAt,
     title,
@@ -99,7 +99,7 @@ export function buildWebsitePersistInput(
 ): PersistResourceInput {
   return {
     channel,
-    externalArticleId: resource.externalResourceId,
+    externalSignalCandidateId: resource.externalResourceId,
     url: resource.normalizedUrl,
     resourceKind: resource.classification.kind,
     title: resource.title ?? "[Pending enrichment]",

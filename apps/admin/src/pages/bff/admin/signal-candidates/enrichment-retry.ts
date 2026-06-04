@@ -24,8 +24,8 @@ function buildSdkOptions(): SignalOpsSdkOptions {
 
 export const POST: APIRoute = async ({ request }) => {
   const action = await prepareAdminAction(request, {
-    fallbackRedirectPath: "/articles",
-    actionToken: { scope: "articles.enrichment-retry" },
+    fallbackRedirectPath: "/signal-candidates",
+    actionToken: { scope: "signal_candidates.enrichment-retry" },
   });
   if (!action.ok) {
     return action.response;
@@ -33,17 +33,17 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     const { payload, session } = action.context;
-    const docId = readRequiredAdminText(payload, "docId", "Article ID is required.");
+    const docId = readRequiredAdminText(payload, "docId", "SignalCandidate ID is required.");
 
     const sdk = createSignalOpsSdk(buildSdkOptions());
-    const run = await sdk.retryArticleEnrichment<Record<string, unknown>>(docId, {
+    const run = await sdk.retrySignalCandidateEnrichment<Record<string, unknown>>(docId, {
       requestedBy: session.userId,
     });
 
     await insertAdminAuditLog(getPool(), {
       actorUserId: session.userId,
-      actionType: "article_enrichment_retry",
-      entityType: "article",
+      actionType: "signal_candidate_enrichment_retry",
+      entityType: "signal_candidate",
       entityId: docId,
       payloadJson: {
         runId: run.run_id ?? null,
@@ -53,16 +53,16 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     return adminActionSuccess(action.context, {
-      section: "articles",
+      section: "signal_candidates",
       message: "Enrichment retry queued",
       status: 202,
       json: run,
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to queue article enrichment retry.";
+      error instanceof Error ? error.message : "Unable to queue signal_candidate enrichment retry.";
     return adminActionError(action.context, {
-      section: "articles",
+      section: "signal_candidates",
       message,
       status: 400,
     });

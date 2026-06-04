@@ -15,21 +15,21 @@ from .pipeline_legacy import (
 )
 
 
-class ArticleExtractPlugin(LegacyHandlerTaskPlugin):
-    name = "enrichment.article_extract"
-    description = "Call the fetchers-owned article enrichment endpoint before normalization."
+class SignalCandidateExtractPlugin(LegacyHandlerTaskPlugin):
+    name = "enrichment.signal_candidate_extract"
+    description = "Call the fetchers-owned signal_candidate enrichment endpoint before normalization."
     handler_name = "fetchers_internal_enrichment"
     input_descriptions = {
-        "doc_id": "Article identifier passed via task options or sequence context.",
+        "doc_id": "SignalCandidate identifier passed via task options or sequence context.",
         "event_id": "Sequence-owned event identifier retained for downstream idempotency.",
-        "force_enrichment": "Optional flag to force article extraction even when normal skip rules would apply.",
+        "force_enrichment": "Optional flag to force signal_candidate extraction even when normal skip rules would apply.",
     }
     output_descriptions = {
-        "doc_id": "Article identifier retained in sequence context.",
+        "doc_id": "SignalCandidate identifier retained in sequence context.",
         "event_id": "Sequence-owned event identifier retained in sequence context.",
         "status": "Fetchers enrichment outcome: skipped, enriched, or failed.",
-        "enrichment_state": "Persisted enrichment state written on the article row.",
-        "body_replaced": "Whether enrichment replaced the article body before normalize ran.",
+        "enrichment_state": "Persisted enrichment state written on the signal candidate row.",
+        "body_replaced": "Whether enrichment replaced the signal candidate body before normalize ran.",
         "media_asset_count": "Number of media assets persisted by the fetchers enrichment owner.",
         "error": "Non-fatal extraction error text when fetchers continued with the feed body.",
     }
@@ -105,7 +105,7 @@ class ArticleExtractPlugin(LegacyHandlerTaskPlugin):
             }
         ).encode("utf-8")
         request = Request(
-            f"{build_fetchers_internal_base_url()}/internal/enrichment/articles/{doc_id}",
+            f"{build_fetchers_internal_base_url()}/internal/enrichment/signal-candidates/{doc_id}",
             data=request_body,
             headers={
                 "accept": "application/json",
@@ -115,7 +115,7 @@ class ArticleExtractPlugin(LegacyHandlerTaskPlugin):
         )
         return request_fetchers_json(
             request=request,
-            subject_label="article",
+            subject_label="signal_candidate",
             subject_id=doc_id,
         )
 
@@ -135,7 +135,7 @@ class ResourceExtractPlugin(LegacyHandlerTaskPlugin):
         "status": "Fetchers resource enrichment outcome: skipped, enriched, or failed.",
         "resource_kind": "Final resource kind after typed extraction.",
         "extraction_state": "Persisted extraction state written on the resource row.",
-        "projected_doc_id": "Projected article doc_id when the resource was editorial-compatible.",
+        "projected_doc_id": "Projected signal_candidate doc_id when the resource was editorial-compatible.",
         "documents_count": "Number of documents stored on the resource row.",
         "media_count": "Number of media assets stored on the resource row.",
         "error": "Non-fatal extraction error text when enrichment failed.",
@@ -234,6 +234,6 @@ class ResourceExtractPlugin(LegacyHandlerTaskPlugin):
 
 
 ENRICHMENT_PIPELINE_PLUGIN_CLASSES = (
-    ArticleExtractPlugin,
+    SignalCandidateExtractPlugin,
     ResourceExtractPlugin,
 )

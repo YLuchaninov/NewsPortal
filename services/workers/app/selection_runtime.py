@@ -12,18 +12,18 @@ from .scoring import hours_between, parse_datetime, place_match_score
 
 def passes_allowed_content_kind(
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     allowed_content_kinds: Sequence[str],
 ) -> tuple[bool, str]:
-    article_content_kind = str(article.get("content_kind") or "editorial").strip() or "editorial"
+    signal_candidate_content_kind = str(signal_candidate.get("content_kind") or "editorial").strip() or "editorial"
     normalized_allowed = {
         str(value).strip()
         for value in allowed_content_kinds
         if str(value).strip()
     }
     if not normalized_allowed:
-        return (True, article_content_kind)
-    return (article_content_kind in normalized_allowed, article_content_kind)
+        return (True, signal_candidate_content_kind)
+    return (signal_candidate_content_kind in normalized_allowed, signal_candidate_content_kind)
 
 
 _WRAPPER_DIRECTORY_TITLE_FRAGMENTS = (
@@ -87,17 +87,17 @@ _GENERIC_ADVICE_TITLE_PREFIXES = (
 )
 
 
-def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
-    url = str(article.get("url") or "").strip()
+def has_wrapper_directory_noise(signal_candidate: Mapping[str, Any]) -> bool:
+    url = str(signal_candidate.get("url") or "").strip()
     if _has_search_ad_url(url) or _has_wrapper_category_url(url):
         return True
 
     title_and_lead = " ".join(
-        str(article.get(field) or "")
+        str(signal_candidate.get(field) or "")
         for field in ("title", "lead")
     ).casefold()
-    article_text = " ".join(
-        str(article.get(field) or "")
+    signal_candidate_text = " ".join(
+        str(signal_candidate.get(field) or "")
         for field in ("title", "lead", "body")
     ).casefold()
     if _has_professional_network_noise_url(url, title_and_lead):
@@ -117,7 +117,7 @@ def has_wrapper_directory_noise(article: Mapping[str, Any]) -> bool:
         return True
 
     body_hit_count = sum(
-        1 for fragment in _WRAPPER_DIRECTORY_BODY_FRAGMENTS if fragment in article_text
+        1 for fragment in _WRAPPER_DIRECTORY_BODY_FRAGMENTS if fragment in signal_candidate_text
     )
     return bool(title_hits) and body_hit_count >= 2
 
@@ -232,22 +232,22 @@ def _looks_like_generic_advice(title_and_lead: str) -> bool:
 
 def passes_hard_filters(
     *,
-    article: Mapping[str, Any],
-    article_features: Mapping[str, Sequence[str]],
+    signal_candidate: Mapping[str, Any],
+    signal_candidate_features: Mapping[str, Sequence[str]],
     hard_constraints: Mapping[str, Any],
 ) -> tuple[bool, list[str], bool]:
     reasons: list[str] = []
-    article_lang = str(article.get("lang") or "").strip().lower()
-    article_text = " ".join(
-        str(article.get(field) or "")
+    signal_candidate_lang = str(signal_candidate.get("lang") or "").strip().lower()
+    signal_candidate_text = " ".join(
+        str(signal_candidate.get(field) or "")
         for field in ("title", "lead", "body")
     ).casefold()
     allowed_languages = {value.casefold() for value in coerce_text_list(hard_constraints.get("languages_allowed"))}
-    if allowed_languages and article_lang and article_lang not in allowed_languages:
+    if allowed_languages and signal_candidate_lang and signal_candidate_lang not in allowed_languages:
         reasons.append("language")
 
     time_window_hours = coerce_nullable_positive_int(hard_constraints.get("time_window_hours"))
-    published_at = parse_datetime(article.get("published_at"))
+    published_at = parse_datetime(signal_candidate.get("published_at"))
     now = datetime.now(timezone.utc)
     within_window = (
         True
@@ -259,34 +259,34 @@ def passes_hard_filters(
 
     must_have_terms = coerce_text_list(hard_constraints.get("must_have_terms"))
     if must_have_terms and not any(
-        value.casefold() in article_text for value in must_have_terms
+        value.casefold() in signal_candidate_text for value in must_have_terms
     ):
         reasons.append("must_have_any")
 
     for value in coerce_text_list(hard_constraints.get("must_not_have_terms")):
-        if value.casefold() in article_text:
+        if value.casefold() in signal_candidate_text:
             reasons.append(f"must_not:{value}")
 
     target_places = coerce_text_list(hard_constraints.get("places"))
-    if target_places and place_match_score(article_features.get("places", []), target_places) <= 0.0:
+    if target_places and place_match_score(signal_candidate_features.get("places", []), target_places) <= 0.0:
         reasons.append("places")
 
     required_short_tokens = {value.casefold() for value in coerce_text_list(hard_constraints.get("short_tokens_required"))}
-    article_short_tokens = {
+    signal_candidate_short_tokens = {
         value.casefold()
-        for value in coerce_text_list(article_features.get("short_tokens"))
+        for value in coerce_text_list(signal_candidate_features.get("short_tokens"))
     }
-    if required_short_tokens and not required_short_tokens.issubset(article_short_tokens):
+    if required_short_tokens and not required_short_tokens.issubset(signal_candidate_short_tokens):
         reasons.append("short_tokens_required")
 
     forbidden_short_tokens = {
         value.casefold()
         for value in coerce_text_list(hard_constraints.get("short_tokens_forbidden"))
     }
-    if forbidden_short_tokens & article_short_tokens:
+    if forbidden_short_tokens & signal_candidate_short_tokens:
         reasons.append("short_tokens_forbidden")
 
-    if has_wrapper_directory_noise(article):
+    if has_wrapper_directory_noise(signal_candidate):
         reasons.append("wrapper_directory_noise")
 
     return (len(reasons) == 0, reasons, within_window)

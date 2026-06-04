@@ -1,6 +1,6 @@
 # SignalOps MCP HTTP Smoke Examples
 
-These examples exercise the shipped SignalOps MCP server directly over HTTP, including the article/content diagnostics layer used for evidence-based tuning.
+These examples exercise the shipped SignalOps MCP server directly over HTTP, including the signal candidate/content diagnostics layer used for evidence-based tuning.
 
 Quick framing:
 
@@ -179,7 +179,7 @@ curl -sS \
   "$SIGNALOPS_MCP_URL" | jq
 ```
 
-## 10. Read article residual diagnostics
+## 10. Read signal_candidate residual diagnostics
 
 ```bash
 curl -sS \
@@ -187,10 +187,10 @@ curl -sS \
   -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
-    "id": "tool-call-articles-summary-1",
+    "id": "tool-call-signal_candidates-summary-1",
     "method": "tools/call",
     "params": {
-      "name": "articles.residuals.summary",
+      "name": "signal_candidates.residuals.summary",
       "arguments": {}
     }
   }' \
@@ -212,10 +212,10 @@ curl -sS \
   -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
-    "id": "tool-call-articles-list-1",
+    "id": "tool-call-signal_candidates-list-1",
     "method": "tools/call",
     "params": {
-      "name": "articles.residuals.list",
+      "name": "signal_candidates.residuals.list",
       "arguments": {
         "page": 1,
         "pageSize": 10,
@@ -234,13 +234,13 @@ curl -sS \
   -H "Authorization: Bearer $SIGNALOPS_MCP_TOKEN" \
   -d '{
     "jsonrpc": "2.0",
-    "id": "prompt-get-article-tune-1",
+    "id": "prompt-get-signal_candidate-tune-1",
     "method": "prompts/get",
     "params": {
       "name": "system_interest.polish",
       "arguments": {
         "interestName": "AI policy monitoring",
-        "residualPattern": "semantic_rejected repeated across policy-analysis articles"
+        "residualPattern": "semantic_rejected repeated across policy-analysis signal_candidates"
       }
     }
   }' \
@@ -284,5 +284,5 @@ After the read-only smoke passes:
 
 1. read the scenario guide for the target domain;
 2. render the matching session-start prompt if useful;
-3. if the job is tuning-related, inspect `signalops://articles/residuals-summary` and `signalops://guide/scenarios/article-diagnostics`;
+3. if the job is tuning-related, inspect `signalops://signal-candidates/residuals-summary` and `signalops://guide/scenarios/signal_candidate-diagnostics`;
 4. only then try bounded write actions with a narrow-scope token.

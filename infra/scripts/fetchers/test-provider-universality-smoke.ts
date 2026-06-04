@@ -11,7 +11,7 @@ import { pollEmailImapProviderChannel } from "../../../services/fetchers/src/fet
 import type {
   ChannelPollCompletion,
   CursorMap,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow
 } from "../../../services/fetchers/src/fetcher-persistence";
 import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
@@ -34,7 +34,7 @@ interface ServiceInternals {
   loadCursorMap(channelId: string): Promise<CursorMap>;
   persistInputsWithPreflight(
     channelId: string,
-    inputs: readonly PersistArticleInput[]
+    inputs: readonly PersistSignalCandidateInput[]
   ): Promise<{ ingestedCount: number; duplicateCount: number }>;
   markChannelSuccess(
     channel: SourceChannelRow,
@@ -367,11 +367,11 @@ async function fetchLatestRun(pool: Pool, channelId: string): Promise<FetchRunRo
   return row;
 }
 
-async function countArticles(pool: Pool, channelId: string): Promise<number> {
+async function countSignalCandidates(pool: Pool, channelId: string): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `
       select count(*)::text as count
-      from articles
+      from signal_candidates
       where channel_id = $1
     `,
     [channelId]
@@ -410,18 +410,18 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[]): Promise<
     return;
   }
 
-  const articleIds = (
+  const signalCandidateIds = (
     await pool.query<{ docId: string }>(
       `
         select doc_id::text as "docId"
-        from articles
+        from signal_candidates
         where channel_id = any($1::uuid[])
       `,
       [channelIds]
     )
   ).rows.map((row) => row.docId);
 
-  if (articleIds.length > 0) {
+  if (signalCandidateIds.length > 0) {
     await pool.query(
       `
         delete from sequence_task_runs
@@ -431,27 +431,27 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[]): Promise<
           where context_json ->> 'doc_id' = any($1::text[])
         )
       `,
-      [articleIds]
+      [signalCandidateIds]
     );
     await pool.query(
       `
         delete from sequence_runs
         where context_json ->> 'doc_id' = any($1::text[])
       `,
-      [articleIds]
+      [signalCandidateIds]
     );
     await pool.query(
       `
         delete from outbox_events
         where aggregate_id::text = any($1::text[])
       `,
-      [articleIds]
+      [signalCandidateIds]
     );
   }
 
   await pool.query(
     `
-      delete from articles
+      delete from signal_candidates
       where channel_id = any($1::uuid[])
     `,
     [channelIds]
@@ -503,7 +503,7 @@ async function main(): Promise<void> {
     const apiRun = await fetchLatestRun(pool, apiChannelId);
     assert.equal(apiRun.outcomeKind, "new_content");
     assert.equal(apiRun.httpStatus, 200);
-    assert.equal(await countArticles(pool, apiChannelId), 2);
+    assert.equal(await countSignalCandidates(pool, apiChannelId), 2);
     assert.deepEqual(
       fixtureState.apiAuthorizationHeaders,
       [apiAuthorizationHeader, apiAuthorizationHeader],
@@ -536,7 +536,7 @@ async function main(): Promise<void> {
 
     const imapRun = await fetchLatestRun(pool, imapChannelId);
     assert.equal(imapRun.outcomeKind, "new_content");
-    assert.equal(await countArticles(pool, imapChannelId), 1);
+    assert.equal(await countSignalCandidates(pool, imapChannelId), 1);
     assert.equal(imapRun.providerMetricsJson?.provider, "email_imap");
     assert.equal(imapRun.providerMetricsJson?.scannedCount, 2);
     assert.equal(imapRun.providerMetricsJson?.selectedCount, 1);
@@ -552,8 +552,8 @@ async function main(): Promise<void> {
           providersVerified: ["api", "email_imap"],
           apiChannelId,
           imapChannelId,
-          apiArticles: 2,
-          imapArticles: 1,
+          apiSignalCandidates: 2,
+          imapSignalCandidates: 1,
         },
         null,
         2

@@ -621,7 +621,7 @@ function createFakeSourceFamilyPool() {
               runCount7d: 2,
               failureCount7d: 0,
               newItemCount7d: 18,
-              articleCount: 18,
+              signalCandidateCount: 18,
               webResourceCount: 0,
               selectedRows: 0,
               grayRows: 2,
@@ -728,7 +728,7 @@ function createFakeSelectionPrecisionPool() {
     state,
     async query(sql: string, params: unknown[] = []) {
       state.queries.push({ sql, params });
-      if (/from final_selection_results fsr\s+join articles a/i.test(sql) && /selectionEvidence/i.test(sql)) {
+      if (/from final_selection_results fsr\s+join signal_candidates a/i.test(sql) && /selectionEvidence/i.test(sql)) {
         return {
           rows: [
             {
@@ -855,7 +855,7 @@ function createFakeSelectionReindexPlanPool() {
     state,
     async query(sql: string, params: unknown[] = []) {
       state.queries.push({ sql, params });
-      if (/from final_selection_results fsr\s+join articles a/i.test(sql) && /selectionEvidence/i.test(sql)) {
+      if (/from final_selection_results fsr\s+join signal_candidates a/i.test(sql) && /selectionEvidence/i.test(sql)) {
         return {
           rows: [
             {
@@ -921,7 +921,7 @@ function createFakeDiscoveryPrefixPool() {
       id: "dddddddd-1111-4111-8111-111111111111",
     },
     {
-      pattern: /from articles/i,
+      pattern: /from signal_candidates/i,
       prefix: "ea25c952",
       id: "ea25c952-1111-4111-8111-111111111111",
     },
@@ -1167,19 +1167,19 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
 
   const toolNames = listMcpTools().map((tool) => tool.name);
   assert.ok(toolNames.includes("admin.summary.get"));
-  assert.ok(toolNames.includes("articles.list"));
-  assert.ok(toolNames.includes("articles.read"));
-  assert.ok(toolNames.includes("articles.explain"));
+  assert.ok(toolNames.includes("signal_candidates.list"));
+  assert.ok(toolNames.includes("signal_candidates.read"));
+  assert.ok(toolNames.includes("signal_candidates.explain"));
   assert.ok(toolNames.includes("content_items.list"));
   assert.ok(toolNames.includes("content_items.read"));
   assert.ok(toolNames.includes("content_items.explain"));
   assert.ok(toolNames.includes("outbox.events.list"));
   assert.ok(toolNames.includes("channels.sync.request"));
-  assert.ok(toolNames.includes("articles.residuals.list"));
-  assert.ok(toolNames.includes("articles.residuals.summary"));
-  assert.ok(toolNames.includes("articles.holds.summary"));
-  assert.ok(toolNames.includes("articles.holds.list"));
-  assert.ok(toolNames.includes("articles.holds.explain"));
+  assert.ok(toolNames.includes("signal_candidates.residuals.list"));
+  assert.ok(toolNames.includes("signal_candidates.residuals.summary"));
+  assert.ok(toolNames.includes("signal_candidates.holds.summary"));
+  assert.ok(toolNames.includes("signal_candidates.holds.list"));
+  assert.ok(toolNames.includes("signal_candidates.holds.explain"));
   assert.ok(toolNames.includes("sequences.create"));
   assert.ok(toolNames.includes("discovery.runs.create"));
   assert.ok(toolNames.includes("discovery_vnext.start_run"));
@@ -1216,12 +1216,12 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("signalops://guide/scenarios/system-interests"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/llm-templates"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/channels"));
-  assert.ok(resourceUris.includes("signalops://guide/scenarios/article-diagnostics"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/signal_candidate-diagnostics"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/observability"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/cleanup"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/funnel-calibration"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery-live-gap-hunting"));
-  assert.ok(resourceUris.includes("signalops://articles/residuals-summary"));
+  assert.ok(resourceUris.includes("signalops://signal-candidates/residuals-summary"));
   const resource = resolveMcpResource("signalops://admin/summary");
   assert.equal(resource.name, "admin.summary");
   const guideResource = resolveMcpResource("signalops://guide/server-overview");
@@ -1293,11 +1293,11 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   const systemInterestPolishPrompt = resolveMcpPrompt("system_interest.polish");
   const systemInterestPolishRendered = systemInterestPolishPrompt.render({
     interestName: "AI safety",
-    residualPattern: "semantic_rejected repeated across policy-analysis articles",
+    residualPattern: "semantic_rejected repeated across policy-analysis signal_candidates",
   });
   assert.match(
     systemInterestPolishRendered.messages[0]?.content.text ?? "",
-    /signalops:\/\/guide\/scenarios\/article-diagnostics/i
+    /signalops:\/\/guide\/scenarios\/signal_candidate-diagnostics/i
   );
   assert.ok(listMcpPrompts().length >= 10);
 
@@ -1532,7 +1532,7 @@ test("MCP hold quality tools and report verify expose tiered hold evidence", asy
       pool,
       token: WRITE_TEMPLATES_TOKEN,
     },
-    "articles.holds.summary",
+    "signal_candidates.holds.summary",
     {}
   )) as Record<string, unknown>;
 
@@ -1545,7 +1545,7 @@ test("MCP hold quality tools and report verify expose tiered hold evidence", asy
       pool,
       token: WRITE_TEMPLATES_TOKEN,
     },
-    "articles.holds.list",
+    "signal_candidates.holds.list",
     { candidateSignalTier: "project_intent", pageSize: 25 }
   )) as Record<string, unknown>;
 
@@ -1568,7 +1568,7 @@ test("MCP hold quality tools and report verify expose tiered hold evidence", asy
   )) as Record<string, unknown>;
 
   assert.match(JSON.stringify(report), /selection_hold_quality/);
-  assert.match(JSON.stringify(report), /articles\.holds\.list/);
+  assert.match(JSON.stringify(report), /signal_candidates\.holds\.list/);
   assert.match(JSON.stringify(report), /project_intent_hold/);
 });
 
@@ -1616,7 +1616,7 @@ test("MCP selection precision audit buckets selected rows without a public gate 
   assert.match(JSON.stringify(report), /Do not add a separate public selected gate/);
 });
 
-test("MCP selection dashboard explains raw article totals versus selected signals", async () => {
+test("MCP selection dashboard explains raw signal_candidate totals versus selected signals", async () => {
   const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
     fetchImpl: (async (input: RequestInfo | URL) => {
@@ -1652,8 +1652,8 @@ test("MCP selection dashboard explains raw article totals versus selected signal
 
   const counts = dashboard.counts as Record<string, unknown>;
   assert.equal(dashboard.readOnly, true);
-  assert.equal(counts.rawArticleObservations, 185);
-  assert.equal(counts.selectedArticleSignals, 0);
+  assert.equal(counts.rawSignalCandidateObservations, 185);
+  assert.equal(counts.selectedSignalCandidateSignals, 0);
   assert.equal(counts.visibleContentItems, 0);
   assert.match(JSON.stringify(dashboard), /raw editorial observations/i);
   assert.match(JSON.stringify(dashboard), /strict selection currently exposes zero/i);
@@ -1995,7 +1995,7 @@ test("MCP sequence and content read tools accept report aliases and UUID prefixe
   );
   await executeMcpTool(
     { sdk, pool, token: WRITE_CHANNELS_TOKEN },
-    "articles.explain",
+    "signal_candidates.explain",
     { canonicalId: "ea25c952" }
   );
   await executeMcpTool(
@@ -2013,7 +2013,7 @@ test("MCP sequence and content read tools accept report aliases and UUID prefixe
   assert.match(requestLog, /cccccccc-1111-4111-8111-111111111111/);
   assert.match(requestLog, /dddddddd-1111-4111-8111-111111111111/);
   assert.match(requestLog, /ea25c952-1111-4111-8111-111111111111/);
-  assert.match(requestLog, /editorial%3Aea25c952-1111-4111-8111-111111111111/);
+  assert.match(requestLog, /signal_candidate%3Aea25c952-1111-4111-8111-111111111111/);
   assert.match(requestLog, /eeeeeeee-1111-4111-8111-111111111111/);
 });
 
@@ -2456,13 +2456,13 @@ test("MCP source-bottleneck report verify uses the shared channel read model", a
             fetchedItemCount7d: 0,
             newItemCount7d: 0,
             duplicateCount7d: 0,
-            articleCount: 0,
+            signalCandidateCount: 0,
             selectedRows: 0,
             selectedUniqueContent: 0,
             grayRows: 0,
             rejectedRows: 0,
-            visibleArticles: 0,
-            duplicateArticles: 0,
+            visibleSignalCandidates: 0,
+            duplicateSignalCandidates: 0,
             webResourceCount: 0,
             projectedResourceCount: 0,
             resourceOnlyCount: 0,
@@ -2579,7 +2579,7 @@ test("MCP reindex request rejects unsupported indexName and jobKind at the bound
         "maintenance.reindex.request",
         {
           payload: {
-            indexName: "articles",
+            indexName: "signal_candidates",
             jobKind: "backfill",
           },
         }
@@ -2639,7 +2639,7 @@ test("MCP reindex backfill stores selection replay defaults and read-back hints"
   assert.deepEqual(JSON.parse(String(reindexInsert.params[3])), {
     batchSize: 100,
     retroNotifications: "skip",
-    replayExistingArticles: true,
+    replayExistingSignalCandidates: true,
     includeEnrichment: false,
     forceEnrichment: false,
   });
@@ -2690,7 +2690,7 @@ test("MCP reindex backfill accepts bounded docId chunks and rejects runtime opti
   assert.deepEqual(JSON.parse(String(reindexInsert.params[3])), {
     batchSize: 50,
     retroNotifications: "skip",
-    replayExistingArticles: true,
+    replayExistingSignalCandidates: true,
     includeEnrichment: false,
     forceEnrichment: false,
     docIds: [
@@ -2716,7 +2716,7 @@ test("MCP reindex backfill accepts bounded docId chunks and rejects runtime opti
             indexName: "interest_centroids",
             jobKind: "backfill",
             options: {
-              progress: { processedArticles: 10 },
+              progress: { processedSignalCandidates: 10 },
             },
           },
         }
@@ -2748,7 +2748,7 @@ test("MCP tool metadata disambiguates selection replay from content analysis bac
     reindex.inputSchema.properties?.payload?.properties?.options?.properties?.docIds?.type,
     "array"
   );
-  assert.match(reindex.description, /old articles|historical|existing/i);
+  assert.match(reindex.description, /old signal_candidates|historical|existing/i);
   assert.match(reindex.description, /bounded chunks|docIds/i);
   assert.match(reindex.description, /current system interests|interest_filter_results/i);
   assert.match(reindex.description, /final_selection_results|selected\/pass_through/i);
@@ -2759,7 +2759,7 @@ test("MCP tool metadata disambiguates selection replay from content analysis bac
   assert.match(reindexJobs.description, /options_json/i);
 
   assert.ok(contentBackfill);
-  assert.match(contentBackfill.description, /does not recompute article\.match_criteria/i);
+  assert.match(contentBackfill.description, /does not recompute signal_candidate\.match_criteria/i);
   assert.match(contentBackfill.description, /interest_filter_results/i);
   assert.match(contentBackfill.description, /final_selection_results/i);
 });
@@ -2788,17 +2788,17 @@ test("content analysis backfill response warns that final selection is not recom
     "content_analysis.backfill.request",
     {
       payload: {
-        subjectTypes: "article, web_resource",
+        subjectTypes: "signal_candidate, web_resource",
         modules: "ner\ncontent_filter",
         subjectIds: "doc-1, doc-2",
       },
     }
   );
 
-  assert.deepEqual(requests[0]?.subjectTypes, ["article", "web_resource"]);
+  assert.deepEqual(requests[0]?.subjectTypes, ["signal_candidate", "web_resource"]);
   assert.deepEqual(requests[0]?.modules, ["ner", "content_filter"]);
   assert.deepEqual(requests[0]?.subjectIds, ["doc-1", "doc-2"]);
-  assert.match(JSON.stringify(result), /does not recompute article\.match_criteria/i);
+  assert.match(JSON.stringify(result), /does not recompute signal_candidate\.match_criteria/i);
   assert.match(JSON.stringify(result), /final_selection_results/i);
   assert.match(JSON.stringify(result), /operator\.report\.verify/i);
 });

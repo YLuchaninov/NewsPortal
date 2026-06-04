@@ -97,25 +97,25 @@ def normalize_weighted_components(
 
 def compute_criterion_meta_score(
     *,
-    article_features: Mapping[str, Sequence[str]],
+    signal_candidate_features: Mapping[str, Sequence[str]],
     target_features: Mapping[str, Sequence[str]],
     place_constraints: Sequence[str],
     is_within_time_window: bool,
 ) -> tuple[float, dict[str, float]]:
     short_score = overlap_ratio(
-        article_features.get("short_tokens", []),
+        signal_candidate_features.get("short_tokens", []),
         target_features.get("short_tokens", []),
     )
     number_score = overlap_ratio(
-        article_features.get("numbers", []),
+        signal_candidate_features.get("numbers", []),
         target_features.get("numbers", []),
     )
     place_score = place_match_score(
-        article_features.get("places", []),
+        signal_candidate_features.get("places", []),
         place_constraints or target_features.get("places", []),
     )
     entity_score = overlap_ratio(
-        article_features.get("entities", []),
+        signal_candidate_features.get("entities", []),
         target_features.get("entities", []),
     )
     time_score = 1.0 if is_within_time_window else 0.0
@@ -143,22 +143,22 @@ def compute_criterion_meta_score(
 
 def compute_interest_meta_score(
     *,
-    article_features: Mapping[str, Sequence[str]],
+    signal_candidate_features: Mapping[str, Sequence[str]],
     target_features: Mapping[str, Sequence[str]],
     place_constraints: Sequence[str],
     language_allowed: bool,
 ) -> tuple[float, dict[str, float]]:
     place_score = place_match_score(
-        article_features.get("places", []),
+        signal_candidate_features.get("places", []),
         place_constraints or target_features.get("places", []),
     )
     lang_score = 1.0 if language_allowed else 0.0
     entity_score = overlap_ratio(
-        article_features.get("entities", []),
+        signal_candidate_features.get("entities", []),
         target_features.get("entities", []),
     )
     short_score = overlap_ratio(
-        article_features.get("short_tokens", []),
+        signal_candidate_features.get("short_tokens", []),
         target_features.get("short_tokens", []),
     )
     score = normalize_weighted_components(

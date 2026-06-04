@@ -36,7 +36,7 @@ export const PRODUCT_MEGA_FLOW_REQUIRED_COMMANDS = [
     proves: ["api-downstream", "email-imap-downstream"],
   }),
   command("website-compose", "provider-fixtures", ["test:website:compose"], {
-    proves: ["website-downstream", "resource-sequence-success", "article-sequence-success"],
+    proves: ["website-downstream", "resource-sequence-success", "signal_candidate-sequence-success"],
   }),
   command("web-viewports", "surface-fixtures", ["test:web:viewports"], {
     proves: ["web-selected-item-display"],
@@ -101,7 +101,7 @@ function countSelectedRows(caseRun) {
 }
 
 function countLiveSelectionProofRows(proof) {
-  return asArray(proof?.selectedArticles).length;
+  return asArray(proof?.selectedSignalCandidates).length;
 }
 
 function countInterestFilterRows(caseRun) {
@@ -117,7 +117,7 @@ function countDownstreamRows(caseRun) {
     const systemFeed = asObject(row?.systemFeed);
     return (
       asArray(row?.fetchRuns).length > 0
-      || asArray(row?.articles).length > 0
+      || asArray(row?.signal_candidates).length > 0
       || asArray(row?.interestFilterResults).length > 0
       || Number(finalSelection.total ?? 0) > 0
       || Number(systemFeed.total ?? 0) > 0
@@ -148,7 +148,7 @@ function classifyMissingLiveSelection(caseRun, liveDiscovery) {
     return "no_live_downstream_evidence";
   }
   if (liveDiscovery.interestFilterRows <= 0) {
-    return "no_interest_filter_rows_for_live_articles";
+    return "no_interest_filter_rows_for_live_signal_candidates";
   }
   if (liveDiscovery.positiveDiscoveryEndpoints <= 0) {
     return "no_positive_live_discovery_endpoint";
@@ -157,15 +157,15 @@ function classifyMissingLiveSelection(caseRun, liveDiscovery) {
   const fetchOnlyRows = sumEvidenceRows(caseRun).filter((row) => {
     const finalSelection = asObject(row?.finalSelection);
     return asArray(row?.fetchRuns).length > 0
-      && asArray(row?.articles).length === 0
+      && asArray(row?.signal_candidates).length === 0
       && asArray(row?.interestFilterResults).length === 0
       && Number(finalSelection.total ?? 0) === 0;
   });
   if (fetchOnlyRows.length > 0) {
-    return "live_fetch_succeeded_but_no_current_window_article_selection";
+    return "live_fetch_succeeded_but_no_current_window_signal_candidate_selection";
   }
 
-  return "live_articles_not_selected_by_interest_policy";
+  return "live_signal_candidates_not_selected_by_interest_policy";
 }
 
 function mcpArtifactHasScenario(mcpArtifact, scenarioKey) {
@@ -233,9 +233,9 @@ export function summarizeSequenceEvidence(input) {
       passed: commandPassed(commandResults, "website-compose"),
       source: "website-compose-resource-sequence",
     },
-    articleIngestSuccess: {
+    signalCandidateIngestSuccess: {
       passed: commandPassed(commandResults, "website-compose"),
-      source: "website-compose-article-sequence",
+      source: "website-compose-signal_candidate-sequence",
     },
     enrichmentContentAnalysisSuccess: {
       passed: mcpArtifactHasScenario(mcpArtifact, "content-analysis-operator-flows"),
@@ -349,7 +349,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
     positiveDiscoveryEndpoints: countPositiveDiscoveryEndpoints(caseRun),
     rootCauseClassification: caseRun?.rootCauseClassification ?? null,
   };
-  const liveSelectedArticleEvidence = {
+  const liveSelectedSignalCandidateEvidence = {
     passed: liveDiscovery.selectedFinalRows > 0,
     source:
       discoverySelectedRows > 0
@@ -360,7 +360,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
     selectedFinalRows: liveDiscovery.selectedFinalRows,
     discoverySelectedFinalRows: discoverySelectedRows,
     replaySelectedFinalRows: replaySelectedRows,
-    selectedArticles: asArray(scenarioLiveSelectionProof.selectedArticles),
+    selectedSignalCandidates: asArray(scenarioLiveSelectionProof.selectedSignalCandidates),
     residualReason: classifyMissingLiveSelection(caseRun, liveDiscovery),
   };
   const adminManagedTruth = {
@@ -375,7 +375,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
     liveDiscovery.finalVerdict === "pass"
     && liveDiscovery.downstreamEvidenceRows > 0
     && liveDiscovery.positiveDiscoveryEndpoints > 0
-    && liveSelectedArticleEvidence.passed;
+    && liveSelectedSignalCandidateEvidence.passed;
   const passed =
     adminManagedTruth.passed
     && liveDiscoveryAccepted
@@ -394,7 +394,7 @@ export function buildProductMegaFlowScenarioSummary(input) {
     adminManagedTruth,
     liveDiscoveryAccepted,
     liveDiscovery,
-    liveSelectedArticleEvidence,
+    liveSelectedSignalCandidateEvidence,
     providerEvidence,
     filterEvidence,
     sequenceEvidence,

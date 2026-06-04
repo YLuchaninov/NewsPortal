@@ -214,7 +214,7 @@ export async function dryRunIngressAdapter(input: DryRunInput): Promise<Record<s
     };
   }
   const itemsPreview = runtimeResult.items.map((item) => ({
-    externalId: item.externalArticleId,
+    externalId: item.externalSignalCandidateId,
     url: item.url,
     title: item.title,
     publishedAt: item.publishedAt,

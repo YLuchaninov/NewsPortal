@@ -104,8 +104,8 @@ def hamming_distance64(left: int, right: int) -> int:
 
 
 
-def extract_raw_rss_payload(article: dict[str, Any]) -> tuple[str, str, str]:
-    raw_payload = article.get("raw_payload_json") or {}
+def extract_raw_rss_payload(signal_candidate: dict[str, Any]) -> tuple[str, str, str]:
+    raw_payload = signal_candidate.get("raw_payload_json") or {}
     entry_payload = raw_payload.get("entry") if isinstance(raw_payload, dict) else {}
     rss_payload = raw_payload.get("rss") if isinstance(raw_payload, dict) else {}
     if not isinstance(entry_payload, dict):
@@ -113,19 +113,19 @@ def extract_raw_rss_payload(article: dict[str, Any]) -> tuple[str, str, str]:
     if not isinstance(rss_payload, dict):
         rss_payload = {}
 
-    title_source = str(article.get("title") or entry_payload.get("title") or rss_payload.get("title") or "")
+    title_source = str(signal_candidate.get("title") or entry_payload.get("title") or rss_payload.get("title") or "")
     summary_source = str(
-        article.get("extracted_description")
+        signal_candidate.get("extracted_description")
         or entry_payload.get("description")
         or rss_payload.get("description")
-        or article.get("lead")
+        or signal_candidate.get("lead")
         or ""
     )
     content_source = str(
-        article.get("full_content_html")
+        signal_candidate.get("full_content_html")
         or entry_payload.get("contentEncoded")
         or rss_payload.get("contentEncoded")
-        or article.get("body")
+        or signal_candidate.get("body")
         or ""
     )
     return (title_source, summary_source, content_source)
@@ -144,7 +144,7 @@ async def find_exact_duplicate_candidate(
           canonical_doc_id,
           family_id,
           ingested_at
-        from articles
+        from signal_candidates
         where
           doc_id <> %s
           and exact_hash = %s
@@ -171,7 +171,7 @@ async def find_near_duplicate_candidate(
           family_id,
           simhash64,
           ingested_at
-        from articles
+        from signal_candidates
         where
           doc_id <> %s
           and simhash64 is not null

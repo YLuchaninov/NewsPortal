@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { PoolClient } from "pg";
 
-import { upsertArticleObservation } from "../../../services/fetchers/src/document-observations";
+import { upsertSignalCandidateObservation } from "../../../services/fetchers/src/document-observations";
 
-test("upsertArticleObservation persists a pending article observation keyed by article origin", async () => {
+test("upsertSignalCandidateObservation persists a pending signal_candidate observation keyed by signal_candidate origin", async () => {
   const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
   const client = {
     async query(sql: string, params?: unknown[]) {
@@ -13,7 +13,7 @@ test("upsertArticleObservation persists a pending article observation keyed by a
     },
   } as unknown as PoolClient;
 
-  await upsertArticleObservation(client, "doc-123");
+  await upsertSignalCandidateObservation(client, "doc-123");
 
   assert.equal(calls.length, 1);
   assert.match(calls[0].sql, /insert into document_observations/i);

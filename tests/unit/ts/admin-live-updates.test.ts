@@ -19,7 +19,7 @@ function createDashboardSnapshot(): AdminDashboardLiveSnapshot {
     revision: "dashboard-v1",
     hasPendingWork: false,
     summary: {
-      activeNews: 10,
+      activeSignals: 10,
       processedToday: 4,
       totalUsers: 7,
       overdueChannels: 1,
@@ -69,9 +69,9 @@ function createReindexSnapshot(): AdminReindexLiveSnapshot {
           cancellable: true,
           createdAt: "2026-03-27T11:59:00Z",
           createdAtLabel: "2026-03-27T11:59:00Z",
-          processedArticles: 10,
-          totalArticles: 42,
-          progressLabel: "10/42 articles",
+          processedSignalCandidates: 10,
+          totalSignalCandidates: 42,
+          progressLabel: "10/42 signal_candidates",
           selectionProfileSnapshot: {
             activeProfiles: 3,
             totalProfiles: 4,

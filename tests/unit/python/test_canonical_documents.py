@@ -25,12 +25,12 @@ class CanonicalDocumentTests(unittest.TestCase):
         )
 
     def test_duplicate_kind_prefers_exact_and_near_duplicate_flags(self) -> None:
-        article_doc_id = uuid.uuid4()
+        signal_candidate_doc_id = uuid.uuid4()
         canonical_document_id = uuid.uuid4()
 
         self.assertEqual(
             resolve_observation_duplicate_kind(
-                article_doc_id=article_doc_id,
+                signal_candidate_doc_id=signal_candidate_doc_id,
                 canonical_document_id=canonical_document_id,
                 is_exact_duplicate=True,
                 is_near_duplicate=False,
@@ -39,7 +39,7 @@ class CanonicalDocumentTests(unittest.TestCase):
         )
         self.assertEqual(
             resolve_observation_duplicate_kind(
-                article_doc_id=article_doc_id,
+                signal_candidate_doc_id=signal_candidate_doc_id,
                 canonical_document_id=canonical_document_id,
                 is_exact_duplicate=False,
                 is_near_duplicate=True,
@@ -48,12 +48,12 @@ class CanonicalDocumentTests(unittest.TestCase):
         )
 
     def test_duplicate_kind_marks_canonical_owner_when_ids_match(self) -> None:
-        article_doc_id = uuid.uuid4()
+        signal_candidate_doc_id = uuid.uuid4()
 
         self.assertEqual(
             resolve_observation_duplicate_kind(
-                article_doc_id=article_doc_id,
-                canonical_document_id=article_doc_id,
+                signal_candidate_doc_id=signal_candidate_doc_id,
+                canonical_document_id=signal_candidate_doc_id,
                 is_exact_duplicate=False,
                 is_near_duplicate=False,
             ),
@@ -63,7 +63,7 @@ class CanonicalDocumentTests(unittest.TestCase):
     def test_duplicate_kind_stays_pending_without_canonical_document(self) -> None:
         self.assertEqual(
             resolve_observation_duplicate_kind(
-                article_doc_id=uuid.uuid4(),
+                signal_candidate_doc_id=uuid.uuid4(),
                 canonical_document_id=None,
                 is_exact_duplicate=False,
                 is_near_duplicate=False,

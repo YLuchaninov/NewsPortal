@@ -296,7 +296,7 @@ async function startFixtureServer(input: {
         .then((payload) => {
           const root = document.getElementById("app");
           payload.items.forEach((item) => {
-            const card = document.createElement("article");
+            const card = document.createElement("signal_candidate");
             const link = document.createElement("a");
             link.href = item.url;
             link.textContent = item.title;
@@ -569,11 +569,11 @@ async function fetchRuntime(pool: Pool, channelId: string): Promise<RuntimeRow> 
   return row;
 }
 
-async function countArticles(pool: Pool, channelId: string): Promise<number> {
+async function countSignalCandidates(pool: Pool, channelId: string): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `
       select count(*)::text as count
-      from articles
+      from signal_candidates
       where channel_id = $1
     `,
     [channelId]
@@ -598,11 +598,11 @@ async function fetchWebsiteResources(pool: Pool, channelId: string): Promise<Web
 
 async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: string): Promise<void> {
   if (channelIds.length > 0) {
-    const articleIds = (
+    const signalCandidateIds = (
       await pool.query<{ docId: string }>(
         `
           select doc_id::text as "docId"
-          from articles
+          from signal_candidates
           where channel_id = any($1::uuid[])
         `,
         [channelIds]
@@ -619,7 +619,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
       )
     ).rows.map((row) => row.resourceId);
 
-    if (articleIds.length > 0 || resourceIds.length > 0) {
+    if (signalCandidateIds.length > 0 || resourceIds.length > 0) {
       await pool.query(
         `
           delete from sequence_task_runs
@@ -631,7 +631,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
               or context_json ->> 'resource_id' = any($1::text[])
           )
         `,
-        [[...articleIds, ...resourceIds]]
+        [[...signalCandidateIds, ...resourceIds]]
       );
       await pool.query(
         `
@@ -640,14 +640,14 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
             context_json ->> 'doc_id' = any($1::text[])
             or context_json ->> 'resource_id' = any($1::text[])
         `,
-        [[...articleIds, ...resourceIds]]
+        [[...signalCandidateIds, ...resourceIds]]
       );
       await pool.query(
         `
           delete from outbox_events
           where aggregate_id::text = any($1::text[])
         `,
-        [[...articleIds, ...resourceIds]]
+        [[...signalCandidateIds, ...resourceIds]]
       );
     }
 
@@ -660,7 +660,7 @@ async function cleanupSmokeArtifacts(pool: Pool, channelIds: string[], domain: s
     );
     await pool.query(
       `
-        delete from articles
+        delete from signal_candidates
         where channel_id = any($1::uuid[])
       `,
       [channelIds]
@@ -777,7 +777,7 @@ async function main(): Promise<void> {
     const rssAuthRun = await fetchLatestRun(pool, rssAuthChannelId);
     assert.equal(rssAuthRun.outcomeKind, "new_content");
     assert.equal(rssAuthRun.httpStatus, 200);
-    assert.equal(await countArticles(pool, rssAuthChannelId), 1);
+    assert.equal(await countSignalCandidates(pool, rssAuthChannelId), 1);
     assert.ok(
       fixtureState.rssAuthorizationHeaders.includes(rssAuthorizationHeader),
       "Expected the protected RSS fixture to receive the configured Authorization header."

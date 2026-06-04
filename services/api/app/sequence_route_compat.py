@@ -152,15 +152,15 @@ def retry_sequence_run(
         namespace["raise_sequence_http_exception"](error)
 
 
-def request_article_enrichment_retry_route(
+def request_signal_candidate_enrichment_retry_route(
     namespace: Mapping[str, Any],
     doc_id: str,
     payload: Any | None = None,
 ) -> dict[str, Any]:
     try:
-        return namespace["request_article_enrichment_retry"](
+        return namespace["request_signal_candidate_enrichment_retry"](
             doc_id,
-            payload or namespace["ArticleEnrichmentRetryPayload"].model_validate({}),
+            payload or namespace["SignalCandidateEnrichmentRetryPayload"].model_validate({}),
         )
     except (
         namespace["SequenceConflictError"],
@@ -177,9 +177,9 @@ def request_content_item_enrichment_retry_route(
     payload: Any | None = None,
 ) -> dict[str, Any]:
     origin_type, origin_id = namespace["parse_content_item_id"](content_item_id)
-    if origin_type != "editorial":
+    if origin_type != "signal_candidate":
         raise namespace["HTTPException"](
             status_code=409,
             detail="Manual retry is only supported for editorial content items in the current runtime.",
         )
-    return namespace["request_article_enrichment_retry_route"](origin_id, payload)
+    return namespace["request_signal_candidate_enrichment_retry_route"](origin_id, payload)

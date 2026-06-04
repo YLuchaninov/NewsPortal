@@ -4,7 +4,7 @@ import test from "node:test";
 import { pollApiProviderChannel } from "../../../services/fetchers/src/fetcher-api-poller.ts";
 import type {
   ChannelPollCompletion,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow,
 } from "../../../services/fetchers/src/fetcher-persistence.ts";
 
@@ -86,7 +86,7 @@ test("pollApiProviderChannel supports POST next_url pagination and relative item
     );
   }) as typeof fetch;
 
-  const persisted: PersistArticleInput[][] = [];
+  const persisted: PersistSignalCandidateInput[][] = [];
   let completion: ChannelPollCompletion | null = null;
 
   try {

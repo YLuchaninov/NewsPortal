@@ -273,7 +273,7 @@ const BULK_IMPORT_VIEW_MODELS: Record<
       },
       enrichmentEnabled: {
         type: "boolean",
-        description: "Enable pre-normalize article enrichment (default: true)"
+        description: "Enable pre-normalize signal_candidate enrichment (default: true)"
       },
       enrichmentMinBodyLength: {
         type: "number",

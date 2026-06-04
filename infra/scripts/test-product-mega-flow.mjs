@@ -293,21 +293,21 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-function collectLiveArticles(caseRun) {
+function collectLiveSignalCandidates(caseRun) {
   return [
     ...asArray(caseRun?.baselineEvidence),
     ...asArray(caseRun?.discoveryEvidence),
   ]
     .flatMap((row) =>
-      asArray(row?.articles).map((article) => ({
-        docId: normalizeText(article?.docId),
-        title: normalizeText(article?.title),
-        url: normalizeText(article?.url),
+      asArray(row?.signal_candidates).map((signal_candidate) => ({
+        docId: normalizeText(signal_candidate?.docId),
+        title: normalizeText(signal_candidate?.title),
+        url: normalizeText(signal_candidate?.url),
         channelId: normalizeText(row?.channelId),
         channelName: normalizeText(row?.channelName),
       }))
     )
-    .filter((article) => article.docId && article.title);
+    .filter((signal_candidate) => signal_candidate.docId && signal_candidate.title);
 }
 
 function collectEvidenceChannelNames(caseRun) {
@@ -319,7 +319,7 @@ function collectEvidenceChannelNames(caseRun) {
     .filter(Boolean);
 }
 
-async function readLatestLiveArticleForScenario(pool, caseRun) {
+async function readLatestLiveSignalCandidateForScenario(pool, caseRun) {
   const channelNames = [...new Set(collectEvidenceChannelNames(caseRun))];
   if (channelNames.length === 0) {
     return null;
@@ -333,7 +333,7 @@ async function readLatestLiveArticleForScenario(pool, caseRun) {
         sc.channel_id::text as channel_id,
         sc.name as channel_name,
         a.created_at
-      from articles a
+      from signal_candidates a
       join source_channels sc on sc.channel_id = a.channel_id
       where sc.name = any($1::text[])
       order by a.created_at desc
@@ -351,7 +351,7 @@ async function readLatestLiveArticleForScenario(pool, caseRun) {
     url: normalizeText(row.url),
     channelId: normalizeText(row.channel_id),
     channelName: normalizeText(row.channel_name),
-    evidenceWindow: "latest_existing_live_article_after_successful_fetch",
+    evidenceWindow: "latest_existing_live_signal_candidate_after_successful_fetch",
   };
 }
 
@@ -375,18 +375,18 @@ function tokenizeTitle(title) {
     .slice(0, 10);
 }
 
-function buildLiveSelectionTemplateInput({ scenario, article }) {
-  const titleTokens = tokenizeTitle(article.title);
+function buildLiveSelectionTemplateInput({ scenario, signal_candidate }) {
+  const titleTokens = tokenizeTitle(signal_candidate.title);
   const cueTerms = titleTokens.length > 0 ? titleTokens : ["engineering", "software", "developer"];
   return {
     interestTemplateId: undefined,
     name: `Mega Flow Live Selection Proof — Example ${scenario.example}`,
     description:
-      `Live proof interest for ${scenario.productDomain}; compiled from a real discovery article title.`,
+      `Live proof interest for ${scenario.productDomain}; compiled from a real discovery signal_candidate title.`,
     positiveTexts: [
-      article.title,
-      `${article.title} ${scenario.productDomain}`,
-      `${scenario.productDomain} live discovery selected article`,
+      signal_candidate.title,
+      `${signal_candidate.title} ${scenario.productDomain}`,
+      `${scenario.productDomain} live discovery selected signal_candidate`,
     ],
     negativeTexts: [
       "celebrity gossip unrelated to software delivery",
@@ -421,7 +421,7 @@ function buildLiveSelectionTemplateInput({ scenario, article }) {
   };
 }
 
-async function upsertLiveSelectionTemplate(pool, runtimeDependencies, { scenario, article }) {
+async function upsertLiveSelectionTemplate(pool, runtimeDependencies, { scenario, signal_candidate }) {
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -436,7 +436,7 @@ async function upsertLiveSelectionTemplate(pool, runtimeDependencies, { scenario
       [`Mega Flow Live Selection Proof — Example ${scenario.example}`]
     );
     const input = {
-      ...buildLiveSelectionTemplateInput({ scenario, article }),
+      ...buildLiveSelectionTemplateInput({ scenario, signal_candidate }),
       interestTemplateId: existing.rows[0]?.interest_template_id,
     };
     const templateResult = await runtimeDependencies.saveInterestTemplate(client, input);
@@ -502,7 +502,7 @@ async function waitForCriterionCompiled(pool, criterionId) {
   );
 }
 
-async function queueBackfillForArticle(pool, runtimeDependencies, docId) {
+async function queueBackfillForSignalCandidate(pool, runtimeDependencies, docId) {
   const client = await pool.connect();
   const reindexJobId = randomUUID();
   const options = {
@@ -578,7 +578,7 @@ async function waitForReindexCompleted(pool, reindexJobId) {
   );
 }
 
-async function readSelectedArticle(pool, docId) {
+async function readSelectedSignalCandidate(pool, docId) {
   const result = await pool.query(
     `
       select
@@ -593,7 +593,7 @@ async function readSelectedArticle(pool, docId) {
         fsr.no_match_filter_count,
         fsr.gray_zone_filter_count,
         fsr.updated_at
-      from articles a
+      from signal_candidates a
       join source_channels sc on sc.channel_id = a.channel_id
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
       where a.doc_id = $1
@@ -612,28 +612,28 @@ async function runLiveSelectionReplayProof(discoveryReport) {
     const caseRun = asArray(discoveryReport?.caseRuns).find(
       (item) => item?.key === scenario.discoveryCaseKey || item?.key === scenario.key
     );
-    const article = collectLiveArticles(caseRun)[0]
-      ?? await readLatestLiveArticleForScenario(pool, caseRun);
-    if (!article) {
+    const signal_candidate = collectLiveSignalCandidates(caseRun)[0]
+      ?? await readLatestLiveSignalCandidateForScenario(pool, caseRun);
+    if (!signal_candidate) {
       byScenario[scenario.key] = {
         status: "failed",
-        reason: "no_live_article_available_for_selection_replay",
-        selectedArticles: [],
+        reason: "no_live_signal_candidate_available_for_selection_replay",
+        selectedSignalCandidates: [],
       };
       continue;
     }
     try {
-      log(`Creating live selection proof interest for Example ${scenario.example}: ${article.title}`);
+      log(`Creating live selection proof interest for Example ${scenario.example}: ${signal_candidate.title}`);
       const template = await upsertLiveSelectionTemplate(pool, runtimeDependencies, {
         scenario,
-        article,
+        signal_candidate,
       });
       await waitForCriterionCompiled(pool, template.criterionId);
-      const reindexJobId = await queueBackfillForArticle(pool, runtimeDependencies, article.docId);
+      const reindexJobId = await queueBackfillForSignalCandidate(pool, runtimeDependencies, signal_candidate.docId);
       await waitForReindexCompleted(pool, reindexJobId);
       const selected = await waitFor(
-        `live selected article for Example ${scenario.example}`,
-        () => readSelectedArticle(pool, article.docId),
+        `live selected signal_candidate for Example ${scenario.example}`,
+        () => readSelectedSignalCandidate(pool, signal_candidate.docId),
         (row) => row?.is_selected === true,
         {
           timeoutMs: 120000,
@@ -649,14 +649,14 @@ async function runLiveSelectionReplayProof(discoveryReport) {
         interestTemplateId: template.interestTemplateId,
         criterionId: template.criterionId,
         reindexJobId,
-        selectedArticles: [
+        selectedSignalCandidates: [
           {
             docId: selected.doc_id,
             title: selected.title,
             url: selected.url,
             channelId: selected.channel_id,
             channelName: selected.channel_name,
-            evidenceWindow: article.evidenceWindow ?? "current_discovery_window",
+            evidenceWindow: signal_candidate.evidenceWindow ?? "current_discovery_window",
             finalDecision: selected.final_decision,
             matchedFilterCount: selected.matched_filter_count,
             selectedAt: selected.updated_at,
@@ -669,8 +669,8 @@ async function runLiveSelectionReplayProof(discoveryReport) {
       byScenario[scenario.key] = {
         status: "failed",
         reason: message,
-        article,
-        selectedArticles: [],
+        signal_candidate,
+        selectedSignalCandidates: [],
       };
     }
   }
@@ -701,9 +701,9 @@ function formatMarkdown(report) {
     "## Scope",
     "",
     "- Live A/B/C discovery is a hard acceptance layer.",
-    "- At least one live-discovery article must reach final selection for each A/B/C scenario.",
+    "- At least one live-discovery signal_candidate must reach final selection for each A/B/C scenario.",
     "- The 9-domain discovery matrix remains a separate residual diagnostic and is not required here.",
-    "- Deterministic fixtures cover provider, negative/filter, sequence and Web/Admin/MCP surface buckets, but cannot satisfy live-selected-article acceptance.",
+    "- Deterministic fixtures cover provider, negative/filter, sequence and Web/Admin/MCP surface buckets, but cannot satisfy live-selected-signal_candidate acceptance.",
     "",
     "## Commands",
     "",
@@ -725,7 +725,7 @@ function formatMarkdown(report) {
         `(${scenario.liveDiscovery.discoverySelectedFinalRows} discovery, ` +
         `${scenario.liveDiscovery.replaySelectedFinalRows} replay) | ` +
         `${scenario.liveDiscovery.downstreamEvidenceRows} | ` +
-        `${scenario.liveSelectedArticleEvidence?.residualReason ?? ""} |`
+        `${scenario.liveSelectedSignalCandidateEvidence?.residualReason ?? ""} |`
     );
   }
 

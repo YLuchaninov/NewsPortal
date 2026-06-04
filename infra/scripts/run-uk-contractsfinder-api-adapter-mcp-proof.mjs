@@ -69,7 +69,7 @@ function adapterPayload(status = "active") {
     description:
       "Declarative UK Contracts Finder OCDS adapter for CPV 72000000 IT/software services buyer-signal candidates.",
     providerType: "api",
-    outputMode: "articles",
+    outputMode: "signal_candidates",
     status,
     priority: 850,
     matchRules: {
@@ -296,16 +296,16 @@ async function main() {
     report.evidence.fetchRun = await waitFor("UK Contracts Finder fetch run", async () => {
       const fetchRuns = await mcp(report, harness, token, "fetch_runs.list", { channelId, page: 1, pageSize: 5 });
       const latest = rows(fetchRuns)[0];
-      if (latest?.outcome === "new_content" || Number(latest?.new_article_count ?? latest?.newArticleCount ?? 0) > 0) return latest;
+      if (latest?.outcome === "new_content" || Number(latest?.new_signal_candidate_count ?? latest?.newSignalCandidateCount ?? 0) > 0) return latest;
       return null;
     });
-    report.evidence.articles = await waitFor("UK Contracts Finder articles", async () => {
-      const articles = await mcp(report, harness, token, "articles.list", { channelId, page: 1, pageSize: 20 });
-      return rows(articles).length > 0 ? articles : null;
+    report.evidence.signal_candidates = await waitFor("UK Contracts Finder signal_candidates", async () => {
+      const signal_candidates = await mcp(report, harness, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 });
+      return rows(signal_candidates).length > 0 ? signal_candidates : null;
     });
 
-    const docIds = rows(report.evidence.articles)
-      .map((article) => idFrom(article, ["doc_id", "docId", "id", "entityId"]))
+    const docIds = rows(report.evidence.signal_candidates)
+      .map((signal_candidate) => idFrom(signal_candidate, ["doc_id", "docId", "id", "entityId"]))
       .filter(Boolean)
       .slice(0, 20);
     report.evidence.reindex = await mcp(report, harness, token, "maintenance.reindex.request", {
@@ -331,9 +331,9 @@ async function main() {
       });
     }
 
-    report.evidence.articleExplains = [];
+    report.evidence.signalCandidateExplains = [];
     for (const docId of docIds.slice(0, 8)) {
-      report.evidence.articleExplains.push(await mcp(report, harness, token, "articles.explain", { docId }));
+      report.evidence.signalCandidateExplains.push(await mcp(report, harness, token, "signal_candidates.explain", { docId }));
     }
     report.evidence.contentItems = await mcp(report, harness, token, "content_items.list", { channelId, page: 1, pageSize: 20 });
     report.evidence.globalContentItems = await mcp(report, harness, token, "content_items.list", { page: 1, pageSize: 20 });
@@ -347,7 +347,7 @@ async function main() {
     report.counts = {
       mcpCalls: report.mcpCalls.length,
       dryRunItems: rows(report.evidence.dryRun?.itemsPreview).length,
-      articles: rows(report.evidence.articles).length,
+      signal_candidates: rows(report.evidence.signal_candidates).length,
       selected,
       globalSelected: Number(report.evidence.globalContentItems?.total ?? rows(report.evidence.globalContentItems).length),
       readAfterWriteOk: report.readAfterWrite.every((entry) => entry.ok),
@@ -371,7 +371,7 @@ async function main() {
         `- interest: ${report.evidence.interestId ?? "n/a"}`,
         `- reindex job: ${report.evidence.reindexJobId ?? "n/a"}`,
         `- MCP calls: ${report.mcpCalls.length}`,
-        `- articles: ${report.counts?.articles ?? "n/a"}`,
+        `- signal_candidates: ${report.counts?.signal_candidates ?? "n/a"}`,
         `- selected: ${report.counts?.selected ?? "n/a"}`,
         `- global selected: ${report.counts?.globalSelected ?? "n/a"}`,
         "",

@@ -1,6 +1,6 @@
 -- Full retained-DB selection replay can exceed the original 30 minute reindex
 -- task budget once discovery/product-test sources have accumulated thousands of
--- articles and gray-zone reviews. Keep the maintenance sequence bounded, but
+-- signal_candidates and gray-zone reviews. Keep the maintenance sequence bounded, but
 -- large enough for a complete backfill to finish instead of leaving partial
 -- selection evidence.
 

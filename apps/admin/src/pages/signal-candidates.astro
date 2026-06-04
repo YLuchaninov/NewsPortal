@@ -7,8 +7,8 @@ import { AdminConfirmAction } from "../components/AdminConfirmAction";
 import AdminWorkspacePane from "../components/AdminWorkspacePane.astro";
 import AdminShell from "../layouts/AdminShell.astro";
 import {
-  resolveArticleOperatorGuidance,
-  resolveArticleOperatorState,
+  resolveSignalCandidateOperatorGuidance,
+  resolveSignalCandidateOperatorState,
 } from "../lib/server/operator-surfaces";
 import { resolveAdminSession } from "../lib/server/auth";
 import {
@@ -45,7 +45,7 @@ const bffPaths = { moderation: appPath("/bff/admin/moderation") };
 const pagePaths = { dashboard: appPath("/") };
 const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
 const currentView = String(Astro.url.searchParams.get("view") ?? "selected").trim() || "selected";
-const selectedArticleId = String(Astro.url.searchParams.get("selected") ?? "").trim();
+const selectedSignalCandidateId = String(Astro.url.searchParams.get("selected") ?? "").trim();
 
 type R = Record<string, unknown>;
 function readInt(value: unknown, fallback = 0): number {
@@ -57,7 +57,7 @@ function readInt(value: unknown, fallback = 0): number {
 }
 
 const page = parsePositivePage(Astro.url, "page", DEFAULT_PAGE);
-const articleListFilters =
+const signalCandidateListFilters =
   currentView === "observations"
     ? {}
     : currentView === "held"
@@ -69,17 +69,17 @@ const articleListFilters =
           : currentView === "recent-failures"
             ? {}
             : { finalSelectionDecision: "selected" };
-const [articles, articleSelectionSummary, visibleContentItemsPage] = await Promise.all([
-  sdk.listArticlesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE, ...articleListFilters }),
-  sdk.getArticleSelectionSummary<R>(),
+const [signal_candidates, signalCandidateSelectionSummary, visibleContentItemsPage] = await Promise.all([
+  sdk.listSignalCandidatesPage<R>({ page, pageSize: DEFAULT_PAGE_SIZE, ...signalCandidateListFilters }),
+  sdk.getSignalCandidateSelectionSummary<R>(),
   sdk.listContentItemsPage<R>({ page: 1, pageSize: 1 }),
 ]);
 const selectionCounts =
-  articleSelectionSummary.counts && typeof articleSelectionSummary.counts === "object"
-    ? (articleSelectionSummary.counts as R)
+  signalCandidateSelectionSummary.counts && typeof signalCandidateSelectionSummary.counts === "object"
+    ? (signalCandidateSelectionSummary.counts as R)
     : {};
-const rawArticleObservationCount = readInt(selectionCounts.rawArticleObservations, articles.total);
-const selectedArticleSignalCount = readInt(selectionCounts.selectedArticleSignals);
+const rawSignalCandidateObservationCount = readInt(selectionCounts.rawSignalCandidateObservations, signal_candidates.total);
+const selectedSignalCandidateSignalCount = readInt(selectionCounts.selectedSignalCandidateSignals);
 const visibleContentItemCount = readInt(visibleContentItemsPage.total);
 const rejectedSelectionCount = readInt(selectionCounts.rejectedRows);
 const grayZoneSelectionCount = readInt(selectionCounts.grayZoneRows);
@@ -88,14 +88,14 @@ const pendingSelectionCount = readInt(selectionCounts.pendingSelectionRows);
 const llmReviewPendingCount = readInt(selectionCounts.llmReviewPendingRows);
 const selectionMetricTiles = [
   {
-    label: "Article observations",
-    value: rawArticleObservationCount,
+    label: "SignalCandidate observations",
+    value: rawSignalCandidateObservationCount,
     detail: "Raw ingested corpus",
   },
   {
     label: "Selected signals",
-    value: selectedArticleSignalCount,
-    detail: "Final-selection article leads",
+    value: selectedSignalCandidateSignalCount,
+    detail: "Final-selection signal_candidate leads",
   },
   {
     label: "Visible content",
@@ -118,13 +118,13 @@ const selectionMetricTiles = [
     detail: "No final row or LLM review",
   },
 ] as const;
-const articleRows = articles.items.map((article) => {
-  const operatorState = resolveArticleOperatorState(article);
-  const operatorGuidance = resolveArticleOperatorGuidance(article);
-  return { article, operatorState, operatorGuidance };
+const signalCandidateRows = signal_candidates.items.map((signal_candidate) => {
+  const operatorState = resolveSignalCandidateOperatorState(signal_candidate);
+  const operatorGuidance = resolveSignalCandidateOperatorGuidance(signal_candidate);
+  return { signal_candidate, operatorState, operatorGuidance };
 });
 
-const visibleArticleRows = articleRows.filter(({ article, operatorState }) => {
+const visibleSignalCandidateRows = signalCandidateRows.filter(({ signal_candidate, operatorState }) => {
   if (currentView === "observations") {
     return true;
   }
@@ -138,25 +138,25 @@ const visibleArticleRows = articleRows.filter(({ article, operatorState }) => {
     return operatorState.selectionDecision === "rejected";
   }
   if (currentView === "blocked") {
-    return String(article.visibility_state ?? "") === "blocked";
+    return String(signal_candidate.visibility_state ?? "") === "blocked";
   }
   if (currentView === "recent-failures") {
     return String(operatorState.enrichmentState ?? "") === "failed" || String(operatorState.processingState ?? "") === "pending";
   }
-  return operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone" || String(article.visibility_state ?? "") === "blocked";
+  return operatorState.selectionMode === "hold" || operatorState.selectionDecision === "gray_zone" || String(signal_candidate.visibility_state ?? "") === "blocked";
 });
 
-const articleViews = [
-  { key: "selected", label: "Selected", count: selectedArticleSignalCount },
+const signalCandidateViews = [
+  { key: "selected", label: "Selected", count: selectedSignalCandidateSignalCount },
   { key: "held", label: "Held", count: holdSelectionCount + grayZoneSelectionCount },
   { key: "rejected", label: "Rejected", count: rejectedSelectionCount },
-  { key: "observations", label: "Observations", count: rawArticleObservationCount },
+  { key: "observations", label: "Observations", count: rawSignalCandidateObservationCount },
 ] as const;
-const ARTICLE_PANE_ID = "articles-preview";
+const SIGNAL_CANDIDATE_PANE_ID = "signal_candidates-preview";
 
-const selectedArticleRow =
-  visibleArticleRows.find(({ article }) => String(article.doc_id ?? "") === selectedArticleId) ??
-  visibleArticleRows[0] ??
+const selectedSignalCandidateRow =
+  visibleSignalCandidateRows.find(({ signal_candidate }) => String(signal_candidate.doc_id ?? "") === selectedSignalCandidateId) ??
+  visibleSignalCandidateRows[0] ??
   null;
 
 const resolvePageHref = createPageHrefResolver(Astro.url, {
@@ -228,21 +228,21 @@ function shortId(value: unknown): string {
 }
 ---
 
-<AdminShell title="Articles — Admin" session={session} flash={flash} activeNav="articles">
+<AdminShell title="Signal Candidates — Admin" session={session} flash={flash} activeNav="signal_candidates">
   <Fragment slot="header-title">
     <nav class="flex items-center gap-1 text-sm text-muted-foreground">
       <a href={pagePaths.dashboard} class="hover:text-foreground">Dashboard</a>
       <span>/</span>
-      <span class="text-foreground font-medium">Articles</span>
+      <span class="text-foreground font-medium">Signal Candidates</span>
     </nav>
   </Fragment>
 
   <div class="space-y-5">
     <section class={ADMIN_HERO_CARD_CLASS}>
       <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Operations</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight">Article triage</h1>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">SignalCandidate triage</h1>
       <p class="mt-2 text-sm leading-6 text-muted-foreground">
-        This page shows raw article observations for audit and replay. Lead-signal yield is counted separately from final selection and public content items.
+        This page shows raw signal_candidate observations for audit and replay. Lead-signal yield is counted separately from final selection and public content items.
       </p>
       <div class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {selectionMetricTiles.map((tile) => (
@@ -257,7 +257,7 @@ function shortId(value: unknown): string {
         If observations stay high while selected signals are low, the corpus is still available for explainability and backfill; the current interests/templates are simply rejecting it as non-lead evidence.
       </p>
       <div class="mt-5 flex flex-wrap gap-2">
-        {articleViews.map((view) => (
+        {signalCandidateViews.map((view) => (
           <a
             href={resolveViewHref(view.key)}
             class:list={[
@@ -283,13 +283,13 @@ function shortId(value: unknown): string {
     <details class="group rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20">
       <summary class="flex items-center gap-2 cursor-pointer p-3 select-none list-none [&::-webkit-details-marker]:hidden">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-blue-500 dark:text-blue-400"><path d="M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
-        <span class="text-sm font-medium">Understanding article states</span>
+        <span class="text-sm font-medium">Understanding signal_candidate states</span>
         <span class="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-transform group-open:rotate-180">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </span>
       </summary>
       <div class="px-3 pb-3 text-sm text-muted-foreground space-y-2">
-        <p class="text-xs">Each row is still one editorial article observation, but the durable operator truth now lives across <code class="rounded bg-muted px-1 py-0.5">document_observations</code>, <code class="rounded bg-muted px-1 py-0.5">canonical_documents</code>, story-cluster verification, and <code class="rounded bg-muted px-1 py-0.5">final_selection_results</code>. The older <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> badge stays visible only as a compatibility read model.</p>
+        <p class="text-xs">Each row is still one editorial signal_candidate observation, but the durable operator truth now lives across <code class="rounded bg-muted px-1 py-0.5">document_observations</code>, <code class="rounded bg-muted px-1 py-0.5">canonical_documents</code>, story-cluster verification, and <code class="rounded bg-muted px-1 py-0.5">final_selection_results</code>. The older <code class="rounded bg-muted px-1 py-0.5">system_feed_results</code> badge stays visible only as a compatibility read model.</p>
         <div class="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <div class="flex shrink-0 gap-1">
@@ -311,7 +311,7 @@ function shortId(value: unknown): string {
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 shrink-0">notified</span>
-            <p class="text-[11px]">A notification decision already ran for the personalization lane. The article can still be in the system-selected collection even when no notification was sent.</p>
+            <p class="text-[11px]">A notification decision already ran for the personalization lane. The signal_candidate can still be in the system-selected collection even when no notification was sent.</p>
           </div>
           <div class="flex items-start gap-2 rounded-md border border-border bg-card p-2">
             <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 shrink-0">system gate</span>
@@ -322,13 +322,13 @@ function shortId(value: unknown): string {
             <p class="text-[11px]">Manually hidden by an admin. Won't appear in user collections or notifications.</p>
           </div>
         </div>
-        <p class="text-[11px]"><strong>Moderation:</strong> Use <em>Block</em> to hide inappropriate articles from users. <em>Unblock</em> reverses the action. Reactions (👍👎) are user feedback and stored for future analytics.</p>
+        <p class="text-[11px]"><strong>Moderation:</strong> Use <em>Block</em> to hide inappropriate signal_candidates from users. <em>Unblock</em> reverses the action. Reactions (👍👎) are user feedback and stored for future analytics.</p>
       </div>
     </details>
 
     <AdminWorkspacePane
-      paneId={ARTICLE_PANE_ID}
-      paneLabel="Article preview"
+      paneId={SIGNAL_CANDIDATE_PANE_ID}
+      paneLabel="SignalCandidate preview"
       collapsedLabel="Preview"
       defaultWidth={420}
       minWidth={340}
@@ -337,10 +337,10 @@ function shortId(value: unknown): string {
     >
       <Fragment slot="main">
         <section class="overflow-hidden rounded-xl border border-border bg-card">
-        {articles.total === 0 ? (
-          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles yet. New content will appear here after ingest runs.</p>
-        ) : visibleArticleRows.length === 0 ? (
-          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No articles on this page match the current triage view. Switch views or try another page.</p>
+        {signal_candidates.total === 0 ? (
+          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No signal_candidates yet. New content will appear here after ingest runs.</p>
+        ) : visibleSignalCandidateRows.length === 0 ? (
+          <p class="px-4 py-8 text-sm text-muted-foreground text-center">No signal_candidates on this page match the current triage view. Switch views or try another page.</p>
         ) : (
           <div class="overflow-x-auto">
             <table class="admin-table w-full text-sm">
@@ -353,14 +353,14 @@ function shortId(value: unknown): string {
                 </tr>
               </thead>
               <tbody>
-                {articleRows.length === 0 ? (
+                {signalCandidateRows.length === 0 ? (
                   <tr>
-                    <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No articles on this page. Try another page of results.</td>
+                    <td colspan="4" class="px-4 py-8 text-center text-sm text-muted-foreground">No signal_candidates on this page. Try another page of results.</td>
                   </tr>
-                ) : visibleArticleRows.map(({ article: a, operatorState, operatorGuidance }) => {
-                  const articleId = String(a.doc_id ?? "");
-                  const isSelected = selectedArticleRow
-                    ? String(selectedArticleRow.article.doc_id ?? "") === articleId
+                ) : visibleSignalCandidateRows.map(({ signal_candidate: a, operatorState, operatorGuidance }) => {
+                  const signalCandidateId = String(a.doc_id ?? "");
+                  const isSelected = selectedSignalCandidateRow
+                    ? String(selectedSignalCandidateRow.signal_candidate.doc_id ?? "") === signalCandidateId
                     : false;
                   return (
                     <tr class:list={[
@@ -370,8 +370,8 @@ function shortId(value: unknown): string {
                       <td class="px-4 py-3 max-w-[320px]">
                         <div class="admin-table-cell-stack">
                           <a
-                            href={resolvePreviewHref(articleId)}
-                            data-admin-pane-open-link={ARTICLE_PANE_ID}
+                            href={resolvePreviewHref(signalCandidateId)}
+                            data-admin-pane-open-link={SIGNAL_CANDIDATE_PANE_ID}
                             class:list={[
                               "font-medium text-xs line-clamp-2 transition-colors",
                               isSelected ? "text-primary" : "hover:text-primary",
@@ -422,22 +422,22 @@ function shortId(value: unknown): string {
                       <td class="px-4 py-3">
                         <div class="admin-table-actions min-w-0">
                           {(() => {
-                            const articleTitle = String(a.title ?? "Untitled");
+                            const signalCandidateTitle = String(a.title ?? "Untitled");
                             const isBlocked = String(a.visibility_state ?? "") === "blocked";
 
                             return (
                               <AdminConfirmAction
                                 action={bffPaths.moderation}
-                                title={isBlocked ? "Restore article visibility" : "Block article"}
+                                title={isBlocked ? "Restore signal_candidate visibility" : "Block signal_candidate"}
                                 description={
                                   isBlocked
-                                    ? `Restore "${articleTitle}" to collections and normal delivery.`
-                                    : `Hide "${articleTitle}" from collections and notifications until it is restored.`
+                                    ? `Restore "${signalCandidateTitle}" to collections and normal delivery.`
+                                    : `Hide "${signalCandidateTitle}" from collections and notifications until it is restored.`
                                 }
                                 triggerLabel={isBlocked ? "Unblock" : "Block"}
-                                confirmLabel={isBlocked ? "Unblock article" : "Block article"}
+                                confirmLabel={isBlocked ? "Unblock signal_candidate" : "Block signal_candidate"}
                                 fields={[
-                                  { name: "docId", value: articleId },
+                                  { name: "docId", value: signalCandidateId },
                                   { name: "actionType", value: isBlocked ? "unblock" : "block" },
                                   { name: "redirectTo", value: currentPath },
                                 ]}
@@ -468,18 +468,18 @@ function shortId(value: unknown): string {
       </Fragment>
 
       <Fragment slot="pane">
-        {selectedArticleRow ? (
+        {selectedSignalCandidateRow ? (
           (() => {
-            const { article: selectedArticle, operatorState, operatorGuidance } = selectedArticleRow;
-            const sourceHref = resolveSafeHref(selectedArticle.url);
+            const { signal_candidate: selectedSignalCandidate, operatorState, operatorGuidance } = selectedSignalCandidateRow;
+            const sourceHref = resolveSafeHref(selectedSignalCandidate.url);
             return (
               <div class="space-y-5">
                 <div>
                   <h2 class="text-lg font-semibold leading-tight">
-                    {String(selectedArticle.title ?? "Untitled article")}
+                    {String(selectedSignalCandidate.title ?? "Untitled signal_candidate")}
                   </h2>
                   <p class="mt-2 text-sm text-muted-foreground">
-                    {String(selectedArticle.lead ?? "Open full detail if you need the full explainability stack and raw content rendering.")}
+                    {String(selectedSignalCandidate.lead ?? "Open full detail if you need the full explainability stack and raw content rendering.")}
                   </p>
                 </div>
 
@@ -497,9 +497,9 @@ function shortId(value: unknown): string {
                       verify:{String(operatorState.verificationState)}
                     </span>
                   )}
-                  {selectedArticle.visibility_state && selectedArticle.visibility_state !== "visible" && (
+                  {selectedSignalCandidate.visibility_state && selectedSignalCandidate.visibility_state !== "visible" && (
                     <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300">
-                      {String(selectedArticle.visibility_state)}
+                      {String(selectedSignalCandidate.visibility_state)}
                     </span>
                   )}
                 </div>
@@ -507,8 +507,8 @@ function shortId(value: unknown): string {
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Source</p>
-                    <p class="mt-2 text-sm font-semibold">{String(selectedArticle.source_name ?? selectedArticle.channel_name ?? "Unknown source")}</p>
-                    <p class="mt-1 text-xs text-muted-foreground">Published {formatTimestamp(selectedArticle.extracted_published_at ?? selectedArticle.published_at)}</p>
+                    <p class="mt-2 text-sm font-semibold">{String(selectedSignalCandidate.source_name ?? selectedSignalCandidate.channel_name ?? "Unknown source")}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Published {formatTimestamp(selectedSignalCandidate.extracted_published_at ?? selectedSignalCandidate.published_at)}</p>
                   </div>
                   <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Pipeline summary</p>
@@ -524,7 +524,7 @@ function shortId(value: unknown): string {
                   </div>
                   <div class={ADMIN_BACKGROUND_TILE_CLASS}>
                     <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Engagement</p>
-                    <p class="mt-2 text-sm font-semibold">👍 {String(selectedArticle.like_count ?? 0)} / 👎 {String(selectedArticle.dislike_count ?? 0)}</p>
+                    <p class="mt-2 text-sm font-semibold">👍 {String(selectedSignalCandidate.like_count ?? 0)} / 👎 {String(selectedSignalCandidate.dislike_count ?? 0)}</p>
                     <p class="mt-1 text-xs text-muted-foreground">next: {operatorGuidance.summary}</p>
                   </div>
                 </div>
@@ -543,7 +543,7 @@ function shortId(value: unknown): string {
 
                 <div class="flex flex-wrap gap-2">
                   <a
-                    href={appPath(`/articles/${encodeURIComponent(String(selectedArticle.doc_id ?? ""))}`)}
+                    href={appPath(`/signal-candidates/${encodeURIComponent(String(selectedSignalCandidate.doc_id ?? ""))}`)}
                     class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     Open detail
@@ -566,20 +566,20 @@ function shortId(value: unknown): string {
           <div class="py-8 text-center">
             <p class="text-sm font-medium">No preview available</p>
             <p class="mt-2 text-sm text-muted-foreground">
-              Pick an article row to inspect its operator summary without leaving triage.
+              Pick a signal candidate row to inspect its operator summary without leaving triage.
             </p>
           </div>
         )}
       </Fragment>
     </AdminWorkspacePane>
-    {(articles.hasPrev || articles.hasNext) && (
+    {(signal_candidates.hasPrev || signal_candidates.hasNext) && (
       <PaginationNav
-        page={articles.page}
-        totalPages={articles.totalPages}
-        hasPrev={articles.hasPrev}
-        hasNext={articles.hasNext}
-        prevHref={resolvePageHref(articles.page - 1)}
-        nextHref={resolvePageHref(articles.page + 1)}
+        page={signal_candidates.page}
+        totalPages={signal_candidates.totalPages}
+        hasPrev={signal_candidates.hasPrev}
+        hasNext={signal_candidates.hasNext}
+        prevHref={resolvePageHref(signal_candidates.page - 1)}
+        nextHref={resolvePageHref(signal_candidates.page + 1)}
       />
     )}
   </div>

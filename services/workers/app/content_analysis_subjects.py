@@ -19,7 +19,7 @@ def coerce_datetime(value: Any) -> datetime | None:
 
 
 def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject | None:
-    if subject_type == "article":
+    if subject_type == "signal_candidate":
         sql = """
             select
               a.doc_id::text as subject_id,
@@ -33,9 +33,9 @@ def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject |
               a.ingested_at,
               a.updated_at,
               a.extracted_published_at
-            from articles a
+            from signal_candidates a
             left join document_observations obs
-              on obs.origin_type = 'article'
+              on obs.origin_type = 'signal_candidate'
              and obs.origin_id = a.doc_id
             where a.doc_id = %s
         """
@@ -44,7 +44,7 @@ def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject |
         if row is None:
             return None
         return ContentSubject(
-            subject_type="article",
+            subject_type="signal_candidate",
             subject_id=str(row["subject_id"]),
             title=str(row.get("title") or ""),
             lead=str(row.get("lead") or ""),
@@ -69,7 +69,7 @@ def load_content_subject(subject_type: str, subject_id: str) -> ContentSubject |
               wr.body,
               wr.lang,
               wr.channel_id::text as source_channel_id,
-              wr.projected_article_id::text as canonical_document_id,
+              wr.projected_signal_candidate_id::text as canonical_document_id,
               wr.published_at,
               wr.discovered_at,
               wr.updated_at,

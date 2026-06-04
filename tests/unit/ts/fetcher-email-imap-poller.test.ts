@@ -4,7 +4,7 @@ import test from "node:test";
 import { pollEmailImapProviderChannel } from "../../../services/fetchers/src/fetcher-email-imap-poller.ts";
 import type {
   ChannelPollCompletion,
-  PersistArticleInput,
+  PersistSignalCandidateInput,
   SourceChannelRow,
 } from "../../../services/fetchers/src/fetcher-persistence.ts";
 
@@ -102,7 +102,7 @@ test("pollEmailImapProviderChannel resets UID cursor on UIDVALIDITY change and d
     },
     async logout() {},
   };
-  const persisted: PersistArticleInput[][] = [];
+  const persisted: PersistSignalCandidateInput[][] = [];
   let completion: ChannelPollCompletion | null = null;
 
   await pollEmailImapProviderChannel(
@@ -146,7 +146,7 @@ test("pollEmailImapProviderChannel resets UID cursor on UIDVALIDITY change and d
   assert.deepEqual(fetchCalls[0]?.query.source, { maxLength: 2048 });
   assert.equal(fetchCalls[0]?.options?.uid, true);
   assert.equal(persisted[0]?.length, 1);
-  assert.equal(persisted[0]?.[0]?.externalArticleId, "message-id:story-1@example.com");
+  assert.equal(persisted[0]?.[0]?.externalSignalCandidateId, "message-id:story-1@example.com");
   assert.equal(persisted[0]?.[0]?.url, "imap://imap.example.com/INBOX/12345/10");
   assert.match(persisted[0]?.[0]?.body ?? "", /HTML body link/);
   assert.doesNotMatch(persisted[0]?.[0]?.body ?? "", /alert/);

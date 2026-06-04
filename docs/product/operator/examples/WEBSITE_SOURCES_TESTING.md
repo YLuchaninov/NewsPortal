@@ -58,12 +58,12 @@
 
 У website ingest truth выглядит так:
 
-`website channel -> web_resources -> optional projection into articles`
+`website channel -> web_resources -> optional projection into signal_candidates`
 
 То есть:
 
-- **не каждая** row обязана стать article;
-- `editorial` rows **могут** проектироваться в `articles`;
+- **не каждая** row обязана стать signal_candidate;
+- `editorial` rows **могут** проектироваться в `signal_candidates`;
 - `entity`, `document`, `listing`, `data_file` и другие rows **могут честно оставаться resource-only**;
 - `/admin/resources` — это не вторичная страница, а каноническая operator surface для website truth.
 
@@ -71,7 +71,7 @@
 
 Если вы только начинаете:
 
-- начните с **Примера A**, если хотите проверить article projection;
+- начните с **Примера A**, если хотите проверить signal_candidate projection;
 - начните с **Примера B**, если хотите проверить resource-only lane;
 - начните с **Примера C**, если ваш реальный target public, но JS-heavy.
 
@@ -117,7 +117,7 @@ pnpm test:website:admin:compose
 
 Для `/admin/resources` это важнее, чем “IT”, “finance” или “policy”.
 
-### Правило 2. Не ждите article projection там, где сайт по своей природе документный
+### Правило 2. Не ждите signal_candidate projection там, где сайт по своей природе документный
 
 Если источник — это procurement portal, registry, docs hub или download center, то нормой будет:
 
@@ -165,9 +165,9 @@ pnpm test:website:admin:compose
 
 ## 3. Пример A — Редакционный newsroom / policy publication
 
-**Сценарий:** сайт-публикация с newsroom / press / updates / blog разделами. Это самый прямой путь проверить, что website lane умеет не только хранить `web_resources`, но и проецировать editorial-compatible rows в `articles`.
+**Сценарий:** сайт-публикация с newsroom / press / updates / blog разделами. Это самый прямой путь проверить, что website lane умеет не только хранить `web_resources`, но и проецировать editorial-compatible rows в `signal_candidates`.
 
-**Почему этот кейс важен:** он проверяет основной “новостной” happy path website provider-а: discovery -> extraction -> `editorial` rows -> projected article drilldown.
+**Почему этот кейс важен:** он проверяет основной “новостной” happy path website provider-а: discovery -> extraction -> `editorial` rows -> projected signal_candidate drilldown.
 
 ### A.1. Когда использовать
 
@@ -241,7 +241,7 @@ Authorization header: <leave empty>
 Для этого сценария нормальный outcome такой:
 
 - много `editorial` rows;
-- часть rows имеет `projected_article_id`;
+- часть rows имеет `projected_signal_candidate_id`;
 - могут появиться отдельные `document` rows, если newsroom публикует PDF annexes или press kits;
 - resource-only rows допустимы, но не должны быть единственным результатом.
 
@@ -250,7 +250,7 @@ Authorization header: <leave empty>
 - `projection = all`
   виден mix из projected editorial rows и редких resource-only rows
 - `projection = projected`
-  видно, что editorial website rows truthfully linked to `/admin/articles/[docId]`
+  видно, что editorial website rows truthfully linked to `/admin/signal-candidates/[docId]`
 - `resourceKind = editorial`
   это основной фильтр для этого кейса
 
@@ -260,9 +260,9 @@ Authorization header: <leave empty>
 
 1. website channel создается без ошибки
 2. после poll появляются `editorial` rows
-3. хотя бы часть `editorial` rows получает article projection
-4. detail по projected resource открывает downstream article
-5. `/admin/articles/[docId]` соответствует ожидаемой website news row
+3. хотя бы часть `editorial` rows получает signal_candidate projection
+4. detail по projected resource открывает downstream signal_candidate
+5. `/admin/signal-candidates/[docId]` соответствует ожидаемой website news row
 
 ### Что не считать ошибкой
 
@@ -288,7 +288,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
    - summary cards не пустые;
    - есть `editorial` rows;
    - есть `Projected` counts;
-   - хотя бы одна row ведет в `/admin/articles/[docId]`.
+   - хотя бы одна row ведет в `/admin/signal-candidates/[docId]`.
 6. Пройдите фильтры:
    - `projection=all`
    - `projection=projected`
@@ -301,7 +301,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
 
 **Сценарий:** сайт, где основная ценность не в “новостных статьях”, а в страницах тендеров, официальных документов, реестрах, notice pages, download artifacts и структурных listings.
 
-**Почему этот кейс важен:** он доказывает, что non-editorial website truth не исчезает behind article-only workflow. Именно здесь легче всего ошибочно решить, что lane “сломана”, хотя на самом деле resource-only rows — это и есть правильный результат.
+**Почему этот кейс важен:** он доказывает, что non-editorial website truth не исчезает behind signal_candidate-only workflow. Именно здесь легче всего ошибочно решить, что lane “сломана”, хотя на самом деле resource-only rows — это и есть правильный результат.
 
 ### B.1. Когда использовать
 
@@ -317,7 +317,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
 
 - много listing pages
 - много detail pages с документами
-- article projection либо редка, либо не нужна вообще
+- signal_candidate projection либо редка, либо не нужна вообще
 
 ### B.2. Готовая конфигурация channel
 
@@ -377,7 +377,7 @@ Authorization header: <leave empty>
 - доминируют `document`, `listing`, `data_file`, иногда `entity`;
 - projected `editorial` rows могут отсутствовать совсем;
 - `resource-only` rows — это expected success path, а не partial failure;
-- `listing`/`document`/`entity` rows могут также получить `projected_article_id`, если extractor смог сделать stable common-pipeline article representation.
+- `listing`/`document`/`entity` rows могут также получить `projected_signal_candidate_id`, если extractor смог сделать stable common-pipeline signal_candidate representation.
 
 Ожидаемая картина:
 
@@ -386,7 +386,7 @@ Authorization header: <leave empty>
 - `projection = resource_only`
   часто самый полезный фильтр для pure resource truth, но не единственный валидный outcome
 - `projection = projected`
-  может быть пустым или показывать rows, которые дальше должны оцениваться через downstream article/selection diagnostics
+  может быть пустым или показывать rows, которые дальше должны оцениваться через downstream signal_candidate/selection diagnostics
 - `resourceKind = document`
   часто самый полезный фильтр
 - `resourceKind = listing`
@@ -399,8 +399,8 @@ Authorization header: <leave empty>
 1. `web_resources` materialize-ятся вообще
 2. `document` / `listing` rows видны в `/admin/resources`
 3. detail по resource открывается и показывает persisted metadata
-4. отсутствие article projection **не считается поломкой**
-5. наличие article projection с `final_decision=rejected` тоже не считается поломкой source onboarding: это уже downstream relevance/selection result
+4. отсутствие signal_candidate projection **не считается поломкой**
+5. наличие signal_candidate projection с `final_decision=rejected` тоже не считается поломкой source onboarding: это уже downstream relevance/selection result
 6. resource-only lane остается наблюдаемой и фильтруемой
 
 ### Что не считать ошибкой
@@ -412,7 +412,7 @@ Authorization header: <leave empty>
 - `projection = projected` пустой
 - `resourceKind = editorial` почти ничего не показывает
 
-Именно этот пример нужен, чтобы отучиться от двух ложных ожиданий: “каждый website source должен превратиться в Articles” и “если procurement rows projected, они обязаны стать selected”.
+Именно этот пример нужен, чтобы отучиться от двух ложных ожиданий: “каждый website source должен превратиться в Signal Candidates” и “если procurement rows projected, они обязаны стать selected”.
 
 ### B.4. Как именно проверять
 
@@ -430,8 +430,8 @@ Authorization header: <leave empty>
    - `resourceKind=document`
    - `resourceKind=listing`
    - `extractionState=failed`, если хотите отделить реальные extraction issues от нормальных resource-only rows
-6. Если есть projected rows, откройте один projected article и проверьте downstream diagnostics / final decision.
-7. Откройте несколько detail rows и убедитесь, что resource truth полезна даже без article projection.
+6. Если есть projected rows, откройте один projected signal_candidate и проверьте downstream diagnostics / final decision.
+7. Откройте несколько detail rows и убедитесь, что resource truth полезна даже без signal_candidate projection.
 
 ---
 
@@ -538,7 +538,7 @@ Browser fallback enabled: true
 
 - cheap/static baseline почти пустой;
 - browser-assisted rows остаются partly resource-only;
-- не все JS-heavy rows становятся projected articles.
+- не все JS-heavy rows становятся projected signal_candidates.
 
 ### C.4. Как именно проверять
 
@@ -573,7 +573,7 @@ Browser fallback enabled: true
 | `feedDiscoveryEnabled` | `true` | чаще `false` | `true` |
 | `downloadDiscoveryEnabled` | `true`, но вторично | `true`, критично | `true` |
 | Основной фильтр в `/resources` | `resourceKind=editorial` | `projection=resource_only`, `resourceKind=document` | compare before/after browser fallback |
-| Что чаще всего считают ошибкой по незнанию | “почему не все rows projected?” | “почему нет articles?” | “почему cheap mode пустой?” |
+| Что чаще всего считают ошибкой по незнанию | “почему не все rows projected?” | “почему нет signal_candidates?” | “почему cheap mode пустой?” |
 | Что на самом деле является нормой | часть rows остается resource-only | projected rows могут отсутствовать | browser assistance нужна только после доказанного cheap-gap |
 
 ---
@@ -605,7 +605,7 @@ docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/c
    - `resourceKind`
    - `extractionState`
 9. Откройте 2–3 resource detail rows
-10. Если есть projected editorial row, откройте связанный `/admin/articles/[docId]`
+10. Если есть projected editorial row, откройте связанный `/admin/signal-candidates/[docId]`
 
 ---
 
@@ -664,7 +664,7 @@ pnpm typecheck
 pnpm test:website:admin:compose
 ```
 
-Если regression подтверждается, чинить нужно именно website/admin/resource surface, а не обходить проблему через article-only workflow.
+Если regression подтверждается, чинить нужно именно website/admin/resource surface, а не обходить проблему через signal_candidate-only workflow.
 
 ---
 
@@ -687,7 +687,7 @@ pnpm test:hard-sites:compose
 - `pnpm test:website:compose`
   сам website ingest path
 - `pnpm test:website:admin:compose`
-  operator-facing create/edit/resources/article flow
+  operator-facing create/edit/resources/signal_candidate flow
 - `pnpm test:hard-sites:compose`
   bounded browser-assisted/hard-site contract
 
@@ -701,13 +701,13 @@ pnpm test:hard-sites:compose
 
 ## 10. FAQ по website examples
 
-### Нужно ли во всех трёх примерах ждать article projection?
+### Нужно ли во всех трёх примерах ждать signal_candidate projection?
 
 Нет.
 
 - В Примере A — да, это core expectation.
 - В Примере B — нет, resource-only lane и есть expected result.
-- В Примере C — article projection возможна, но главный смысл кейса не в ней, а в browser-assisted discovery.
+- В Примере C — signal_candidate projection возможна, но главный смысл кейса не в ней, а в browser-assisted discovery.
 
 ### Почему я не даю здесь список “идеальных live URLs”?
 
@@ -720,13 +720,13 @@ pnpm test:hard-sites:compose
 
 ### Какой из трёх примеров самый важный для `web_resources`?
 
-Если цель — именно проверить, что `web_resources` не исчезают behind article-only workflow, самый важный пример — **Пример B**.
+Если цель — именно проверить, что `web_resources` не исчезают behind signal_candidate-only workflow, самый важный пример — **Пример B**.
 
 ### Какой из трёх примеров лучше всего проверяет operator-ready happy path?
 
 **Пример A**, потому что он легче всего показывает всю цепочку:
 
-`website -> web_resources -> projected article`
+`website -> web_resources -> projected signal_candidate`
 
 ### Какой из трёх примеров нужен, если сайт “похож на SPA”?
 

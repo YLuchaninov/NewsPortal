@@ -5,10 +5,10 @@ from typing import Any
 from .runtime_values import coerce_bool
 
 
-async def process_article_extract(job: Any, _job_token: str) -> dict[str, Any]:
-    from .task_engine.pipeline_enrichment_plugins import ArticleExtractPlugin
+async def process_signal_candidate_extract(job: Any, _job_token: str) -> dict[str, Any]:
+    from .task_engine.pipeline_enrichment_plugins import SignalCandidateExtractPlugin
 
-    plugin = ArticleExtractPlugin()
+    plugin = SignalCandidateExtractPlugin()
     event_id = str(job.data.get("eventId"))
     doc_id = str(job.data.get("docId"))
     force_enrichment = coerce_bool(job.data.get("forceEnrichment"))

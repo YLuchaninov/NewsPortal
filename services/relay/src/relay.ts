@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import {
-  ARTICLE_INGEST_REQUESTED_EVENT,
+  SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
   OUTBOX_EVENT_QUEUE_MAP,
   SEQUENCE_QUEUE,
   isSequenceManagedOutboxEvent,
@@ -10,8 +10,8 @@ import {
   isNotificationFeedbackOutboxEvent,
   isReindexOutboxEvent,
   isResourceOutboxEvent,
-  isArticleOutboxEvent,
-  type ArticleQueueJobPayload,
+  isSignalCandidateOutboxEvent,
+  type SignalCandidateQueueJobPayload,
   type CriterionCompileQueueJobPayload,
   type InterestCompileQueueJobPayload,
   type LlmReviewQueueJobPayload,
@@ -91,7 +91,7 @@ export interface SequenceQueuePriorityRepairSummary {
   missingJobs: number;
 }
 
-const ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY = 100;
+const SIGNAL_CANDIDATE_INGEST_SEQUENCE_JOB_PRIORITY = 100;
 const SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE = 500;
 
 export class OutboxRelay {
@@ -291,7 +291,7 @@ export class OutboxRelay {
             offset $3
           `,
           [
-            ARTICLE_INGEST_REQUESTED_EVENT,
+            SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
             SEQUENCE_PRIORITY_REPAIR_BATCH_SIZE,
             offset
           ]
@@ -327,11 +327,11 @@ export class OutboxRelay {
           }
 
           // BullMQ drains wait-list jobs before the prioritized set. Moving
-          // pre-fix article-ingest runs out of the default wait lane allows
+          // pre-fix signal_candidate-ingest runs out of the default wait lane allows
           // existing llm.review.requested jobs to surface without rewriting
           // queue ownership or re-enqueueing jobs.
           await job.changePriority({
-            priority: ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY
+            priority: SIGNAL_CANDIDATE_INGEST_SEQUENCE_JOB_PRIORITY
           });
           summary.reprioritizedRuns += 1;
         }
@@ -426,11 +426,11 @@ export class OutboxRelay {
   private getSequenceJobQueueOptions(
     eventType: string
   ): { priority?: number } {
-    if (eventType === ARTICLE_INGEST_REQUESTED_EVENT) {
+    if (eventType === SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT) {
       // BullMQ consumes wait-list jobs before prioritized jobs, so we
-      // deliberately place bulk article-ingest runs behind default-priority
+      // deliberately place bulk signal_candidate-ingest runs behind default-priority
       // sequence jobs such as llm.review.requested.
-      return { priority: ARTICLE_INGEST_SEQUENCE_JOB_PRIORITY };
+      return { priority: SIGNAL_CANDIDATE_INGEST_SEQUENCE_JOB_PRIORITY };
     }
 
     return {};
@@ -440,7 +440,7 @@ export class OutboxRelay {
     row: PendingOutboxRow
   ):
     | ThinQueueJobPayload
-    | ArticleQueueJobPayload
+    | SignalCandidateQueueJobPayload
     | ResourceQueueJobPayload
     | InterestCompileQueueJobPayload
     | CriterionCompileQueueJobPayload
@@ -449,7 +449,7 @@ export class OutboxRelay {
     | ReindexQueueJobPayload {
     const payloadVersion = this.readPayloadVersion(row.payload_json);
 
-    if (isArticleOutboxEvent(row.event_type)) {
+    if (isSignalCandidateOutboxEvent(row.event_type)) {
       return {
         jobId: row.event_id,
         eventId: row.event_id,

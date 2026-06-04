@@ -1,6 +1,6 @@
 # Контракт universal content model
 
-Этот contract обязателен, когда работа меняет public content/read surfaces, system-selected collection, user matches или mapping между article/resource storage и public content items.
+Этот contract обязателен, когда работа меняет public content/read surfaces, system-selected collection, user matches или mapping между signal_candidate/resource storage и public content items.
 
 Если работа добавляет `analysis_summary`, entities, labels or content filter projections к public/admin/API content responses, также читай `.aidp/contracts/content-analysis-and-gating.md`.
 
@@ -19,11 +19,11 @@ SignalOps больше не должен мыслить public surface как "�
 
 ## Инварианты
 
-- Editorial/article content is one `content_kind`, not the product-wide default.
+- Editorial/signal_candidate content is one `content_kind`, not the product-wide default.
 - User interests do not expand upstream scope beyond system-selected content.
 - A user without personal interests still sees the global system-selected collection.
 - `allowed_content_kinds` on system interests governs which content kinds may enter global selection.
-- Public/API/admin wording should prefer `content item`, `system interest`, and `system-selected collection` over legacy article-centric names unless the code surface is truly article-specific.
+- Public/API/admin wording should prefer `content item`, `system interest`, and `system-selected collection` over legacy signal_candidate-centric names unless the code surface is truly signal_candidate-specific.
 
 ## Public route contract
 
@@ -41,7 +41,7 @@ SignalOps больше не должен мыслить public surface как "�
 
 ## Legacy/internal names
 
-`articles`, `criteria`, `interest_templates`, `system_feed_results` and similar names remain implementation details. They must not retake public product meaning or become the only semantic decision language.
+`signal_candidates`, `criteria`, `interest_templates`, `system_feed_results` and similar names remain implementation details. They must not retake public product meaning or become the only semantic decision language.
 
 ## Proof expectations
 

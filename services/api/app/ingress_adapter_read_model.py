@@ -19,7 +19,7 @@ class IngressAdapterMutationError(ValueError):
 
 _PROVIDER_TYPES = {"rss", "website", "api", "email_imap"}
 _RUNTIME_KINDS = {"declarative", "builtin"}
-_OUTPUT_MODES = {"articles", "web_resources", "mixed"}
+_OUTPUT_MODES = {"signal_candidates", "web_resources", "mixed"}
 _STATUSES = {"active", "draft", "disabled", "archived"}
 _SELECTION_MODES = {"manual", "mcp", "auto", "migration", "builtin_default"}
 _SECRET_FIELD_PARTS = {
@@ -225,7 +225,7 @@ def create_declarative_ingress_adapter(payload: dict[str, Any]) -> dict[str, Any
         payload.get("outputMode") or payload.get("output_mode"),
         "outputMode",
         _OUTPUT_MODES,
-        "articles",
+        "signal_candidates",
     )
     title = str(payload.get("title") or adapter_key).strip()
     description = str(payload.get("description") or "").strip()

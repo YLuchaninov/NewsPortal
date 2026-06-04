@@ -311,7 +311,7 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "operator.selection.dashboard",
-    "Read-only count dashboard that separates raw article observations from selected/public lead signals. Use this when article totals appear inconsistent with selected signal yield.",
+    "Read-only count dashboard that separates raw signal_candidate observations from selected/public lead signals. Use this when signal_candidate totals appear inconsistent with selected signal yield.",
     emptyReadSchema,
     async (context) => buildSelectionDashboard(context)
   ),
@@ -356,7 +356,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                    sc.is_active as "isActive",
                    sc.fetch_url as "fetchUrl",
                    sc.updated_at as "updatedAt",
-                   (select count(*)::int from articles a where a.channel_id = sc.channel_id) as "articleCount",
+                   (select count(*)::int from signal_candidates a where a.channel_id = sc.channel_id) as "signalCandidateCount",
                    (select count(*)::int from web_resources wr where wr.channel_id = sc.channel_id) as "webResourceCount",
                    (select count(*)::int from channel_fetch_runs cfr where cfr.channel_id = sc.channel_id) as "fetchRunCount"
             from source_channels sc
@@ -698,7 +698,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                   },
                 },
                 reason:
-                  "Replay existing articles through current system-interest criteria to refresh interest_filter_results and final_selection_results.",
+                  "Replay existing signal_candidates through current system-interest criteria to refresh interest_filter_results and final_selection_results.",
               }
             : null,
       };
@@ -771,7 +771,7 @@ const CONTENT_ANALYSIS_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createWriteTool(
     "content_analysis.backfill.request",
-    "Queue safe content-analysis replay for existing content. This refreshes NER/entities, sentiment, category, system-interest labels, and content-filter evidence only; it does not recompute article.match_criteria, interest_filter_results, or final_selection_results. For old articles/current interests/selected or pass_through noise, use maintenance.reindex.request with jobKind=backfill. Default modules exclude structured_extraction; request that module explicitly when an LLM-backed extraction policy should run.",
+    "Queue safe content-analysis replay for existing content. This refreshes NER/entities, sentiment, category, system-interest labels, and content-filter evidence only; it does not recompute signal_candidate.match_criteria, interest_filter_results, or final_selection_results. For old signal_candidates/current interests/selected or pass_through noise, use maintenance.reindex.request with jobKind=backfill. Default modules exclude structured_extraction; request that module explicitly when an LLM-backed extraction policy should run.",
     "write.sequences",
     MCP_CONTENT_ANALYSIS_ARGUMENT_SCHEMAS.backfillRequest,
     async ({ sdk, pool, token }, args) => {
@@ -788,7 +788,7 @@ const CONTENT_ANALYSIS_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...queued,
         warnings: [
           "Content analysis backfill only refreshes analysis/label/filter evidence.",
-          "It does not recompute article.match_criteria, interest_filter_results, or final_selection_results; use maintenance.reindex.request jobKind=backfill for selection replay.",
+          "It does not recompute signal_candidate.match_criteria, interest_filter_results, or final_selection_results; use maintenance.reindex.request jobKind=backfill for selection replay.",
         ],
       };
     }

@@ -38,13 +38,13 @@ DEFAULT_GENERATOR_CONFIGS = [
 ]
 
 LENS_ARTIFACTS = {
-    "official_owners": ["article", "listing", "document"],
+    "official_owners": ["signal_candidate", "listing", "document"],
     "registries_and_directories": ["registry_entry", "listing", "profile"],
     "documents_and_reports": ["document", "report", "listing"],
     "datasets_and_apis": ["dataset", "registry_entry", "unknown"],
-    "announcements_and_newsrooms": ["article", "changelog", "listing"],
-    "change_logs_and_updates": ["changelog", "article", "registry_entry"],
-    "public_discussions": ["thread", "profile", "article"],
+    "announcements_and_newsrooms": ["signal_candidate", "changelog", "listing"],
+    "change_logs_and_updates": ["changelog", "signal_candidate", "registry_entry"],
+    "public_discussions": ["thread", "profile", "signal_candidate"],
     "marketplaces_and_listings": ["listing", "profile", "unknown"],
     "local_language_forms": ["listing", "document", "registry_entry"],
     "weird_public_artifacts": ["unknown", "dataset", "document"],

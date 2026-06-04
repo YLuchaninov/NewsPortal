@@ -52,8 +52,8 @@ def apply_reindex_selection_profile_payload(
     progress = as_json_object(job_like.get("options_json")).get("progress")
     progress_payload = as_json_object(progress)
     status = as_json_str(job_like.get("status")) or "queued"
-    processed_articles = as_json_int(progress_payload.get("processedArticles"))
-    total_articles = as_json_int(progress_payload.get("totalArticles"))
+    processed_signal_candidates = as_json_int(progress_payload.get("processedSignalCandidates"))
+    total_signal_candidates = as_json_int(progress_payload.get("totalSignalCandidates"))
     progress_elapsed_seconds = as_json_int(progress_payload.get("elapsedSeconds"))
     review_failures = as_json_int(progress_payload.get("llmReviewFailures"))
     derived_state = status
@@ -61,8 +61,8 @@ def apply_reindex_selection_profile_payload(
         if not progress_payload:
             derived_state = "running_no_progress_yet"
         elif (
-            total_articles > 0
-            and processed_articles < total_articles
+            total_signal_candidates > 0
+            and processed_signal_candidates < total_signal_candidates
             and progress_elapsed_seconds >= REINDEX_RUNNING_STALL_SECONDS
         ):
             derived_state = "running_stalled"

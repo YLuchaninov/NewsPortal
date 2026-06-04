@@ -66,9 +66,9 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
     domain: "channels",
     title: "Source Channels",
     lifecycle: ["configured", "scheduled", "fetched", "persisted", "verified", "tuned"],
-    keyMetrics: ["active channel count", "fetch outcomes", "new articles/resources", "last success/error"],
+    keyMetrics: ["active channel count", "fetch outcomes", "new signal_candidates/resources", "last success/error"],
     normalStates: [
-      "Active RSS/API/email channels usually produce articles directly.",
+      "Active RSS/API/email channels usually produce signal_candidates directly.",
       "Website channels may produce resource-only rows before downstream projection/selection succeeds.",
     ],
     commonSymptoms: ["fetch failures", "duplicate-heavy fetches", "active channel with no recent runs"],
@@ -80,35 +80,35 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
     domain: "website_pipeline",
     title: "Website Resource Pipeline",
     lifecycle: ["fetch", "resource extraction", "enrichment", "common-pipeline projection", "final selection"],
-    keyMetrics: ["web resource count", "extraction state", "projection state", "projected article decision"],
+    keyMetrics: ["web resource count", "extraction state", "projection state", "projected signal_candidate decision"],
     normalStates: [
       "resource_only is valid for listings/documents that should stay in resources.",
       "projected_to_common_pipeline plus final_decision=rejected means acquisition worked and downstream selection rejected it.",
     ],
     commonSymptoms: [
-      "resources exist but no selected articles",
+      "resources exist but no selected signal_candidates",
       "many explicitly_rejected_before_pipeline rows",
-      "projected articles all rejected",
+      "projected signal_candidates all rejected",
     ],
     commonCauses: [
       "resource kind is listing/document",
-      "content filter or selection profile rejects the article",
+      "content filter or selection profile rejects the signal candidate",
       "website discovery settings are too broad",
       "browser fallback is needed for heavy JS sites",
     ],
     tuningLevers: ["website discovery settings", "content filter policy", "system interests", "selection profile"],
-    readBackChecks: ["web_resources.list", "articles.explain", "content_filter_results.list"],
+    readBackChecks: ["web_resources.list", "signal_candidates.explain", "content_filter_results.list"],
   },
   selection: {
     domain: "selection",
     title: "Final Selection",
-    lifecycle: ["article observation", "interest/filter evaluation", "LLM review when configured", "final decision"],
+    lifecycle: ["signal_candidate observation", "interest/filter evaluation", "LLM review when configured", "final decision"],
     keyMetrics: ["selected/rejected/gray_zone counts", "residual buckets", "verification state"],
     normalStates: [
       "final_decision=rejected can be correct automation behavior.",
       "gray_zone/hold is expected when profile policy says uncertain items need operator review.",
     ],
-    commonSymptoms: ["useful article rejected", "LLM approved but item held", "too many gray_zone rows"],
+    commonSymptoms: ["useful signal_candidate rejected", "LLM approved but item held", "too many gray_zone rows"],
     commonCauses: [
       "profile hold policy",
       "weak verification",
@@ -116,7 +116,7 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
       "content filter policy in hold/enforce mode",
     ],
     tuningLevers: ["system interest definition", "LLM template", "content filter policy", "selection profile strictness"],
-    readBackChecks: ["articles.residuals.summary", "articles.explain", "content_items.explain"],
+    readBackChecks: ["signal_candidates.residuals.summary", "signal_candidates.explain", "content_items.explain"],
   },
   content_analysis: {
     domain: "content_analysis",
@@ -144,7 +144,7 @@ export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, Operati
     commonSymptoms: ["reviews stopped", "too many expensive reviews", "gray_zone held after review"],
     commonCauses: ["budget exhausted", "review mode always", "weak verification", "template too broad"],
     tuningLevers: ["LLM review mode", "review thresholds", "template scope", "budget ceiling"],
-    readBackChecks: ["llm_budget.summary", "articles.explain", "operator.report.verify"],
+    readBackChecks: ["llm_budget.summary", "signal_candidates.explain", "operator.report.verify"],
   },
   discovery: {
     domain: "discovery",
@@ -228,18 +228,18 @@ async function queryCount(pool: Pool, sql: string, params: unknown[] = []): Prom
 export async function buildSelectionDashboard(context: McpToolContext) {
   const { pool, sdk } = context;
   const [
-    rawArticleObservations,
-    blockedArticleObservations,
+    rawSignalCandidateObservations,
+    blockedSignalCandidateObservations,
     pendingSelectionRows,
     decisionRows,
     contentItemsPage,
   ] = await Promise.all([
-    queryCount(pool, "select count(*)::int as total from articles"),
+    queryCount(pool, "select count(*)::int as total from signal_candidates"),
     queryCount(
       pool,
       `
       select count(*)::int as total
-      from articles
+      from signal_candidates
       where visibility_state = 'blocked'
       `
     ),
@@ -247,7 +247,7 @@ export async function buildSelectionDashboard(context: McpToolContext) {
       pool,
       `
       select count(*)::int as total
-      from articles a
+      from signal_candidates a
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
       where fsr.doc_id is null
       `
@@ -276,7 +276,7 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     decision: String(row.decision ?? "unknown"),
     count: Number(row.count ?? 0),
   }));
-  const selectedArticleSignals = decisionRows.rows.reduce(
+  const selectedSignalCandidateSignals = decisionRows.rows.reduce(
     (sum, row) => sum + Number(row.selectedCount ?? 0),
     0
   );
@@ -292,31 +292,31 @@ export async function buildSelectionDashboard(context: McpToolContext) {
   return {
     readOnly: true,
     sourceOfTruth: {
-      rawArticleObservations: "articles",
-      articleSelection: "final_selection_results",
+      rawSignalCandidateObservations: "signal_candidates",
+      signalCandidateSelection: "final_selection_results",
       publicSelectedContent: "content_items",
     },
     counts: {
-      rawArticleObservations,
+      rawSignalCandidateObservations,
       materializedSelectionRows,
       pendingSelectionRows,
-      selectedArticleSignals,
+      selectedSignalCandidateSignals,
       visibleContentItems,
       rejectedRows: countForDecision("rejected"),
       grayZoneRows: countForDecision("gray_zone"),
       holdRows,
       llmReviewPendingRows,
-      blockedArticleObservations,
+      blockedSignalCandidateObservations,
     },
     byDecision,
     discrepancyExplanation:
-      "articles.list and the admin Articles page show raw editorial observations. content_items.list and final_selection_results selected rows show public selected lead signals.",
+      "signal_candidates.list and the admin Signal Candidates page show raw editorial observations. content_items.list and final_selection_results selected rows show public selected lead signals.",
     operatorGuidance:
-      visibleContentItems === 0 && rawArticleObservations > 0
+      visibleContentItems === 0 && rawSignalCandidateObservations > 0
         ? "The corpus still exists for audit/replay, but strict selection currently exposes zero public selected signals. Tune interests/templates or discovery sources before broad replay."
-        : "Compare rawArticleObservations with visibleContentItems before reporting signal yield.",
+        : "Compare rawSignalCandidateObservations with visibleContentItems before reporting signal yield.",
     readBackChecks: [
-      "articles.list",
+      "signal_candidates.list",
       "content_items.list",
       "operator.report.verify reportKind=selection",
       "operator.selection.reindex_plan",
@@ -427,12 +427,12 @@ function holdQualitySelectSql() {
           )
       ) as "holdEvidence"
     from final_selection_results fsr
-    join articles a on a.doc_id = fsr.doc_id
+    join signal_candidates a on a.doc_id = fsr.doc_id
     left join source_channels sc on sc.channel_id = a.channel_id
   `;
 }
 
-export async function buildArticleHoldQualitySummary(
+export async function buildSignalCandidateHoldQualitySummary(
   { pool }: McpToolContext,
   args: Record<string, unknown>
 ) {
@@ -443,7 +443,7 @@ export async function buildArticleHoldQualitySummary(
       `
         select count(*)::int as count
         from final_selection_results fsr
-        join articles a on a.doc_id = fsr.doc_id
+        join signal_candidates a on a.doc_id = fsr.doc_id
         where ${whereSql}
       `,
       params
@@ -455,7 +455,7 @@ export async function buildArticleHoldQualitySummary(
           coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', 'unknown') as tier,
           count(*)::int as count
         from final_selection_results fsr
-        join articles a on a.doc_id = fsr.doc_id
+        join signal_candidates a on a.doc_id = fsr.doc_id
         where ${whereSql}
         group by tier
         order by count desc, tier asc
@@ -468,7 +468,7 @@ export async function buildArticleHoldQualitySummary(
         select coalesce(fsr.explain_json ->> 'downstreamLossBucket', 'unknown') as bucket,
                count(*)::int as count
         from final_selection_results fsr
-        join articles a on a.doc_id = fsr.doc_id
+        join signal_candidates a on a.doc_id = fsr.doc_id
         where ${whereSql}
         group by bucket
         order by count desc, bucket asc
@@ -481,7 +481,7 @@ export async function buildArticleHoldQualitySummary(
         select coalesce(fsr.verification_state, 'unknown') as "verificationState",
                count(*)::int as count
         from final_selection_results fsr
-        join articles a on a.doc_id = fsr.doc_id
+        join signal_candidates a on a.doc_id = fsr.doc_id
         where ${whereSql}
         group by fsr.verification_state
         order by count desc, "verificationState" asc
@@ -493,7 +493,7 @@ export async function buildArticleHoldQualitySummary(
       `
         select count(*)::int as count
         from final_selection_results fsr
-        join articles a on a.doc_id = fsr.doc_id
+        join signal_candidates a on a.doc_id = fsr.doc_id
         where ${whereSql}
           and coalesce((fsr.explain_json #>> '{semanticSignalSummary,llmReviewPending}')::int, 0) > 0
       `,
@@ -515,7 +515,7 @@ export async function buildArticleHoldQualitySummary(
   };
 }
 
-export async function listArticleHoldQuality(
+export async function listSignalCandidateHoldQuality(
   { pool }: McpToolContext,
   args: Record<string, unknown>
 ) {
@@ -544,7 +544,7 @@ export async function listArticleHoldQuality(
     `
       select count(*)::int as count
       from final_selection_results fsr
-      join articles a on a.doc_id = fsr.doc_id
+      join signal_candidates a on a.doc_id = fsr.doc_id
       where ${whereSql}
     `,
     params
@@ -557,7 +557,7 @@ export async function listArticleHoldQuality(
   };
 }
 
-export async function explainArticleHoldQuality(
+export async function explainSignalCandidateHoldQuality(
   { pool }: McpToolContext,
   args: Record<string, unknown>
 ) {
@@ -800,7 +800,7 @@ function selectionPrecisionSelectSql() {
           and ifr.filter_scope = 'system_criterion'
       ) as "selectionEvidence"
     from final_selection_results fsr
-    join articles a on a.doc_id = fsr.doc_id
+    join signal_candidates a on a.doc_id = fsr.doc_id
     left join source_channels sc on sc.channel_id = a.channel_id
   `;
 }
@@ -928,8 +928,8 @@ export async function buildSelectionPrecisionAudit(
     ],
     nextReadBack: [
       "operator.report.verify reportKind=selection",
-      "articles.holds.summary",
-      "articles.residuals.summary",
+      "signal_candidates.holds.summary",
+      "signal_candidates.residuals.summary",
       "maintenance.reindex_jobs.list",
       "content_items.list",
     ],
@@ -992,9 +992,9 @@ export async function buildSelectionReindexPlan(
   );
 
   const [projectHolds, buyerHolds, contextHolds] = await Promise.all([
-    listArticleHoldQuality(context, { candidateSignalTier: "project_intent", pageSize: maxDocIds }),
-    listArticleHoldQuality(context, { candidateSignalTier: "buyer_intent", pageSize: maxDocIds }),
-    listArticleHoldQuality(context, { candidateSignalTier: "context", pageSize: maxDocIds }),
+    listSignalCandidateHoldQuality(context, { candidateSignalTier: "project_intent", pageSize: maxDocIds }),
+    listSignalCandidateHoldQuality(context, { candidateSignalTier: "buyer_intent", pageSize: maxDocIds }),
+    listSignalCandidateHoldQuality(context, { candidateSignalTier: "context", pageSize: maxDocIds }),
   ]);
   const buyerHoldRows = [
     ...(Array.isArray(projectHolds.items) ? projectHolds.items : []),
@@ -1016,14 +1016,14 @@ export async function buildSelectionReindexPlan(
     {
       bucket: "buyer_hold",
       docIds: buyerHoldDocIds.slice(0, maxDocIds),
-      source: "articles.holds.list candidateSignalTier=project_intent,buyer_intent",
+      source: "signal_candidates.holds.list candidateSignalTier=project_intent,buyer_intent",
       purpose:
         "Replay held buyer/project candidates when increasing recall or recovering direct evidence.",
     },
     {
       bucket: "context_only",
       docIds: uniqueStrings([...contextOnlyDocIds, ...contextHoldDocIds]).slice(0, maxDocIds),
-      source: "selection precision context_only rows plus articles.holds.list candidateSignalTier=context",
+      source: "selection precision context_only rows plus signal_candidates.holds.list candidateSignalTier=context",
       purpose:
         "Replay context-only rows only to confirm they stay context/noise unless item-level buyer evidence appears.",
     },
@@ -1311,7 +1311,7 @@ function buildFunnelRecommendedActions(
   }
   actions.push(
     {
-      tool: "articles.residuals.list",
+      tool: "signal_candidates.residuals.list",
       reason: "Choose bounded gray/hold docId chunks only after calibration drift is understood.",
       arguments: { selectionMode: "hold", pageSize: 100 },
     },
@@ -1629,14 +1629,14 @@ export async function buildFunnelAudit(
     riskNotes: [
       "Reference evidence is calibration input, not canonical runtime truth.",
       "Domain vocabulary must remain in MCP/admin configuration and tests, not hardcoded selection/discovery runtime logic.",
-      "Source health and vNext routing telemetry remain independent from article selection, ranking, escalation, web visibility, and counts.",
+      "Source health and vNext routing telemetry remain independent from signal_candidate selection, ranking, escalation, web visibility, and counts.",
       "If async workers are running, repeat report verification after bounded replay or fetch cycles complete.",
     ],
     nextReadBack: [
       "operator.report.verify reportKind=funnel_calibration",
       "system_interests.compile_status.list",
       "templates.duplicates.audit",
-      "articles.residuals.summary",
+      "signal_candidates.residuals.summary",
       "content_items.list",
     ],
   };
@@ -1869,7 +1869,7 @@ export async function buildSystemHealth(
                coalesce(fsr.final_decision, 'not_projected') as "finalDecision",
                count(*)::int as count
         from web_resources wr
-        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
         where wr.updated_at >= now() - ($1::int * interval '1 hour')
         group by wr.extraction_state, wr.projection_state, coalesce(fsr.final_decision, 'not_projected')
         order by wr.extraction_state, wr.projection_state, coalesce(fsr.final_decision, 'not_projected')
@@ -1987,7 +1987,7 @@ export async function buildSystemHealth(
         pageSize: 20,
       }),
       llmBudgetSummary: sdk.getLlmBudgetSummary<Record<string, unknown>>(),
-      residualSummary: sdk.getArticleResidualSummary<Record<string, unknown>>(),
+      residualSummary: sdk.getSignalCandidateResidualSummary<Record<string, unknown>>(),
     }),
   ]);
 
@@ -2015,7 +2015,7 @@ export async function buildSystemHealth(
     domains,
     sourceOfTruth: [
       "PostgreSQL source_channels/channel_fetch_runs/web_resources/final_selection_results/content_analysis_results/content_filter_results/discovery*/sequence_runs/mcp_request_log",
-      "API-backed dashboard/discovery/LLM budget/article residual summaries",
+      "API-backed dashboard/discovery/LLM budget/signal_candidate residual summaries",
     ],
     health: {
       channels,
@@ -2082,7 +2082,7 @@ function buildIssuesFromHealth(input: Record<string, unknown>) {
         { projectedRejected },
         [
           "Treat this as selection/filter evidence, not channel creation failure.",
-          "Inspect articles.explain and content_filter_results.list for projected article IDs.",
+          "Inspect signal_candidates.explain and content_filter_results.list for projected signal_candidate IDs.",
         ]
       )
     );
@@ -2110,7 +2110,7 @@ function buildIssuesFromHealth(input: Record<string, unknown>) {
   if (grayZone > 0) {
     issues.push(
       issue("info", "selection", "Gray-zone selections are being held by policy.", { grayZone }, [
-        "Use articles.residuals.summary and articles.explain before changing review policy.",
+        "Use signal_candidates.residuals.summary and signal_candidates.explain before changing review policy.",
         "Tune one interest/template/profile at a time if this is too conservative.",
       ])
     );
@@ -2208,10 +2208,10 @@ async function collectHealthSamples(pool: Pool, sinceHours: number) {
         `
           select wr.resource_id::text as "resourceId", wr.channel_id::text as "channelId",
                  wr.title, wr.url, wr.projection_state as "projectionState",
-                 wr.projected_article_id::text as "projectedArticleId",
+                 wr.projected_signal_candidate_id::text as "projectedSignalCandidateId",
                  fsr.final_decision as "finalDecision"
           from web_resources wr
-          join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+          join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
           where wr.updated_at >= now() - ($1::int * interval '1 hour')
             and fsr.final_decision = 'rejected'
           order by wr.updated_at desc
@@ -2520,14 +2520,14 @@ function buildTuningRecommendations(
         "gray_zone_hold can be caused by candidate-signal recovery plus strict hold policy; prove replay effects before changing criteria.",
     });
     base.suggestedToolCalls.push(
-      { toolName: "articles.holds.summary", argumentsTemplate: {} },
+      { toolName: "signal_candidates.holds.summary", argumentsTemplate: {} },
       {
-        toolName: "articles.holds.list",
+        toolName: "signal_candidates.holds.list",
         argumentsTemplate: { candidateSignalTier: "project_intent", pageSize: 25 },
       },
-      { toolName: "articles.residuals.summary", argumentsTemplate: { downstreamLossBucket: "gray_zone_hold" } },
+      { toolName: "signal_candidates.residuals.summary", argumentsTemplate: { downstreamLossBucket: "gray_zone_hold" } },
       {
-        toolName: "articles.residuals.list",
+        toolName: "signal_candidates.residuals.list",
         argumentsTemplate: { selectionMode: "hold", downstreamLossBucket: "project_intent_hold", pageSize: 25 },
       },
       {
@@ -2581,7 +2581,7 @@ function buildTuningRecommendations(
     });
   }
   base.suggestedToolCalls.push(
-    { toolName: "articles.residuals.summary", argumentsTemplate: { downstreamLossBucket: residualBucket ?? undefined } },
+    { toolName: "signal_candidates.residuals.summary", argumentsTemplate: { downstreamLossBucket: residualBucket ?? undefined } },
     { toolName: "system_interests.update", argumentsTemplate: { interestTemplateId: "<interestId>", payload: {} } }
   );
   return base;
@@ -2644,7 +2644,7 @@ function effectQueryForDomain(domain: OperatingDomain) {
                coalesce(fsr.final_decision, 'not_projected') as "finalDecision",
                count(*)::int as count
         from web_resources wr
-        left join final_selection_results fsr on fsr.doc_id = wr.projected_article_id
+        left join final_selection_results fsr on fsr.doc_id = wr.projected_signal_candidate_id
         where wr.updated_at >= now() - ($1::int * interval '1 hour')
           and wr.updated_at < now() - ($2::int * interval '1 hour')
         group by wr.projection_state, coalesce(fsr.final_decision, 'not_projected')
@@ -2881,8 +2881,8 @@ export async function buildOperationalReportVerification(
   if (reportKind === "selection_hold_quality") {
     const docIds = readStringArray(entityIds.docIds);
     const args = docIds.length > 0 ? { docIds, pageSize: includeSamples ? 25 : 5 } : {};
-    const summary = await buildArticleHoldQualitySummary(context, args);
-    const list = await listArticleHoldQuality(context, {
+    const summary = await buildSignalCandidateHoldQualitySummary(context, args);
+    const list = await listSignalCandidateHoldQuality(context, {
       ...args,
       pageSize: includeSamples ? 25 : 5,
     });
@@ -2918,9 +2918,9 @@ export async function buildOperationalReportVerification(
         "Use maintenance.reindex.request only with bounded docIds after inspecting hold quality.",
       ],
       nextReadBack: [
-        "articles.holds.summary",
-        "articles.holds.list",
-        "articles.holds.explain",
+        "signal_candidates.holds.summary",
+        "signal_candidates.holds.list",
+        "signal_candidates.holds.explain",
         "maintenance.reindex_jobs.list",
         "operator.effect.verify",
       ],
@@ -3018,19 +3018,19 @@ export async function buildOperationalReportVerification(
       group by 1, 2
       order by channels desc
     `);
-    const articleCounts = await context.pool.query(`
+    const signalCandidateCounts = await context.pool.query(`
       select
         coalesce(a.raw_payload_json ->> 'adapterKey', 'unknown') as adapter_key,
-        count(*)::int as articles,
+        count(*)::int as signal_candidates,
         count(*) filter (where fsr.final_decision = 'selected')::int as selected,
         count(*) filter (where fsr.final_decision = 'gray_zone')::int as held,
         count(*) filter (where fsr.final_decision = 'rejected')::int as rejected
-      from articles a
+      from signal_candidates a
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
       where a.raw_payload_json ->> 'adapterKey'
         in ('ddgs_search', 'searxng_search', 'brave_search', 'tavily_search', 'exa_search', 'serpapi_google_news_research')
       group by 1
-      order by articles desc
+      order by signal_candidates desc
     `);
     const watchOrBacklogSources = Number(endpointCounts.rows[0]?.watch_or_backlog_sources ?? 0);
     return {
@@ -3042,7 +3042,7 @@ export async function buildOperationalReportVerification(
         indirectSources: Number(endpointCounts.rows[0]?.indirect_sources ?? 0),
         watchOrBacklogSources,
         channels: channelCounts.rows,
-        articles: articleCounts.rows,
+        signal_candidates: signalCandidateCounts.rows,
       },
       warnings: [
         ...(watchOrBacklogSources > 0 && channelCounts.rows.length === 0
@@ -3062,8 +3062,8 @@ export async function buildOperationalReportVerification(
         "discovery.adapter_backlog.list",
         "channels.bulk_onboard.plan",
         "fetch_runs.list",
-        "articles.residuals.summary",
-        "articles.holds.summary",
+        "signal_candidates.residuals.summary",
+        "signal_candidates.holds.summary",
       ],
       staleReportNotes: [
         "This verification is read-only and DB-backed.",
@@ -3075,19 +3075,19 @@ export async function buildOperationalReportVerification(
     const quality = await context.pool.query(`
       select
         coalesce(a.raw_payload_json ->> 'adapterKey', 'unknown') as adapter_key,
-        count(*)::int as articles,
-        count(*) filter (where (a.raw_payload_json ->> 'extractionKind') = 'project_detail')::int as project_detail_articles,
+        count(*)::int as signal_candidates,
+        count(*) filter (where (a.raw_payload_json ->> 'extractionKind') = 'project_detail')::int as project_detail_signal_candidates,
         count(*) filter (where nullif(a.raw_payload_json ->> 'projectDetailConfidence', '')::float >= 0.55)::int as confident_project_details,
         count(*) filter (where (a.raw_payload_json ->> 'detailFetchAttempted')::boolean is true)::int as detail_fetch_attempted,
         count(*) filter (where fsr.final_decision = 'selected')::int as selected,
         count(*) filter (where fsr.final_decision = 'gray_zone')::int as held,
         count(*) filter (where fsr.final_decision = 'rejected')::int as rejected
-      from articles a
+      from signal_candidates a
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
       where a.raw_payload_json ->> 'adapterKey'
         in ('peopleperhour_public_projects_research', 'freelancer_public_projects_research', 'guru_public_projects_research', 'malt_public_projects_research', 'contra_public_search_research', 'upwork_public_signal_research', 'linkedin_public_signal_research', 'discourse_search')
       group by 1
-      order by articles desc
+      order by signal_candidates desc
     `);
     return {
       reportKind,
@@ -3100,7 +3100,7 @@ export async function buildOperationalReportVerification(
       warnings: [
         ...(quality.rows.some(
           (row: Record<string, unknown>) =>
-            Number(row.articles ?? 0) > 0 && Number(row.project_detail_articles ?? 0) === 0
+            Number(row.signal_candidates ?? 0) > 0 && Number(row.project_detail_signal_candidates ?? 0) === 0
         )
           ? [
               issue(
@@ -3113,7 +3113,7 @@ export async function buildOperationalReportVerification(
             ]
           : []),
       ],
-      nextReadBack: ["articles.residuals.list", "articles.holds.list", "channels.bottlenecks.list"],
+      nextReadBack: ["signal_candidates.residuals.list", "signal_candidates.holds.list", "channels.bottlenecks.list"],
       staleReportNotes: [
         "This verification is read-only and DB-backed.",
         "Project-detail confidence is extraction evidence only and cannot select content by itself.",
@@ -3272,7 +3272,7 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
           },
         ],
         note:
-          "Content-analysis backfill does not recompute article.match_criteria, interest_filter_results, or final_selection_results.",
+          "Content-analysis backfill does not recompute signal_candidate.match_criteria, interest_filter_results, or final_selection_results.",
       },
     };
   }

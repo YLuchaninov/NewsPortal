@@ -39,7 +39,7 @@ function buildAdapterPayload(payload: JsonRecord): JsonRecord {
     title: readText(payload.title),
     description: readText(payload.description),
     providerType: readText(payload.providerType, "api"),
-    outputMode: readText(payload.outputMode, "articles"),
+    outputMode: readText(payload.outputMode, "signal_candidates"),
     status: readText(payload.status, "draft"),
     priority: Number(readText(payload.priority, "100")),
     matchRules: readJsonField(payload.matchRulesJson, "matchRulesJson", {}),

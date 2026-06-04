@@ -1316,7 +1316,7 @@
     "validationNotes": "The marketing site is public, but the help documentation says developers review matched jobs from email links or after logging in. Treat as not suitable for open-web job monitoring.",
     "evidenceUrls": [
       "https://www.moonlightwork.com/",
-      "https://help.moonlightwork.com/en/articles/8986723-applying-for-jobs"
+      "https://help.moonlightwork.com/en/signal-candidates/8986723-applying-for-jobs"
     ],
     "recommendedConfig": {
       "adaptive": true,

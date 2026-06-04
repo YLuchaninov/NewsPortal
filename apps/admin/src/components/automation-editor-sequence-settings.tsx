@@ -82,7 +82,7 @@ export function AutomationEditorSequenceSettings({
           <Input
             value={triggerEvent}
             onChange={(event) => onTriggerEventChange(event.target.value)}
-            placeholder="article.ingest.requested"
+            placeholder="signal_candidate.ingest.requested"
           />
         </label>
         <label className="grid gap-2 text-sm">

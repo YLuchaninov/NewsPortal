@@ -6,7 +6,7 @@ import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
 test("listSystemSelectedContentItems sends pagination, sort, and search params", async () => {
   let requestedUrl = "";
   const expected = {
-    items: [{ content_item_id: "editorial:article-1" }],
+    items: [{ content_item_id: "signal_candidate:signal_candidate-1" }],
     page: 2,
     pageSize: 50,
     total: 125,
@@ -106,7 +106,7 @@ test("listMatchesPage sends pagination, sort, and search params", async () => {
   );
 });
 
-test("listArticlesPage sends pagination params to the admin article list", async () => {
+test("listSignalCandidatesPage sends pagination params to the admin signal candidate list", async () => {
   let requestedUrl = "";
   const expected = {
     items: [],
@@ -129,12 +129,12 @@ test("listArticlesPage sends pagination params to the admin article list", async
     }) as typeof fetch,
   });
 
-  const response = await sdk.listArticlesPage<Record<string, unknown>>({
+  const response = await sdk.listSignalCandidatesPage<Record<string, unknown>>({
     page: 3,
     pageSize: 10,
   });
 
-  assert.equal(requestedUrl, "http://api.example.test/maintenance/articles?page=3&pageSize=10");
+  assert.equal(requestedUrl, "http://api.example.test/maintenance/signal-candidates?page=3&pageSize=10");
   assert.deepEqual(response, expected);
 });
 
@@ -175,7 +175,7 @@ test("listContentItemsPage preserves search and sort params", async () => {
   );
 });
 
-test("article residual endpoints preserve filters and pagination params", async () => {
+test("signal_candidate residual endpoints preserve filters and pagination params", async () => {
   const requestedUrls = [];
   const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
@@ -199,7 +199,7 @@ test("article residual endpoints preserve filters and pagination params", async 
     }) as typeof fetch,
   });
 
-  await sdk.listArticleResidualsPage<Record<string, unknown>>({
+  await sdk.listSignalCandidateResidualsPage<Record<string, unknown>>({
     page: 3,
     pageSize: 15,
     downstreamLossBucket: "semantic_rejected",
@@ -212,7 +212,7 @@ test("article residual endpoints preserve filters and pagination params", async 
     duplicateKind: "canonical",
     q: "climate",
   });
-  await sdk.getArticleResidualSummary<Record<string, unknown>>({
+  await sdk.getSignalCandidateResidualSummary<Record<string, unknown>>({
     downstreamLossBucket: "gray_zone_hold",
     selectionMode: "hold",
     q: "operators",
@@ -220,11 +220,11 @@ test("article residual endpoints preserve filters and pagination params", async 
 
   assert.equal(
     requestedUrls[0],
-    "http://api.example.test/maintenance/articles/residuals?page=3&pageSize=15&downstreamLossBucket=semantic_rejected&selectionBlockerStage=semantic_filter&selectionBlockerReason=semantic_no_match&selectionMode=rejected&verificationState=weak&processingState=processed&observationState=canonicalized&duplicateKind=canonical&q=climate"
+    "http://api.example.test/maintenance/signal-candidates/residuals?page=3&pageSize=15&downstreamLossBucket=semantic_rejected&selectionBlockerStage=semantic_filter&selectionBlockerReason=semantic_no_match&selectionMode=rejected&verificationState=weak&processingState=processed&observationState=canonicalized&duplicateKind=canonical&q=climate"
   );
   assert.equal(
     requestedUrls[1],
-    "http://api.example.test/maintenance/articles/residuals/summary?downstreamLossBucket=gray_zone_hold&selectionMode=hold&q=operators"
+    "http://api.example.test/maintenance/signal-candidates/residuals/summary?downstreamLossBucket=gray_zone_hold&selectionMode=hold&q=operators"
   );
 });
 
@@ -361,7 +361,7 @@ test("listClustersPage sends pagination params", async () => {
   assert.equal(requestedUrl, "http://api.example.test/clusters?page=1&pageSize=12");
 });
 
-test("retryArticleEnrichment posts to the dedicated maintenance route", async () => {
+test("retrySignalCandidateEnrichment posts to the dedicated maintenance route", async () => {
   let requestedUrl = "";
   let requestedMethod = "";
   let requestedBody = "";
@@ -384,19 +384,19 @@ test("retryArticleEnrichment posts to the dedicated maintenance route", async ()
     }) as typeof fetch,
   });
 
-  await sdk.retryArticleEnrichment<Record<string, unknown>>("doc-99", {
+  await sdk.retrySignalCandidateEnrichment<Record<string, unknown>>("doc-99", {
     requestedBy: "admin-1",
   });
 
   assert.equal(
     requestedUrl,
-    "http://api.example.test/maintenance/articles/doc-99/enrichment/retry"
+    "http://api.example.test/maintenance/signal-candidates/doc-99/enrichment/retry"
   );
   assert.equal(requestedMethod, "POST");
   assert.match(requestedBody, /"requestedBy":"admin-1"/);
 });
 
-test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", async () => {
+test("getSignalCandidateSelectionSummary reads the raw-versus-selected count endpoint", async () => {
   let requestedUrl = "";
   const sdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
@@ -405,8 +405,8 @@ test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", 
       return new Response(
         JSON.stringify({
           counts: {
-            rawArticleObservations: 185,
-            selectedArticleSignals: 0,
+            rawSignalCandidateObservations: 185,
+            selectedSignalCandidateSignals: 0,
           },
         }),
         {
@@ -417,15 +417,15 @@ test("getArticleSelectionSummary reads the raw-versus-selected count endpoint", 
     }) as typeof fetch,
   });
 
-  const summary = await sdk.getArticleSelectionSummary<Record<string, unknown>>();
+  const summary = await sdk.getSignalCandidateSelectionSummary<Record<string, unknown>>();
 
   assert.equal(
     requestedUrl,
-    "http://api.example.test/maintenance/articles/selection-summary"
+    "http://api.example.test/maintenance/signal-candidates/selection-summary"
   );
   assert.deepEqual(summary.counts, {
-    rawArticleObservations: 185,
-    selectedArticleSignals: 0,
+    rawSignalCandidateObservations: 185,
+    selectedSignalCandidateSignals: 0,
   });
 });
 

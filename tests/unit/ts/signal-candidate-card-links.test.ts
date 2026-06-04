@@ -25,7 +25,7 @@ test("resolveSafeContentHref rejects unsafe or invalid content URLs", () => {
 });
 
 test("resolveInternalContentHref creates stable internal content detail links", () => {
-  assert.equal(resolveInternalContentHref("editorial:doc-42"), "/content/editorial%3Adoc-42");
+  assert.equal(resolveInternalContentHref("signal_candidate:doc-42"), "/content/signal_candidate%3Adoc-42");
   assert.equal(resolveInternalContentHref("resource:item with spaces"), "/content/resource%3Aitem%20with%20spaces");
   assert.equal(resolveInternalContentHref(""), null);
 });

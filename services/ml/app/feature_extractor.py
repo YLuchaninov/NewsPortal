@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .interfaces import ArticleFeatureSet
+from .interfaces import SignalCandidateFeatureSet
 
 FEATURE_VERSION = 1
 SEARCH_VECTOR_VERSION = 1
@@ -56,17 +56,17 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return result
 
 
-class HeuristicArticleFeatureExtractor:
+class HeuristicSignalCandidateFeatureExtractor:
     feature_version = FEATURE_VERSION
     search_vector_version = SEARCH_VECTOR_VERSION
 
-    def extract(self, title: str, lead: str, body: str) -> ArticleFeatureSet:
+    def extract(self, title: str, lead: str, body: str) -> SignalCandidateFeatureSet:
         combined = " ".join(part for part in (title, lead, body) if part)
         numbers = _dedupe_preserve_order(NUMBER_PATTERN.findall(combined))
         short_tokens = self._extract_short_tokens(combined)
         places = self._extract_places(combined)
         entities = self._extract_entities(combined, places)
-        return ArticleFeatureSet(
+        return SignalCandidateFeatureSet(
             numbers=numbers,
             short_tokens=short_tokens,
             places=places,

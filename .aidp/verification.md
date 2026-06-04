@@ -45,7 +45,7 @@
 - Local product core contour with deterministic RSS/website/API/IMAP acquisition proof and without Telegram/YouTube ingestion: `pnpm test:product:local:core`
 - Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
 - Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
-- Product mega-flow live-pass proof for Examples A/B/C with strict live-selected-article acceptance and deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
+- Product mega-flow live-pass proof for Examples A/B/C with strict live-selected-signal_candidate acceptance and deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
 - Product total-live audit layer above mega-flow, with required core/runtime/surface lanes, classified live diagnostic residuals, and fixture-backed API/Email IMAP external-live residual truth: `pnpm test:product:total-live:compose`
 - Internal MVP smoke path: `pnpm test:mvp:internal`
 - Scaffold sanity: `pnpm check:scaffold`
@@ -81,7 +81,7 @@
 - Stop/down/log lifecycle: `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:logs`
 - Expected local health endpoints: web `http://127.0.0.1:4321/api/health`, admin `http://127.0.0.1:4322/api/health`, API `http://127.0.0.1:8000/health`, nginx `http://127.0.0.1:8080/health`, Mailpit `http://127.0.0.1:8025/`.
 - One-off runtime utilities: `pnpm db:migrate`, `pnpm db:seed:outbox-smoke`, `pnpm fetch:rss:once`, `pnpm website:projection:replay`, `pnpm website:projection:replay:compose`.
-- Article yield diagnostics/remediation: `pnpm article:yield:diagnostics`, `pnpm article:yield:remediate`.
+- Signal candidate yield diagnostics/remediation: `pnpm signal-candidate:yield:diagnostics`, `pnpm signal-candidate:yield:remediate`.
 
 ## Test surface taxonomy
 
@@ -367,7 +367,7 @@ If delegated/subagent work is used:
 - Notification/digest changes: affected BFF/worker proof plus Mailpit-local or explicit external-provider residual gap.
 - HNSW/index changes: affected rebuild/check command, plus worker/API proof if matching or search behavior changed.
 - UI interaction/layout changes: viewport proof and, for button/control regressions, `pnpm test:web:ui-audit`.
-- Article yield/enrichment changes: diagnostics/remediation commands are required when the active item changes yield policy or fixes existing production-like derived state.
+- SignalCandidate yield/enrichment changes: diagnostics/remediation commands are required when the active item changes yield policy or fixes existing production-like derived state.
 - Architecture-sensitive changes: explicit review against `.aidp/engineering.md` quality bar, especially god-object growth, magic constants, coupling/cohesion, scalability/backpressure, state-machine typing and observability.
 - Security-sensitive changes: explicit review of trust boundary, abuse case, authorization/scope behavior, secret leakage risk, audit behavior and denied/invalid-path proof.
 - Dependency/supply-chain changes: dependency owner and lockfile review, build input review and explicit release/deploy gap handling when no repository command exists.

@@ -13,7 +13,7 @@ class IngressAdapterReadModelTest(unittest.TestCase):
                 "description": "Feeds",
                 "runtime_kind": "builtin",
                 "provider_type": "rss",
-                "output_mode": "articles",
+                "output_mode": "signal_candidates",
                 "status": "active",
                 "priority": 10,
                 "match_rules_json": {"allowAutoSelect": True},
@@ -47,7 +47,7 @@ class IngressAdapterReadModelTest(unittest.TestCase):
                 "adapter_binding_enabled": True,
                 "adapter_binding_title": "Google News RSS",
                 "adapter_binding_runtime_kind": "builtin",
-                "adapter_binding_output_mode": "articles",
+                "adapter_binding_output_mode": "signal_candidates",
                 "adapter_binding_status": "active",
             }
         )

@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Awaitable, Callable, Final, Mapping
 
-from ..article_extraction_processor import (
-    process_article_extract as process_article_extract_processor,
+from ..signal_candidate_extraction_processor import (
+    process_signal_candidate_extract as process_signal_candidate_extract_processor,
 )
-from ..article_processors import (
+from ..signal_candidate_processors import (
     process_dedup as process_dedup_processor,
     process_embed as process_embed_processor,
     process_normalize as process_normalize_processor,
@@ -34,7 +34,7 @@ from .plugins import TaskPlugin
 
 LegacyHandler = Callable[[Any, str], Awaitable[dict[str, Any]]]
 DIRECT_PROCESSOR_HANDLERS: dict[str, LegacyHandler] = {
-    "process_article_extract": process_article_extract_processor,
+    "process_signal_candidate_extract": process_signal_candidate_extract_processor,
     "process_normalize": process_normalize_processor,
     "process_dedup": process_dedup_processor,
     "process_embed": process_embed_processor,
@@ -86,11 +86,11 @@ class LegacyHandlerTaskPlugin(TaskPlugin):
     category = "pipeline"
     handler_name: str
     input_descriptions: dict[str, str] = {
-        "doc_id": "Article identifier passed via task options or sequence context.",
+        "doc_id": "SignalCandidate identifier passed via task options or sequence context.",
         "event_id": "Existing outbox event UUID forwarded into the legacy handler shim.",
     }
     output_descriptions: dict[str, str] = {
-        "doc_id": "Article identifier retained in sequence context.",
+        "doc_id": "SignalCandidate identifier retained in sequence context.",
         "event_id": "Legacy event identifier retained in sequence context.",
         "legacy_handler": "Legacy process_* handler invoked by this adapter.",
         "status": "Normalized handler status copied from the legacy result.",

@@ -112,8 +112,8 @@ export interface WebResourcePreview {
   extraction_error?: string | null;
   projection_state?: WebResourceProjectionState | string;
   projection_error?: string | null;
-  projected_article_id?: string | null;
-  projected_article_title?: string | null;
+  projected_signal_candidate_id?: string | null;
+  projected_signal_candidate_title?: string | null;
   content_item_id?: string | null;
   content_item_ready?: boolean;
   selection_source?: string | null;

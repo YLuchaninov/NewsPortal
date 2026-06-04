@@ -36,8 +36,8 @@ export function buildPromptArguments(name, runId) {
       };
     case "operator.session.start":
       return {
-        objective: `review article residual diagnostics ${runId}`,
-        domain: "article diagnostics",
+        objective: `review signal_candidate residual diagnostics ${runId}`,
+        domain: "signal_candidate diagnostics",
       };
     case "sequences.session.plan":
       return {
@@ -114,12 +114,12 @@ export function buildPromptArguments(name, runId) {
     case "system_interest.polish":
       return {
         interestName: `Operator interest ${runId}`,
-        residualPattern: "semantic_rejected repeated across explainable article residuals",
+        residualPattern: "semantic_rejected repeated across explainable signal_candidate residuals",
       };
     case "llm_template.tune":
       return {
         templateName: `Operator template ${runId}`,
-        residualPattern: "llm_review_pending repeated in gray-zone article residuals",
+        residualPattern: "llm_review_pending repeated in gray-zone signal_candidate residuals",
       };
     case "discovery.policy.tune":
       return {

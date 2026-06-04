@@ -160,11 +160,11 @@ export interface DiscoveryWebsiteProbeResult {
   is_news_site: boolean;
   has_hidden_rss: boolean;
   hidden_rss_urls: string[];
-  article_count_estimate: number;
+  signal_candidate_count_estimate: number;
   freshness: "daily" | "unknown";
   date_patterns_found: boolean;
   category_urls: string[];
-  sample_articles: Array<{
+  sample_signal_candidates: Array<{
     url: string;
     title: string | null;
     date: string | null;

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 
-class ArticleNotFoundError(LookupError):
+class SignalCandidateNotFoundError(LookupError):
     pass
 
 
@@ -60,7 +60,7 @@ def get_resource_content_item(
           wr.projection_error
         from web_resources wr
         join source_channels sc on sc.channel_id = wr.channel_id
-        join articles pa on pa.doc_id = wr.projected_article_id
+        join signal_candidates pa on pa.doc_id = wr.projected_signal_candidate_id
         join final_selection_results fsr on fsr.doc_id = pa.doc_id
         where wr.resource_id = %s
           and wr.resource_kind <> 'editorial'
@@ -84,9 +84,9 @@ def get_content_item(
     content_item_id: str,
     *,
     parse_content_item_id_func: Callable[[str], tuple[str, str]],
-    get_article_func: Callable[[str], dict[str, Any]],
+    get_signal_candidate_func: Callable[[str], dict[str, Any]],
     get_selected_content_item_preview_func: Callable[[str], dict[str, Any]],
-    build_editorial_content_item_preview_from_article_func: Callable[
+    build_editorial_content_item_preview_from_signal_candidate_func: Callable[
         [Mapping[str, Any]], dict[str, Any]
     ],
     get_resource_content_item_func: Callable[[str], dict[str, Any]],
@@ -94,22 +94,22 @@ def get_content_item(
     http_exception_type: type[Exception],
 ) -> dict[str, Any]:
     origin_type, origin_id = parse_content_item_id_func(content_item_id)
-    if origin_type == "editorial":
-        article = get_article_func(origin_id)
+    if origin_type == "signal_candidate":
+        signal_candidate = get_signal_candidate_func(origin_id)
         try:
             content_item = get_selected_content_item_preview_func(content_item_id)
         except http_exception_type as exc:
             if getattr(exc, "status_code", None) != 404:
                 raise
-            content_item = build_editorial_content_item_preview_from_article_func(article)
-        article.update(content_item)
-        article["summary"] = article.get("summary") or article.get("lead")
-        article["body_html"] = article.get("body_html") or article.get("full_content_html")
-        article["analysis_summary"] = load_content_analysis_summary_func(
-            subject_type="article",
+            content_item = build_editorial_content_item_preview_from_signal_candidate_func(signal_candidate)
+        signal_candidate.update(content_item)
+        signal_candidate["summary"] = signal_candidate.get("summary") or signal_candidate.get("lead")
+        signal_candidate["body_html"] = signal_candidate.get("body_html") or signal_candidate.get("full_content_html")
+        signal_candidate["analysis_summary"] = load_content_analysis_summary_func(
+            subject_type="signal_candidate",
             subject_id=origin_id,
         )
-        return article
+        return signal_candidate
     return get_resource_content_item_func(origin_id)
 
 
@@ -127,7 +127,7 @@ def get_content_item_explain(
 ) -> dict[str, Any]:
     origin_type, origin_id = parse_content_item_id_func(content_item_id)
     content_item = get_content_item_func(content_item_id)
-    if origin_type == "editorial":
+    if origin_type == "signal_candidate":
         final_selection = query_one_func(
             """
             select *
@@ -235,15 +235,15 @@ def get_content_item_explain(
     }
 
 
-def get_article(
+def get_signal_candidate(
     doc_id: str,
     *,
     query_one_func: Callable[[str, tuple[Any, ...]], dict[str, Any] | None],
     query_all_func: Callable[..., list[dict[str, Any]]],
-    apply_article_selection_payload_func: Callable[..., dict[str, Any]],
+    apply_signal_candidate_selection_payload_func: Callable[..., dict[str, Any]],
     load_content_analysis_summary_func: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
-    article = query_one_func(
+    signal_candidate = query_one_func(
         """
         select
           a.*,
@@ -290,8 +290,8 @@ def get_article(
             as final_selection_canonical_review_reused_count,
           coalesce((fsr.explain_json ->> 'canonicalSelectionReused')::boolean, false)
             as final_selection_canonical_selection_reused,
-          coalesce((fsr.explain_json ->> 'duplicateArticleCountForCanonical')::int, 0)
-            as final_selection_duplicate_article_count_for_canonical,
+          coalesce((fsr.explain_json ->> 'duplicateSignalCandidateCountForCanonical')::int, 0)
+            as final_selection_duplicate_signal_candidate_count_for_canonical,
           fsr.explain_json ->> 'selectionReuseSource' as final_selection_reuse_source,
           fsr.verification_target_type,
           fsr.verification_target_id::text as verification_target_id,
@@ -299,10 +299,10 @@ def get_article(
           coalesce(ars.dislike_count, 0) as dislike_count,
           sfr.decision as system_feed_decision,
           coalesce(sfr.eligible_for_feed, false) as system_feed_eligible
-        from articles a
+        from signal_candidates a
         join source_channels sc on sc.channel_id = a.channel_id
         left join document_observations obs
-          on obs.origin_type = 'article'
+          on obs.origin_type = 'signal_candidate'
          and obs.origin_id = a.doc_id
         left join final_selection_results fsr on fsr.doc_id = a.doc_id
         left join system_feed_results sfr on sfr.doc_id = a.doc_id
@@ -315,19 +315,19 @@ def get_article(
         left join verification_results vrc
           on vrc.target_type = 'canonical_document'
          and vrc.target_id = cd.canonical_document_id
-        left join article_media_assets pma on pma.asset_id = a.primary_media_asset_id
-        left join article_reaction_stats ars on ars.doc_id = a.doc_id
+        left join signal_candidate_media_assets pma on pma.asset_id = a.primary_media_asset_id
+        left join signal_candidate_reaction_stats ars on ars.doc_id = a.doc_id
         where a.doc_id = %s
         """,
         (doc_id,),
     )
-    if article is None:
-        raise ArticleNotFoundError
+    if signal_candidate is None:
+        raise SignalCandidateNotFoundError
 
-    article["media_assets"] = query_all_func(
+    signal_candidate["media_assets"] = query_all_func(
         """
         select *
-        from article_media_assets
+        from signal_candidate_media_assets
         where doc_id = %s
         order by sort_order, created_at
         """,
@@ -360,45 +360,45 @@ def get_article(
         """,
         (doc_id,),
     )
-    article = apply_article_selection_payload_func(
-        article,
+    signal_candidate = apply_signal_candidate_selection_payload_func(
+        signal_candidate,
         interest_filter_results=interest_filter_results,
         llm_reviews=llm_reviews,
         notifications=notifications,
     )
-    article["enrichment_debug"] = {
-        "state": article.get("enrichment_state"),
-        "enriched_at": article.get("enriched_at"),
-        "full_content_html": article.get("full_content_html"),
-        "extracted_description": article.get("extracted_description"),
-        "extracted_author": article.get("extracted_author"),
-        "extracted_ttr_seconds": article.get("extracted_ttr_seconds"),
-        "extracted_image_url": article.get("extracted_image_url"),
-        "extracted_favicon_url": article.get("extracted_favicon_url"),
-        "extracted_published_at": article.get("extracted_published_at"),
-        "extracted_source_name": article.get("extracted_source_name"),
-        "raw_payload_json": article.get("raw_payload_json"),
+    signal_candidate["enrichment_debug"] = {
+        "state": signal_candidate.get("enrichment_state"),
+        "enriched_at": signal_candidate.get("enriched_at"),
+        "full_content_html": signal_candidate.get("full_content_html"),
+        "extracted_description": signal_candidate.get("extracted_description"),
+        "extracted_author": signal_candidate.get("extracted_author"),
+        "extracted_ttr_seconds": signal_candidate.get("extracted_ttr_seconds"),
+        "extracted_image_url": signal_candidate.get("extracted_image_url"),
+        "extracted_favicon_url": signal_candidate.get("extracted_favicon_url"),
+        "extracted_published_at": signal_candidate.get("extracted_published_at"),
+        "extracted_source_name": signal_candidate.get("extracted_source_name"),
+        "raw_payload_json": signal_candidate.get("raw_payload_json"),
     }
-    article["analysis_summary"] = load_content_analysis_summary_func(
-        subject_type="article",
+    signal_candidate["analysis_summary"] = load_content_analysis_summary_func(
+        subject_type="signal_candidate",
         subject_id=doc_id,
     )
-    return article
+    return signal_candidate
 
 
-def get_article_explain(
+def get_signal_candidate_explain(
     doc_id: str,
     *,
-    get_article_func: Callable[[str], dict[str, Any]],
+    get_signal_candidate_func: Callable[[str], dict[str, Any]],
     query_one_func: Callable[[str, tuple[Any, ...]], dict[str, Any] | None],
     query_all_func: Callable[..., list[dict[str, Any]]],
     build_selection_explain_payload_func: Callable[..., dict[str, Any]],
     build_selection_diagnostics_payload_func: Callable[..., dict[str, Any]],
     build_selection_guidance_payload_func: Callable[..., dict[str, Any]],
 ) -> dict[str, Any]:
-    article = get_article_func(doc_id)
-    canonical_document_id = article.get("canonical_document_id")
-    story_cluster_id = article.get("story_cluster_id")
+    signal_candidate = get_signal_candidate_func(doc_id)
+    canonical_document_id = signal_candidate.get("canonical_document_id")
+    story_cluster_id = signal_candidate.get("story_cluster_id")
     verification_results: list[dict[str, Any]] = []
     if canonical_document_id:
         verification_results.extend(
@@ -488,12 +488,12 @@ def get_article_explain(
         (doc_id,),
     )
     selection_explain = build_selection_explain_payload_func(
-        selection_like=article,
+        selection_like=signal_candidate,
         final_selection_result=final_selection_result,
         system_feed_result=system_feed_result,
     )
     return {
-        "article": article,
+        "signal_candidate": signal_candidate,
         "criteria_matches": criteria_matches,
         "interest_matches": interest_matches,
         "interest_filter_results": interest_filter_results,

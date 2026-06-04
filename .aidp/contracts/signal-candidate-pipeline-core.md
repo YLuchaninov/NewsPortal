@@ -1,20 +1,20 @@
-# Контракт article pipeline core
+# Контракт signal_candidate pipeline core
 
-Этот contract обязателен, когда работа трогает ingest-to-selection pipeline: `article.ingest.requested`, `resource.ingest.requested`, observations, canonical documents, story clusters, verification, semantic filters, final selection, LLM review reuse or compatibility projections.
+Этот contract обязателен, когда работа трогает ingest-to-selection pipeline: `signal_candidate.ingest.requested`, `resource.ingest.requested`, observations, canonical documents, story clusters, verification, semantic filters, final selection, LLM review reuse or compatibility projections.
 
 Если работа добавляет persisted NER/entities, labels or post-selection content gates, также читай `.aidp/contracts/content-analysis-and-gating.md`.
 
 ## Назначение
 
-Защитить уже shipped article/selection pipeline от случайного дрейфа: ingest, canonicalization, verification, semantic filtering, final selection and compatibility projections должны оставаться разделенными слоями.
+Защитить уже shipped signal_candidate/selection pipeline от случайного дрейфа: ingest, canonicalization, verification, semantic filtering, final selection and compatibility projections должны оставаться разделенными слоями.
 
 ## Truth model
 
-- `services/fetchers` owns fetch/extract/enrichment handoff and raw/resource/article persistence.
-- Rendered article/resource HTML is untrusted provider content until passed through the shared server-side `@signalops/content-safety` sanitizer allowlist.
-- Public/admin article and resource detail pages must not use local regex sanitizers for persisted provider HTML; they should call `sanitizeHtmlFragment` from `@signalops/content-safety`. Inline admin SVG icons are trusted UI chrome only when sourced from static icon maps, not persisted/operator content.
+- `services/fetchers` owns fetch/extract/enrichment handoff and raw/resource/signal_candidate persistence.
+- Rendered signal_candidate/resource HTML is untrusted provider content until passed through the shared server-side `@signalops/content-safety` sanitizer allowlist.
+- Public/admin signal_candidate and resource detail pages must not use local regex sanitizers for persisted provider HTML; they should call `sanitizeHtmlFragment` from `@signalops/content-safety`. Inline admin SVG icons are trusted UI chrome only when sourced from static icon maps, not persisted/operator content.
 - `document_observations` are additive evidence and must not disappear because an early semantic gate rejects content.
-- `canonical_documents` are primary dedup/evidence units; duplicate article rows may exist and must preserve provenance.
+- `canonical_documents` are primary dedup/evidence units; duplicate signal_candidate rows may exist and must preserve provenance.
 - `verification_results` express corroboration/evidence quality and are not the same as semantic match.
 - `interest_filter_results` own technical/semantic filtering truth.
 - `final_selection_results` is primary internal selection truth.
@@ -25,7 +25,7 @@
 
 - Criterion-scope LLM review reuse key is `canonical_document_id + criterion_id`.
 - Duplicate rows of one canonical document must not trigger repeated LLM review for the same resolved criterion.
-- Canonical reuse must not erase article-level provenance.
+- Canonical reuse must not erase signal_candidate-level provenance.
 
 ## Инварианты
 

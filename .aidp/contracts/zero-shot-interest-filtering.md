@@ -25,14 +25,14 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 
 ## Responsibility boundaries
 
-- Fetchers persist raw observations/resources/articles and emit outbox.
+- Fetchers persist raw observations/resources/signal-candidates and emit outbox.
 - Workers own canonicalization, clustering, verification, filters, final selection and repair/backfill.
 - API/admin/web expose materialized truth and explainability; they must not silently recompute hidden selection ownership.
 - Discovery may acquire/register sources but does not own downstream selection truth.
 
 ## Compatibility rules
 
-- `articles` may remain storage/runtime compatibility surface but must not be the only semantic decision unit.
+- `signal_candidates` may remain storage/runtime compatibility surface but must not be the only semantic decision unit.
 - `system_feed_results` may remain fallback/read projection only while `final_selection_results` is absent for a row.
 - Public/domain meaning follows `.aidp/contracts/content-model.md`.
 
@@ -53,4 +53,4 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 
 ## Update triggers
 
-Update on changes to canonical document ownership, observation persistence, duplicate/story clustering, verification, semantic filtering, final selection, compatibility with `articles`/`system_feed_results`, or proof contour.
+Update on changes to canonical document ownership, observation persistence, duplicate/story clustering, verification, semantic filtering, final selection, compatibility with `signal_candidates`/`system_feed_results`, or proof contour.

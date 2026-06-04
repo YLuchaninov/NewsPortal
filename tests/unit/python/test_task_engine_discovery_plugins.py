@@ -233,13 +233,13 @@ class FakeContentSamplerAdapter:
         self,
         *,
         source_urls: list[str],
-        article_count: int,
+        signal_candidate_count: int,
         max_chars: int,
     ) -> list[dict[str, Any]]:
         return [
             {
                 "source_url": url,
-                "articles": [
+                "signal_candidates": [
                     {
                         "title": "Ukraine tech market expands",
                         "content": "Ukraine technology startups grow across Europe."[:max_chars],
@@ -248,7 +248,7 @@ class FakeContentSamplerAdapter:
                         "title": "Developers build AI tools",
                         "content": "Tech teams ship AI products for newsrooms."[:max_chars],
                     },
-                ][:article_count],
+                ][:signal_candidate_count],
             }
             for url in source_urls
         ]
@@ -286,13 +286,13 @@ class FakeWebsiteProbeAdapter:
                 "is_news_site": True,
                 "has_hidden_rss": True,
                 "hidden_rss_urls": [f"{url.rstrip('/')}/feed.xml"],
-                "article_count_estimate": 12,
+                "signal_candidate_count_estimate": 12,
                 "freshness": "recent",
                 "date_patterns_found": True,
                 "category_urls": [f"{url.rstrip('/')}/world"],
                 "browser_assisted_recommended": True,
                 "challenge_kind": None,
-                "sample_articles": [
+                "sample_signal_candidates": [
                     {"title": "Lead story", "url": f"{url.rstrip('/')}/lead"},
                     {"title": "Policy story", "url": f"{url.rstrip('/')}/policy"},
                 ][:sample_count],
@@ -319,11 +319,11 @@ class FakeLlmAnalyzerAdapter:
                 "model": model or "fake-llm",
             }
         if task == "extract_topics":
-            articles = payload if isinstance(payload, list) else []
+            signal_candidates = payload if isinstance(payload, list) else []
             return {
-                article["doc_id"]: {"topics": ["tech", "ukraine"]}
-                for article in articles
-                if isinstance(article, dict) and "doc_id" in article
+                signal_candidate["doc_id"]: {"topics": ["tech", "ukraine"]}
+                for signal_candidate in signal_candidates
+                if isinstance(signal_candidate, dict) and "doc_id" in signal_candidate
             }
         return {"prompt": prompt, "task": task, "temperature": temperature}
 
@@ -365,8 +365,8 @@ class FakeDbStoreAdapter:
         return {"record_key": record_key, "namespace": namespace, "size": size}
 
 
-class FakeArticleLoaderAdapter:
-    def load_articles(
+class FakeSignalCandidateLoaderAdapter:
+    def load_signal_candidates(
         self,
         *,
         filters: dict[str, Any],
@@ -379,25 +379,25 @@ class FakeArticleLoaderAdapter:
         ][:limit]
 
 
-class FakeArticleEnricherAdapter:
-    def enrich_articles(
+class FakeSignalCandidateEnricherAdapter:
+    def enrich_signal_candidates(
         self,
         *,
-        articles: list[dict[str, Any]],
+        signal_candidates: list[dict[str, Any]],
         enrichment: Any,
         mode: str,
         target_field: str | None,
     ) -> dict[str, Any]:
         field_name = target_field or "enrichment"
-        enriched_articles = []
+        enriched_signal_candidates = []
         annotations = enrichment if isinstance(enrichment, dict) else {}
-        for article in articles:
-            article_copy = dict(article)
-            article_copy[field_name] = annotations.get(article["doc_id"], {})
-            enriched_articles.append(article_copy)
+        for signal_candidate in signal_candidates:
+            signal_candidate_copy = dict(signal_candidate)
+            signal_candidate_copy[field_name] = annotations.get(signal_candidate["doc_id"], {})
+            enriched_signal_candidates.append(signal_candidate_copy)
         return {
-            "articles": enriched_articles,
-            "enriched_count": len(enriched_articles),
+            "signal_candidates": enriched_signal_candidates,
+            "enriched_count": len(enriched_signal_candidates),
             "mode": mode,
         }
 
@@ -412,8 +412,8 @@ class FakeDiscoveryRuntime:
         self.llm_analyzer = FakeLlmAnalyzerAdapter()
         self.source_registrar = FakeSourceRegistrarAdapter()
         self.db_store = FakeDbStoreAdapter()
-        self.article_loader = FakeArticleLoaderAdapter()
-        self.article_enricher = FakeArticleEnricherAdapter()
+        self.signal_candidate_loader = FakeSignalCandidateLoaderAdapter()
+        self.signal_candidate_enricher = FakeSignalCandidateEnricherAdapter()
 
 
 class _FakeDdgsClient:
@@ -717,13 +717,13 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
                 "sampled_content": [
                     {
                         "source_url": "https://feeds.example.com/ukraine-tech.xml",
-                        "articles": [
+                        "signal_candidates": [
                             {"title": "Ukraine tech market expands", "content": "Tech startups win"},
                         ],
                     },
                     {
                         "source_url": "https://feeds.example.com/sports.xml",
-                        "articles": [
+                        "signal_candidates": [
                             {"title": "Sports update", "content": "Football and tennis"},
                         ],
                     },
@@ -771,7 +771,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
                 {
                     "key": "sample",
                     "module": "discovery.content_sampler",
-                    "options": {"article_count": 2},
+                    "options": {"signal_candidate_count": 2},
                 },
                 {
                     "key": "score",
@@ -827,7 +827,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
             task_graph=[
                 {
                     "key": "load",
-                    "module": "enrichment.article_loader",
+                    "module": "enrichment.signal_candidate_loader",
                     "options": {"filters": {"lang": "en"}, "limit": 2},
                 },
                 {
@@ -835,13 +835,13 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
                     "module": "discovery.llm_analyzer",
                     "options": {
                         "task": "extract_topics",
-                        "payload_field": "articles",
+                        "payload_field": "signal_candidates",
                         "output_field": "topic_annotations",
                     },
                 },
                 {
                     "key": "enrich",
-                    "module": "enrichment.article_enricher",
+                    "module": "enrichment.signal_candidate_enricher",
                     "options": {
                         "enrichment_field": "topic_annotations",
                         "target_field": "topics",
@@ -860,8 +860,8 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(repository.runs["run-1"].context_json["enriched_count"], 2)
-        enriched_articles = repository.runs["run-1"].context_json["articles"]
-        self.assertEqual(enriched_articles[0]["topics"]["topics"], ["tech", "ukraine"])
+        enriched_signal_candidates = repository.runs["run-1"].context_json["signal_candidates"]
+        self.assertEqual(enriched_signal_candidates[0]["topics"]["topics"], ["tech", "ukraine"])
         self.assertEqual(repository.task_runs[-1]["status"], "completed")
 
     def _build_executor(

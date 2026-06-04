@@ -22,9 +22,9 @@ def _legacy_worker_main() -> Any:
     return legacy_main
 
 
-def _collect_article_shape_veto_reasons(article: Mapping[str, Any]) -> set[str]:
-    title = str(article.get("title") or "").strip().lower()
-    url = str(article.get("url") or article.get("source_url") or "").strip().lower()
+def _collect_signal_candidate_shape_veto_reasons(signal_candidate: Mapping[str, Any]) -> set[str]:
+    title = str(signal_candidate.get("title") or "").strip().lower()
+    url = str(signal_candidate.get("url") or signal_candidate.get("source_url") or "").strip().lower()
     reasons: set[str] = set()
 
     if "github.com/" in url and (
@@ -59,18 +59,18 @@ async def upsert_system_feed_result(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: str | uuid.UUID,
     *,
-    fetch_article_for_update_func: AsyncFunc | None = None,
+    fetch_signal_candidate_for_update_func: AsyncFunc | None = None,
     upsert_final_selection_result_func: AsyncFunc | None = None,
     fetch_system_feed_result_row_func: AsyncFunc | None = None,
 ) -> dict[str, Any]:
     if (
-        fetch_article_for_update_func is None
+        fetch_signal_candidate_for_update_func is None
         or upsert_final_selection_result_func is None
         or fetch_system_feed_result_row_func is None
     ):
         legacy_main = _legacy_worker_main()
-        fetch_article_for_update_func = (
-            fetch_article_for_update_func or legacy_main.fetch_article_for_update
+        fetch_signal_candidate_for_update_func = (
+            fetch_signal_candidate_for_update_func or legacy_main.fetch_signal_candidate_for_update
         )
         upsert_final_selection_result_func = (
             upsert_final_selection_result_func
@@ -81,10 +81,10 @@ async def upsert_system_feed_result(
             or legacy_main.fetch_system_feed_result_row
         )
 
-    article = await fetch_article_for_update_func(cursor, doc_id)
+    signal_candidate = await fetch_signal_candidate_for_update_func(cursor, doc_id)
     final_selection_result = await upsert_final_selection_result_func(
         cursor,
-        article=article,
+        signal_candidate=signal_candidate,
     )
     previous_result = await fetch_system_feed_result_row_func(cursor, doc_id)
     total_criteria_count = int(final_selection_result["totalFilterCount"])
@@ -197,20 +197,20 @@ async def find_reusable_criterion_llm_review(
         select
           lrl.review_id::text as review_id,
           lrl.doc_id::text as reviewed_doc_id,
-          reviewed_article.canonical_doc_id::text as reviewed_canonical_document_id,
+          reviewed_signal_candidate.canonical_doc_id::text as reviewed_canonical_document_id,
           lrl.decision as provider_decision,
           lrl.score,
           lrl.prompt_template_id::text as prompt_template_id,
           lrl.prompt_version,
           lrl.created_at
         from llm_review_log lrl
-        join articles reviewed_article on reviewed_article.doc_id = lrl.doc_id
+        join signal_candidates reviewed_signal_candidate on reviewed_signal_candidate.doc_id = lrl.doc_id
         where lrl.scope = 'criterion'
           and lrl.target_id = %s
           and (%s::uuid is null or lrl.prompt_template_id = %s::uuid)
           and (%s::integer is null or lrl.prompt_version = %s::integer)
           and (
-            (%s::uuid is not null and reviewed_article.canonical_doc_id = %s::uuid)
+            (%s::uuid is not null and reviewed_signal_candidate.canonical_doc_id = %s::uuid)
             or (%s::uuid is null and lrl.doc_id = %s)
           )
         order by lrl.created_at desc
@@ -243,7 +243,7 @@ def resolve_criterion_review_final_decision(provider_decision: str | None) -> st
 async def persist_criterion_review_resolution(
     cursor: psycopg.AsyncCursor[Any],
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     criterion_id: str | uuid.UUID,
     review_context: Mapping[str, Any],
     provider_decision: str,
@@ -342,13 +342,13 @@ async def persist_criterion_review_resolution(
                     "runtimeReviewState": base_explain["runtimeReviewState"],
                 }
             ),
-            article["doc_id"],
+            signal_candidate["doc_id"],
             criterion_id,
         ),
     )
     filter_context = await resolve_interest_filter_context_func(
         cursor,
-        article=article,
+        signal_candidate=signal_candidate,
         prefer_story_cluster=False,
     )
     technical_filter_state, semantic_decision = resolve_criterion_filter_outcome_func(
@@ -358,7 +358,7 @@ async def persist_criterion_review_resolution(
     await upsert_interest_filter_result_func(
         cursor,
         filter_scope="system_criterion",
-        doc_id=uuid.UUID(str(article["doc_id"])),
+        doc_id=uuid.UUID(str(signal_candidate["doc_id"])),
         canonical_document_id=filter_context["canonicalDocumentId"],
         story_cluster_id=filter_context["storyClusterId"],
         user_id=None,
@@ -384,7 +384,7 @@ async def persist_criterion_review_resolution(
     if refresh_selection_gate:
         system_feed_result = await upsert_system_feed_result_func(
             cursor,
-            article["doc_id"],
+            signal_candidate["doc_id"],
         )
         if (
             should_dispatch_clustering_func(system_feed_result)
@@ -394,10 +394,10 @@ async def persist_criterion_review_resolution(
             legacy_main = _legacy_worker_main()
             await insert_outbox_event_func(
                 cursor,
-                legacy_main.ARTICLE_CRITERIA_MATCHED_EVENT,
-                "article",
-                article["doc_id"],
-                {"docId": str(article["doc_id"]), "version": 1},
+                legacy_main.SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+                "signal_candidate",
+                signal_candidate["doc_id"],
+                {"docId": str(signal_candidate["doc_id"]), "version": 1},
             )
     return {
         "finalDecision": final_decision,
@@ -410,7 +410,7 @@ async def persist_criterion_review_resolution(
 async def upsert_final_selection_result(
     cursor: psycopg.AsyncCursor[Any],
     *,
-    article: Mapping[str, Any],
+    signal_candidate: Mapping[str, Any],
     fetch_final_selection_result_row_func: AsyncFunc | None = None,
     resolve_interest_filter_context_func: AsyncFunc | None = None,
 ) -> dict[str, Any]:
@@ -428,11 +428,11 @@ async def upsert_final_selection_result(
             or legacy_main.resolve_interest_filter_context
         )
 
-    doc_id = uuid.UUID(str(article["doc_id"]))
+    doc_id = uuid.UUID(str(signal_candidate["doc_id"]))
     previous_result = await fetch_final_selection_result_row_func(cursor, doc_id)
     selection_context = await resolve_interest_filter_context_func(
         cursor,
-        article=article,
+        signal_candidate=signal_candidate,
         prefer_story_cluster=True,
     )
     await cursor.execute(
@@ -522,7 +522,7 @@ async def upsert_final_selection_result(
             if not reason:
                 continue
             filter_reason_counts[reason] = filter_reason_counts.get(reason, 0) + 1
-    for reason in _collect_article_shape_veto_reasons(article):
+    for reason in _collect_signal_candidate_shape_veto_reasons(signal_candidate):
         filter_reason_counts[reason] = max(
             filter_reason_counts.get(reason, 0),
             int(counts.get("total_filter_count") or 0),
@@ -530,19 +530,19 @@ async def upsert_final_selection_result(
     candidate_signal_tier, candidate_signal_tier_counts = build_candidate_signal_tier_summary(
         counts
     )
-    duplicate_article_count = 1
+    duplicate_signal_candidate_count = 1
     if selection_context.get("canonicalDocumentId") is not None:
         await cursor.execute(
             """
-            select count(*)::int as duplicate_article_count
-            from articles
+            select count(*)::int as duplicate_signal_candidate_count
+            from signal_candidates
             where canonical_doc_id = %s
             """,
             (selection_context["canonicalDocumentId"],),
         )
         duplicate_row = await cursor.fetchone() or {}
-        duplicate_article_count = max(
-            int(duplicate_row.get("duplicate_article_count") or 0),
+        duplicate_signal_candidate_count = max(
+            int(duplicate_row.get("duplicate_signal_candidate_count") or 0),
             1,
         )
     summary = summarize_final_selection_result(
@@ -587,14 +587,14 @@ async def upsert_final_selection_result(
     explain_json["canonicalReviewReusedCount"] = int(
         counts.get("canonical_review_reused_count") or 0
     )
-    explain_json["duplicateArticleCountForCanonical"] = duplicate_article_count
+    explain_json["duplicateSignalCandidateCountForCanonical"] = duplicate_signal_candidate_count
     explain_json["canonicalSelectionReused"] = bool(
-        duplicate_article_count > 1 and bool(summary["isSelected"])
+        duplicate_signal_candidate_count > 1 and bool(summary["isSelected"])
     )
     explain_json["selectionReuseSource"] = (
         "canonical_reused"
-        if duplicate_article_count > 1 and bool(summary["isSelected"])
-        else "article_level"
+        if duplicate_signal_candidate_count > 1 and bool(summary["isSelected"])
+        else "signal_candidate_level"
     )
     explain_json["canonicalDocumentId"] = (
         None
@@ -705,9 +705,9 @@ async def upsert_final_selection_result(
         "canonicalReviewReusedCount": int(
             counts.get("canonical_review_reused_count") or 0
         ),
-        "duplicateArticleCountForCanonical": duplicate_article_count,
+        "duplicateSignalCandidateCountForCanonical": duplicate_signal_candidate_count,
         "canonicalSelectionReused": bool(
-            duplicate_article_count > 1 and bool(summary["isSelected"])
+            duplicate_signal_candidate_count > 1 and bool(summary["isSelected"])
         ),
         "technicalFilteredOutCount": int(counts.get("technical_filtered_out_count") or 0),
         "previousDecision": (

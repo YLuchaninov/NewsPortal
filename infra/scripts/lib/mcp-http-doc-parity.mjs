@@ -12,9 +12,9 @@ export const DOC_PARITY_CLASSIFICATIONS = [
 
 export const EXPECTED_SHIPPED_NOT_YET_EXERCISED = {
   tools: [
-    "articles.holds.explain",
-    "articles.holds.list",
-    "articles.holds.summary",
+    "signal_candidates.holds.explain",
+    "signal_candidates.holds.list",
+    "signal_candidates.holds.summary",
     "channels.alternatives.plan",
     "channels.alternatives.start",
     "channels.bottlenecks.explain",

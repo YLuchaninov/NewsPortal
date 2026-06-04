@@ -103,7 +103,7 @@ CHANNEL_LIST_SELECT = """
             coalesce(
               (
                 select count(*)::int
-                from articles a
+                from signal_candidates a
                 where a.channel_id = sc.channel_id
               ),
               0
@@ -114,7 +114,7 @@ CHANNEL_LIST_SELECT = """
                 select count(*)::int
                 from web_resources wr
                 where wr.channel_id = sc.channel_id
-                  and wr.projected_article_id is null
+                  and wr.projected_signal_candidate_id is null
               ),
               0
             )
@@ -185,7 +185,7 @@ CHANNEL_GET_SELECT = """
             coalesce(
               (
                 select count(*)::int
-                from articles a
+                from signal_candidates a
                 where a.channel_id = sc.channel_id
               ),
               0
@@ -196,7 +196,7 @@ CHANNEL_GET_SELECT = """
                 select count(*)::int
                 from web_resources wr
                 where wr.channel_id = sc.channel_id
-                  and wr.projected_article_id is null
+                  and wr.projected_signal_candidate_id is null
               ),
               0
             )

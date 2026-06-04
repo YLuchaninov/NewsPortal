@@ -46,12 +46,12 @@ class FetchersContentSamplerAdapterTests(unittest.TestCase):
             website_probe=website_probe,
         ).sample_content(
             source_urls=["https://example.com/feed.xml"],
-            article_count=1,
+            signal_candidate_count=1,
             max_chars=20,
         )
 
-        self.assertEqual(result[0]["articles"][0]["title"], "Feed Story")
-        self.assertEqual(result[0]["articles"][0]["content"], "Feed summary")
+        self.assertEqual(result[0]["signal_candidates"][0]["title"], "Feed Story")
+        self.assertEqual(result[0]["signal_candidates"][0]["content"], "Feed summary")
         self.assertEqual(len(website_probe.calls), 0)
 
     def test_sample_content_falls_back_to_fetchers_website_probe_without_direct_http(self) -> None:
@@ -61,7 +61,7 @@ class FetchersContentSamplerAdapterTests(unittest.TestCase):
                 {
                     "title": "Example Site",
                     "final_url": "https://example.com/",
-                    "sample_articles": [
+                    "sample_signal_candidates": [
                         {
                             "title": "Website Story",
                             "url": "https://example.com/story",
@@ -76,10 +76,10 @@ class FetchersContentSamplerAdapterTests(unittest.TestCase):
             website_probe=website_probe,
         ).sample_content(
             source_urls=["https://example.com/"],
-            article_count=1,
+            signal_candidate_count=1,
             max_chars=20,
         )
 
-        self.assertEqual(result[0]["articles"][0]["title"], "Website Story")
-        self.assertEqual(result[0]["articles"][0]["url"], "https://example.com/story")
+        self.assertEqual(result[0]["signal_candidates"][0]["title"], "Website Story")
+        self.assertEqual(result[0]["signal_candidates"][0]["url"], "https://example.com/story")
         self.assertEqual(website_probe.calls[0]["urls"], ["https://example.com/"])

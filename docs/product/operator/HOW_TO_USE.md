@@ -16,7 +16,7 @@ Channels -> Fetchers -> PostgreSQL -> Relay/Queue -> Workers -> PostgreSQL -> Ad
 
 - база — место бизнес-правды;
 - очереди только двигают работу;
-- website resources видны отдельно от articles;
+- website resources видны отдельно от signal_candidates;
 - сначала работает system selection, потом user personalization;
 - LLM используется только для разрешенных серых зон;
 - discovery выключен по умолчанию и требует явного включения.
@@ -43,7 +43,7 @@ Dashboard нужен для первого ответа на вопрос “с�
 - есть ли overdue channels;
 - есть ли fetch failures;
 - сколько LLM reviews было за 24 часа;
-- появились ли новые articles/resources;
+- появились ли новые signal_candidates/resources;
 - есть ли surfaces, требующие внимания.
 
 Если dashboard пустой после старта, сначала проверьте channels и fetch history, а не rules.
@@ -74,12 +74,12 @@ Channels — это вход в систему.
 
 - channel появляется в списке;
 - fetch run появляется после poll;
-- для RSS проверяйте `Articles`;
-- для website проверяйте и `Resources`, и `Articles`.
+- для RSS проверяйте `Signal Candidates`;
+- для website проверяйте и `Resources`, и `Signal Candidates`.
 
 ### Website sources
 
-Website source не обязан сразу давать article.
+Website source не обязан сразу давать signal_candidate.
 
 Правильный порядок проверки:
 
@@ -87,7 +87,7 @@ Website source не обязан сразу давать article.
 2. Дождитесь poll или запустите проверочный flow.
 3. Откройте `Resources`.
 4. Посмотрите resource status, provenance, enrichment/projection state.
-5. Только затем проверяйте, появились ли articles.
+5. Только затем проверяйте, появились ли signal_candidates.
 
 Browser assistance включайте только для публичных JS-heavy страниц, где static path не находит реальные resources. Login/CAPTCHA/manual challenge bypass не поддерживаются.
 
@@ -106,7 +106,7 @@ Browser assistance включайте только для публичных JS-
 - `/admin/ingress-adapters` показывает builtin и declarative adapters;
 - channel binding выбирает конкретный `adapter_key`;
 - legacy RSS `adapterStrategy` или API `adapterKey` в старом JSON — только diagnostic history;
-- dry-run preview не должен писать `articles`, `web_resources`, cursors, outbox events or fetch runs.
+- dry-run preview не должен писать `signal_candidates`, `web_resources`, cursors, outbox events or fetch runs.
 
 Custom declarative adapters должны оставаться bounded: JSON/NDJSON, GET или static non-secret JSON POST, selectors/mappings, max items and bounded pagination.
 
@@ -130,9 +130,9 @@ Rules отвечают за system selection.
 
 Scope `interests` не является обязательным baseline для LLM review. Не делайте его hot path без отдельного решения.
 
-## Articles, Resources and Clusters
+## Signal Candidates, Resources and Clusters
 
-`Articles` показывают editorial/content items.
+`Signal Candidates` показывают editorial/content items.
 
 `Resources` показывают website-level truth: найденные страницы, документы, newsroom entries, downloads and projection state.
 
@@ -141,7 +141,7 @@ Scope `interests` не является обязательным baseline для
 Если материал “пропал”, проверьте по порядку:
 
 1. channel fetch history;
-2. resource/article row;
+2. resource/signal_candidate row;
 3. dedup state;
 4. cluster/verification state;
 5. selection diagnostics;
@@ -175,7 +175,7 @@ Sequence runtime показывает multi-step work как visible runs and ta
 Observability должна отвечать на вопросы:
 
 - какие источники ломаются;
-- что произошло с конкретным channel/resource/article;
+- что произошло с конкретным channel/resource/signal_candidate;
 - сколько стоит LLM/discovery;
 - что можно retry;
 - какие errors являются upstream residuals, а какие regression.
@@ -208,10 +208,10 @@ MCP service нужен для operator tooling. Он не заменяет admin
 1. Поднять stack по [Manual MVP Runbook](./manual-mvp-runbook.md).
 2. Убедиться, что `/admin` открывается.
 3. Создать или импортировать RSS channel.
-4. Дождаться article flow.
+4. Дождаться signal_candidate flow.
 5. Создать system interests.
 6. Запустить reindex/backfill при необходимости.
-7. Проверить Articles, Clusters, Observability.
+7. Проверить Signal Candidates, Clusters, Observability.
 8. Добавить website channel и проверить Resources.
 9. Только после этого включать discovery или live provider paths.
 

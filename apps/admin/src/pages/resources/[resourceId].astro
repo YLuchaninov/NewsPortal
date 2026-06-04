@@ -92,8 +92,8 @@ function selectionBadgeClass(modeLike: unknown): string {
 }
 
 const sourceHref = resolveSafeHref(resource.final_url ?? resource.url);
-const projectedArticleHref = resource.projected_article_id
-  ? appPath(`/articles/${encodeURIComponent(String(resource.projected_article_id))}`)
+const projectedSignalCandidateHref = resource.projected_signal_candidate_id
+  ? appPath(`/signal-candidates/${encodeURIComponent(String(resource.projected_signal_candidate_id))}`)
   : null;
 const resourceHtml = sanitizeHtmlFragment(resource.body_html ?? null, { baseUrl: sourceHref });
 const documents = toArray<Record<string, unknown>>(resource.documents_json);
@@ -146,12 +146,12 @@ const analysisFilter =
   </Fragment>
 
   <Fragment slot="header-actions">
-    {projectedArticleHref && (
+    {projectedSignalCandidateHref && (
       <a
-        href={projectedArticleHref}
+        href={projectedSignalCandidateHref}
         class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium transition-colors hover:bg-accent"
       >
-        Open projected article
+        Open projected signal_candidate
       </a>
     )}
     {sourceHref && (
@@ -213,12 +213,12 @@ const analysisFilter =
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
           <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Projection</p>
           <p class="mt-2 font-medium">
-            {resource.projected_article_id ? "Projected into article" : "Diagnostics only"}
+            {resource.projected_signal_candidate_id ? "Projected into signal candidate" : "Diagnostics only"}
           </p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {resource.projected_article_title
-              ? String(resource.projected_article_title)
-              : projectionError || "Not projected to an article yet."}
+            {resource.projected_signal_candidate_title
+              ? String(resource.projected_signal_candidate_title)
+              : projectionError || "Not projected to a signal candidate yet."}
           </p>
         </div>
         <div class={ADMIN_BACKGROUND_TILE_CLASS}>
@@ -281,7 +281,7 @@ const analysisFilter =
           <div class="mb-4">
             <h2 class="text-base font-semibold">Selection diagnostics</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-              Server-owned selection summary for this resource or its projected article.
+              Server-owned selection summary for this resource or its projected signal_candidate.
             </p>
           </div>
           <dl class="grid gap-3 text-sm">
