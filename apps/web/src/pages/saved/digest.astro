@@ -19,7 +19,7 @@ if (!session) {
 
 const flash = readFlash(Astro.url);
 const itemIds = parseSelectedDigestItemIds(Astro.url.searchParams);
-const digestSelection = await loadSavedDigestSelection(getPool(), session.userId, itemIds);
+const digestSelection = await loadSavedDigestSelection(getPool(), session.userId, itemIds, Astro.request);
 const selectedItemIds = digestSelection.itemIds;
 const selectedItems: ContentItemDetail[] = digestSelection.items;
 if (selectedItems.length === 0) {

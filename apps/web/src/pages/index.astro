@@ -3,10 +3,8 @@ import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@signalops/config";
 import {
   DEFAULT_PAGE,
   type ContentItemPreview,
-  type PaginatedResponse,
   type WebContentListSort,
 } from "@signalops/contracts";
-import { createSignalOpsSdk } from "@signalops/sdk";
 import { PaginationNav } from "@signalops/ui";
 import { buildLiveRevision } from "../lib/live-updates";
 import Shell from "../layouts/Shell.astro";
@@ -15,6 +13,8 @@ import { LiveSurfaceSummary } from "../components/LiveSurfaceSummary";
 import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
+import { loadPublicRedactedSignals } from "../lib/server/public-redacted-content";
+import { createWebServerSdk } from "../lib/server/sdk";
 import { getUserContentStateMap } from "../lib/server/user-content-state";
 import { WEB_CARD_GRID_PAGE_SIZE, createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
@@ -32,10 +32,8 @@ function isWebContentListSort(value: string | null): value is WebContentListSort
 
 const session = await resolveWebSession(Astro.request);
 const flash = readFlash(Astro.url);
-const sdk = createSignalOpsSdk({
-  baseUrl: readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" }).apiBaseUrl,
-  fetchImpl: fetch,
-});
+const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
+const sdk = createWebServerSdk(Astro.request);
 
 const pageBaseUrl = new URL(Astro.url);
 if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";
@@ -45,6 +43,7 @@ function resolvePageAppPath(t: string) {
 
 const bffPaths = {
   authBootstrap: resolvePageAppPath("bff/auth/bootstrap"),
+  authGoogle: resolvePageAppPath("bff/auth/google"),
   authLogout: resolvePageAppPath("bff/auth/logout"),
   liveUpdates: resolvePageAppPath("bff/live-updates"),
   preferences: resolvePageAppPath("bff/preferences"),
@@ -60,16 +59,22 @@ const selectedSort: WebContentListSort = isWebContentListSort(requestedSort)
   ? requestedSort
   : "latest";
 const hasActiveFilters = searchQuery.length > 0 || selectedSort !== "latest";
-const collection: PaginatedResponse<ContentItemPreview> =
-  await sdk.listSystemSelectedContentItems<ContentItemPreview>({
-    page,
-    pageSize: WEB_CARD_GRID_PAGE_SIZE,
-    sort: selectedSort,
-    q: searchQuery || undefined,
-  });
-const contentItems = collection.items;
+const signedInCollection = session
+  ? await sdk.listSystemSelectedContentItems<ContentItemPreview>({
+      page,
+      pageSize: WEB_CARD_GRID_PAGE_SIZE,
+      sort: selectedSort,
+      q: searchQuery || undefined,
+    })
+  : null;
+const publicCollection = session ? null : await loadPublicRedactedSignals(WEB_CARD_GRID_PAGE_SIZE);
+const contentItems = signedInCollection?.items ?? [];
+const redactedItems = publicCollection?.items ?? [];
+const collectionTotal = signedInCollection?.total ?? publicCollection?.total ?? 0;
+const collectionPage = signedInCollection?.page ?? DEFAULT_PAGE;
+const collectionTotalPages = signedInCollection?.totalPages ?? 1;
 const feedRevision = buildLiveRevision([
-  collection.total,
+  collectionTotal,
   contentItems[0]?.content_item_id,
   contentItems[0]?.published_at ?? contentItems[0]?.ingested_at,
 ]);
@@ -102,6 +107,8 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
   bffPreferencesPath={bffPaths.preferences}
   bffLogoutPath={bffPaths.authLogout}
   bffBootstrapPath={bffPaths.authBootstrap}
+  bffGoogleAuthPath={bffPaths.authGoogle}
+  googleClientId={runtimeConfig.webGoogleClientId}
 >
   <!-- Page header -->
   <div class="mb-8">
@@ -110,10 +117,10 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
     {session ? (
       <LiveSurfaceSummary
         surface="feed"
-        initialCount={collection.total}
+        initialCount={collectionTotal}
         initialRevision={feedRevision}
-        page={collection.page}
-        totalPages={collection.totalPages}
+        page={collectionPage}
+        totalPages={collectionTotalPages}
         singularLabel="content item"
         pluralLabel="content items"
         suffix=" in the system-selected collection"
@@ -122,55 +129,56 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
       />
     ) : (
       <p class="text-xs text-muted-foreground mt-3">
-        {collection.total} content item{collection.total !== 1 ? "s" : ""} in the system-selected collection
-        {contentItems.length > 0 && ` — page ${collection.page} of ${Math.max(collection.totalPages, 1)}`}
+        {collectionTotal} signal{collectionTotal !== 1 ? "s" : ""} in the system
       </p>
     )}
   </div>
 
-  <form method="get" action={Astro.url.pathname} class="mb-8 rounded-xl border border-border bg-card p-4 shadow-sm">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
-      <div class="flex-1">
-        <label for="feed-search" class="mb-1 block text-sm font-medium text-foreground">Search</label>
-        <input
-          id="feed-search"
-          type="search"
-          name="q"
-          value={searchQuery}
-          placeholder="Search title or text"
-          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        />
+  {session && (
+    <form method="get" action={Astro.url.pathname} class="mb-8 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div class="flex-1">
+          <label for="feed-search" class="mb-1 block text-sm font-medium text-foreground">Search</label>
+          <input
+            id="feed-search"
+            type="search"
+            name="q"
+            value={searchQuery}
+            placeholder="Search title or text"
+            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+        <div class="w-full lg:w-56">
+          <label for="feed-sort" class="mb-1 block text-sm font-medium text-foreground">Sort</label>
+          <select
+            id="feed-sort"
+            name="sort"
+            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            {WEB_CONTENT_SORT_OPTIONS.map((option) => (
+              <option value={option.value} selected={option.value === selectedSort}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+        <div class="flex gap-2 lg:pb-0">
+          <button
+            type="submit"
+            class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Apply
+          </button>
+          <a
+            href={clearFiltersHref}
+            class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            Clear filters
+          </a>
+        </div>
       </div>
-      <div class="w-full lg:w-56">
-        <label for="feed-sort" class="mb-1 block text-sm font-medium text-foreground">Sort</label>
-        <select
-          id="feed-sort"
-          name="sort"
-          class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          {WEB_CONTENT_SORT_OPTIONS.map((option) => (
-            <option value={option.value} selected={option.value === selectedSort}>{option.label}</option>
-          ))}
-        </select>
-      </div>
-      <div class="flex gap-2 lg:pb-0">
-        <button
-          type="submit"
-          class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Apply
-        </button>
-        <a
-          href={clearFiltersHref}
-          class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          Clear filters
-        </a>
-      </div>
-    </div>
-  </form>
+    </form>
+  )}
 
-  {contentItems.length === 0 ? (
+  {(session ? contentItems.length : redactedItems.length) === 0 ? (
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
@@ -184,7 +192,7 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
           : "Content will appear here once active system interests allow it into the global collection."}
       </p>
     </div>
-  ) : (
+  ) : session ? (
     <>
       <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {contentItems.map((contentItem) => (
@@ -198,17 +206,48 @@ const resolvePageHref = createPageHrefResolver(Astro.url, DEFAULT_PAGE);
           />
         ))}
       </div>
-      {(collection.hasPrev || collection.hasNext) && (
+      {signedInCollection && (signedInCollection.hasPrev || signedInCollection.hasNext) && (
         <PaginationNav
           className="mt-8"
-          page={collection.page}
-          totalPages={collection.totalPages}
-          hasPrev={collection.hasPrev}
-          hasNext={collection.hasNext}
-          prevHref={resolvePageHref(collection.page - 1)}
-          nextHref={resolvePageHref(collection.page + 1)}
+          page={signedInCollection.page}
+          totalPages={signedInCollection.totalPages}
+          hasPrev={signedInCollection.hasPrev}
+          hasNext={signedInCollection.hasNext}
+          prevHref={resolvePageHref(signedInCollection.page - 1)}
+          nextHref={resolvePageHref(signedInCollection.page + 1)}
         />
       )}
     </>
+  ) : (
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {redactedItems.map((item) => (
+        <article class="flex min-h-56 flex-col rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div class="mb-5 flex items-center justify-between">
+            <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+              Signal {item.index}
+            </span>
+            {item.lang && (
+              <span class="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                {item.lang.toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div class="flex flex-1 flex-col justify-between gap-6">
+            <div class="space-y-3">
+              <p class="text-sm font-medium text-muted-foreground">Redacted signal card</p>
+              <h2 class="text-xl font-semibold leading-snug text-foreground">
+                Verified signal details are available after Google sign-in
+              </h2>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span class="rounded-full bg-background px-2.5 py-1">{item.contentKind}</span>
+              {item.publishedBucket && (
+                <span class="rounded-full bg-background px-2.5 py-1">{item.publishedBucket}</span>
+              )}
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
   )}
 </Shell>

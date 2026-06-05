@@ -1,6 +1,4 @@
 import { DEFAULT_PAGE } from "@signalops/contracts";
-import { readRuntimeConfig } from "@signalops/config";
-import { createSignalOpsSdk } from "@signalops/sdk";
 
 import {
   buildLiveRevision,
@@ -8,6 +6,7 @@ import {
   type LiveUpdatesSnapshot,
 } from "../live-updates";
 import { queryOne, queryRows } from "./db";
+import { createWebServerSdk } from "./sdk";
 
 type ApiListRow = Record<string, unknown>;
 type InterestAggregateRow = {
@@ -95,15 +94,10 @@ function parseRepairJob(row: RepairJobRow): LiveRepairJobSnapshot {
 }
 
 export async function loadLiveUpdatesSnapshot(
-  userId: string
+  userId: string,
+  request?: Request | null
 ): Promise<LiveUpdatesSnapshot> {
-  const runtimeConfig = readRuntimeConfig(process.env, {
-    defaultAppBaseUrl: "http://127.0.0.1:4321/",
-  });
-  const sdk = createSignalOpsSdk({
-    baseUrl: runtimeConfig.apiBaseUrl,
-    fetchImpl: fetch,
-  });
+  const sdk = createWebServerSdk(request);
 
   const [feedPage, matchesPage, notificationsPage, interestAggregate, profileRow, channelAggregate, repairRows] =
     await Promise.all([

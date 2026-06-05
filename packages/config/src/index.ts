@@ -25,6 +25,9 @@ export interface RuntimeConfig {
   publicApiBaseUrl: string;
   firebaseProjectId: string;
   firebaseWebApiKey: string;
+  webGoogleClientId: string;
+  webGoogleAllowedDomain: string;
+  apiContentAuthRequired: boolean;
   webPushVapidPublicKey: string;
   discoveryEnabled: boolean;
   discoveryCron: string;
@@ -128,6 +131,11 @@ export function readRuntimeConfig(
     publicApiBaseUrl: env.SIGNALOPS_PUBLIC_API_BASE_URL ?? apiBaseUrl,
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? "",
     firebaseWebApiKey: env.FIREBASE_WEB_API_KEY ?? "",
+    webGoogleClientId: env.SIGNALOPS_WEB_GOOGLE_CLIENT_ID ?? "",
+    webGoogleAllowedDomain: env.SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN ?? "",
+    apiContentAuthRequired:
+      String(env.SIGNALOPS_API_CONTENT_AUTH_REQUIRED ?? "0").trim().toLowerCase() === "1" ||
+      String(env.SIGNALOPS_API_CONTENT_AUTH_REQUIRED ?? "").trim().toLowerCase() === "true",
     webPushVapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "",
     discoveryEnabled:
       String(env.DISCOVERY_ENABLED ?? "0").trim().toLowerCase() === "1" ||

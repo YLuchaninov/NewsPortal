@@ -1460,8 +1460,12 @@ async function main() {
   const allowlistEntries = readAllowlistEntries(env);
   const adminEmail = selectAdminEmail(allowlistEntries, runId, { prefix: "button-audit" });
   const adminPassword = `SignalOps!${runId}`;
+  const webProofEmail = `button-audit-user-${runId}@example.test`;
   let adminCreated = false;
 
+  process.env.SIGNALOPS_WEB_TEST_AUTH_ENABLED = "true";
+  process.env.SIGNALOPS_WEB_TEST_AUTH_EMAIL = webProofEmail;
+  process.env.SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN = "example.test";
   await ensureComposeStack();
 
   const browser = await chromium.launch({ headless: true });
@@ -1480,7 +1484,7 @@ async function main() {
       throw new Error("Admin sign-in did not return a session cookie.");
     }
 
-    log("Bootstrapping anonymous web session.");
+    log("Bootstrapping proof-only Google web session.");
     const webBootstrap = await postForm("http://127.0.0.1:4321/bff/auth/bootstrap", {});
     const webCookie = webBootstrap.cookie;
     const userId = String(webBootstrap.json?.session?.userId ?? "");

@@ -17,7 +17,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   }
 
   const itemIds = parseSelectedDigestItemIds(url.searchParams);
-  const items = await loadSavedDigestItems(getPool(), session.userId, itemIds);
+  const items = await loadSavedDigestItems(getPool(), session.userId, itemIds, request);
   if (items.length === 0) {
     return new Response("No saved digest items selected.", { status: 400 });
   }

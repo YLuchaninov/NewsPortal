@@ -364,6 +364,7 @@ test("mutating web BFF POST routes use the shared web action kit", () => {
   const routeRoot = join(repoRoot, "apps/web/src/pages/bff");
   const expectedPostRoutes = new Set([
     "auth/bootstrap.ts",
+    "auth/google.ts",
     "auth/logout.ts",
     "content-state.ts",
     "digest-settings.ts",
@@ -394,7 +395,7 @@ test("mutating web BFF POST routes use the shared web action kit", () => {
       `${routeFile} must validate a declared web BFF action payload schema`,
     );
 
-    if (routeFile === "auth/bootstrap.ts" || routeFile === "auth/logout.ts") {
+    if (routeFile === "auth/bootstrap.ts" || routeFile === "auth/google.ts" || routeFile === "auth/logout.ts") {
       assert.match(source, /requireSession:\s*false/, `${routeFile} must document sessionless action-kit use`);
     } else {
       const expectedScope = WEB_ACTION_TOKEN_TARGETS.find((target) => {

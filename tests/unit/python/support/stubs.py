@@ -142,6 +142,11 @@ def _fastapi_param_default(*args: Any, **kwargs: Any) -> Any:
     return None
 
 
+class _FastApiDepends:
+    def __init__(self, dependency: Any = None, **_kwargs: Any):
+        self.dependency = dependency
+
+
 def install_fastapi_stub() -> None:
     if "fastapi" in sys.modules:
         return
@@ -152,6 +157,7 @@ def install_fastapi_stub() -> None:
     fastapi_stub.HTTPException = _FastApiHTTPException
     fastapi_stub.Query = _fastapi_param_default
     fastapi_stub.Body = _fastapi_param_default
+    fastapi_stub.Depends = _FastApiDepends
     sys.modules["fastapi"] = fastapi_stub
 
 

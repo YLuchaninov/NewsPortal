@@ -1,25 +1,24 @@
 ---
 import type { ContentItemDetail } from "@signalops/contracts";
-import { DEFAULT_BRAND_CONFIG, readRuntimeConfig } from "@signalops/config";
+import { DEFAULT_BRAND_CONFIG } from "@signalops/config";
 import { sanitizeHtmlFragment } from "@signalops/content-safety";
-import { createSignalOpsSdk } from "@signalops/sdk";
 
 import Shell from "../../layouts/Shell.astro";
 import { UserContentStateControls } from "../../components/UserContentStateControls";
 import { getPool, queryOne } from "../../lib/server/db";
 import { resolveWebSession } from "../../lib/server/auth";
 import { readFlash } from "../../lib/server/browser-flow";
+import { createWebServerSdk } from "../../lib/server/sdk";
 import { markContentItemSeen } from "../../lib/server/user-content-state";
 
 export const prerender = false;
 
 const session = await resolveWebSession(Astro.request);
+if (!session) {
+  return Astro.redirect("/");
+}
 const flash = readFlash(Astro.url);
-const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createSignalOpsSdk({
-  baseUrl: runtimeConfig.apiBaseUrl,
-  fetchImpl: fetch,
-});
+const sdk = createWebServerSdk(Astro.request);
 const rawContentItemId = String(Astro.params.id ?? "").trim();
 const contentItemId = rawContentItemId ? decodeURIComponent(rawContentItemId) : "";
 

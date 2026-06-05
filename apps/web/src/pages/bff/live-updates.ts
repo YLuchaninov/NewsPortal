@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
-  const snapshot = await loadLiveUpdatesSnapshot(session.userId);
+  const snapshot = await loadLiveUpdatesSnapshot(session.userId, request);
   return Response.json(serializeLiveUpdatesResponse(snapshot), {
     headers: {
       "Cache-Control": "no-store",

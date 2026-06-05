@@ -1,12 +1,11 @@
 import type { ContentItemDetail } from "@signalops/contracts";
-import { readRuntimeConfig } from "@signalops/config";
-import { createSignalOpsSdk } from "@signalops/sdk";
 import type { Pool } from "pg";
 
 import {
   collapseRepresentativeContentItemIds,
   resolveRepresentativeContentItemIds,
 } from "./user-content-state";
+import { createWebServerSdk } from "./sdk";
 
 function escapeHtml(value: string): string {
   return value
@@ -92,28 +91,23 @@ export async function resolveSavedDigestItemIds(
   return resolveSavedItemIds(pool, userId, requestedItemIds);
 }
 
-function createContentItemLoader() {
-  const sdk = createSignalOpsSdk({
-    baseUrl: readRuntimeConfig(process.env, {
-      defaultAppBaseUrl: "http://127.0.0.1:4321/",
-    }).apiBaseUrl,
-    fetchImpl: fetch,
-  });
-
+function createContentItemLoader(request?: Request | null) {
+  const sdk = createWebServerSdk(request);
   return (contentItemId: string) => sdk.getContentItem<ContentItemDetail>(contentItemId);
 }
 
 export async function loadSavedDigestSelection(
   pool: Pool,
   userId: string,
-  requestedItemIds: string[]
+  requestedItemIds: string[],
+  request?: Request | null
 ): Promise<{ itemIds: string[]; items: ContentItemDetail[] }> {
   const itemIds = await resolveSavedDigestItemIds(pool, userId, requestedItemIds);
   if (itemIds.length === 0) {
     return { itemIds: [], items: [] };
   }
 
-  const loadItem = createContentItemLoader();
+  const loadItem = createContentItemLoader(request);
   const items = await Promise.all(itemIds.map((contentItemId) => loadItem(contentItemId)));
   return { itemIds, items };
 }
@@ -121,9 +115,10 @@ export async function loadSavedDigestSelection(
 export async function loadSavedDigestItems(
   pool: Pool,
   userId: string,
-  requestedItemIds: string[]
+  requestedItemIds: string[],
+  request?: Request | null
 ): Promise<ContentItemDetail[]> {
-  const selection = await loadSavedDigestSelection(pool, userId, requestedItemIds);
+  const selection = await loadSavedDigestSelection(pool, userId, requestedItemIds, request);
   return selection.items;
 }
 

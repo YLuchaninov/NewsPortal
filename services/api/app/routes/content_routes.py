@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
+
+from services.api.app.web_content_auth import require_api_content_read_session
 
 
 def register_content_routes(app: FastAPI, deps: dict[str, Any]) -> None:
@@ -15,10 +17,15 @@ def register_content_routes(app: FastAPI, deps: dict[str, Any]) -> None:
     router.get("/maintenance/signal-candidates/residuals/summary")(
         deps["summarize_signal_candidate_residuals"]
     )
-    router.get("/collections/system-selected")(deps["list_system_selected_content_items"])
-    router.get("/content-items")(deps["list_content_items"])
-    router.get("/content-items/{content_item_id}")(deps["get_content_item"])
-    router.get("/content-items/{content_item_id}/explain")(deps["get_content_item_explain"])
+    content_read_guard = [Depends(require_api_content_read_session)]
+    router.get("/collections/system-selected", dependencies=content_read_guard)(
+        deps["list_system_selected_content_items"]
+    )
+    router.get("/content-items", dependencies=content_read_guard)(deps["list_content_items"])
+    router.get("/content-items/{content_item_id}", dependencies=content_read_guard)(deps["get_content_item"])
+    router.get("/content-items/{content_item_id}/explain", dependencies=content_read_guard)(
+        deps["get_content_item_explain"]
+    )
     router.get("/maintenance/web-resources")(deps["list_web_resources"])
     router.get("/maintenance/web-resources/{resource_id}")(deps["get_web_resource"])
     router.get("/maintenance/signal-candidates/{doc_id}")(deps["get_signal_candidate"])

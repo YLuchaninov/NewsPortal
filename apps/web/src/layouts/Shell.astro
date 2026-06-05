@@ -2,6 +2,7 @@
 import "../styles/globals.css";
 import { DEFAULT_BRAND_CONFIG } from "@signalops/config";
 import { FlashToast } from "../components/FlashToast";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { UserLiveUpdateCoordinator } from "../components/UserLiveUpdateCoordinator";
 import {
@@ -19,7 +20,9 @@ export interface Props {
   bffPreferencesPath?: string;
   bffLogoutPath?: string;
   bffBootstrapPath?: string;
+  bffGoogleAuthPath?: string;
   bffLiveUpdatesPath?: string;
+  googleClientId?: string;
 }
 
 const {
@@ -31,8 +34,9 @@ const {
   activeNav,
   bffPreferencesPath = "/bff/preferences",
   bffLogoutPath = "/bff/auth/logout",
-  bffBootstrapPath = "/bff/auth/bootstrap",
+  bffGoogleAuthPath = "/bff/auth/google",
   bffLiveUpdatesPath = "/bff/live-updates",
+  googleClientId = "",
 } = Astro.props;
 
 const navItems = [
@@ -84,20 +88,24 @@ const webActionTokenTargets = WEB_ACTION_TOKEN_TARGETS.map((target) => ({
         </a>
 
         <!-- Desktop Nav -->
-        <nav class="hidden lg:flex items-center gap-1 flex-1">
-          {navItems.map(({ href, label, key }) => (
-            <a
-              href={href}
-              class={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
-                activeNav === key
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
+        {session ? (
+          <nav class="hidden lg:flex items-center gap-1 flex-1">
+            {navItems.map(({ href, label, key }) => (
+              <a
+                href={href}
+                class={`inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors ${
+                  activeNav === key
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <div class="flex-1"></div>
+        )}
 
         <!-- Right side controls -->
         <div class="flex items-center gap-2 ml-auto">
@@ -129,46 +137,42 @@ const webActionTokenTargets = WEB_ACTION_TOKEN_TARGETS.map((target) => ({
               </form>
             </div>
           ) : (
-            <form method="post" action={bffBootstrapPath} id="bootstrap-form">
-              <button
-                type="button"
-                id="bootstrap-btn"
-                class="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
-              >
-                Get Started
-              </button>
-            </form>
+            <GoogleSignInButton clientId={googleClientId} authPath={bffGoogleAuthPath} client:load />
           )}
 
           <!-- Mobile menu button -->
-          <button
-            type="button"
-            id="mobile-menu-btn"
-            class="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
-            aria-label="Toggle menu"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
-            </svg>
-          </button>
+          {session && (
+            <button
+              type="button"
+              id="mobile-menu-btn"
+              class="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent transition-colors"
+              aria-label="Toggle menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
       <!-- Mobile nav -->
-      <div id="mobile-nav" class="hidden lg:hidden border-t border-border bg-card px-4 pb-3 pt-2">
-        {navItems.map(({ href, label, key }) => (
-          <a
-            href={href}
-            class={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              activeNav === key
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
-            }`}
-          >
-            {label}
-          </a>
-        ))}
-      </div>
+      {session && (
+        <div id="mobile-nav" class="hidden lg:hidden border-t border-border bg-card px-4 pb-3 pt-2">
+          {navItems.map(({ href, label, key }) => (
+            <a
+              href={href}
+              class={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                activeNav === key
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      )}
     </header>
 
     <!-- Flash toast (client island) -->

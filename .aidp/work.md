@@ -2,129 +2,110 @@
 
 ## Active Item
 
-- id: `SIGNALOPS-DOMAIN-TERMS-RENAME-SWEEP-1`
+- id: `SIGNALOPS-WEB-GOOGLE-GATED-ACCESS-1`
 - lifecycle: `normal`
-- route: `sweep`
-- route phase: `domain-terminology-breaking-rename`
+- route: `capability`
+- route phase: `web-google-gated-access`
 - status: `done`
 - risk: `high`
-- approval: approved by operator request on 2026-06-04 to implement the accepted plan for a full domain terminology breaking rename without legacy aliases.
-- planning required: yes, because this is a broad breaking rename across database schema, API/BFF routes, SDK, MCP tools/resources, queue/event/module contracts, UI, docs, tests and proof harnesses.
+- approval: approved by operator request on 2026-06-05 to implement the accepted Google-gated user web access plan.
+- planning required: yes, because this changes auth/session semantics, user web access, optional API content-read authorization, env/runtime config and proof harness behavior.
 - planning source: `tool-native`
 - planning status: `accepted-for-this-item`
-- accepted plan: operator-provided domain terminology rename plan from 2026-06-04.
+- accepted plan: operator-provided Google-gated user web access plan from 2026-06-05.
 
 ## Scope
 
-Rename product-owned domain terminology so former article entities become signal candidates and product-owned news wording becomes signal wording, while preserving external/library/source semantics.
+Unauthenticated end users may only access a redacted `/` web landing surface with total system-selected signal count and non-clickable sanitized cards. Full user web functionality requires an authorized Google Firebase identity, optionally restricted to one configured email domain. Optional API content-read protection can be enabled by env and is off by default.
 
 In scope:
 
-- rename product-owned storage/data model surfaces from the legacy content-candidate table family to `signal_candidates` / `signal_candidate_*`;
-- rename product-owned columns and counters such as `source_signal_candidate_id`, `external_signal_candidate_id`, `new_signal_candidate_count`, `projected_signal_candidate_id` and duplicate signal_candidate counters to signal-candidate equivalents;
-- rename product-owned runtime/API/contracts: `/maintenance/signal-candidates`, admin `/signal-candidates`, SDK `SignalCandidate*`, MCP `signal_candidates.*`, `signalops://signal-candidates/*`, queue/events/modules `signal_candidate.*`, and content item prefix `signal_candidate:` to signal-candidate equivalents;
-- rename product-owned UI/docs/tests/proof harnesses from legacy content-candidate/news wording to Signal Candidates/signal wording;
-- update current AIDP canon for the new domain terminology while preserving historical archive evidence as historical.
+- replace web anonymous Firebase bootstrap with Google-only web sign-in through Firebase `accounts:signInWithIdp`;
+- enforce authorized web sessions as `firebase_google` with email present and optional exact-domain match from `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN`;
+- add `SIGNALOPS_WEB_GOOGLE_CLIENT_ID`, `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN` and `SIGNALOPS_API_CONTENT_AUTH_REQUIRED` config/env/runtime wiring;
+- make signed-out `/` redacted and non-navigable while preserving total system-selected signal count;
+- gate user web pages and BFF routes behind authorized Google web sessions;
+- add optional API content-read auth for `/collections/system-selected`, `/content-items*` and user-specific `/users/{user_id}/matches|notifications|interests`, default off;
+- add disabled-by-default proof-only test session support if required by existing local product proofs;
+- update targeted tests and auth/session contract truth for the changed behavior.
 
 Out of scope:
 
-- changing external/provider/source protocol terms such as `Google News`, `Hacker News`, DuckDuckGo/SearXNG `news` result type, URL paths like `/news`, Schema.org structured-data content types, `@extractus/article-extractor`, HTML/feed source-url literals, and third-party package/import names;
-- renaming Discovery `discovery_candidates`, `discovery.candidates.*`, `candidateSignals` or generic local variable `candidate` when they refer to existing Discovery/source-candidate concepts rather than former signal_candidate rows;
-- preserving old DB/API/SDK/MCP/event aliases;
-- production deployment or external-state migration;
-- physically renaming the repository folder path.
+- changing admin sign-in, admin allowlist or local admin role bootstrap behavior;
+- adding new npm dependencies;
+- implementing broad FastAPI/admin/MCP authorization outside the listed end-user content read endpoints;
+- production deployment or external Google/Firebase console changes.
 
 Allowed paths:
 
 - `.aidp/**`
 - `.env.example`
 - `.env.dev`
-- `package.json`
-- `pnpm-lock.yaml`
-- `pnpm-workspace.yaml`
-- `tsconfig*.json`
-- `playwright.config.mjs`
-- `apps/**`
-- `packages/**`
-- `services/**`
+- `apps/web/**`
+- `packages/config/**`
+- `packages/contracts/**`
+- `packages/sdk/**`
+- `packages/bff-server/**`
+- `services/api/**`
 - `infra/**`
-- `database/**`
 - `tests/**`
 - `docs/**`
-- `README.md`
 
 Protected boundaries:
 
-- PostgreSQL remains business source of truth; this rename may rebuild local disposable state but must not introduce a second state owner.
-- Fetchers still own acquisition/raw persistence, workers still own processing/selection/notifications/discovery, relay still routes thin jobs, and API/admin/web/MCP expose declared surfaces.
-- External news/article semantics remain source/provider/library semantics, not SignalOps product identity.
-- AIDP runtime truth stays in `.aidp/*`; root routers remain thin.
+- Firebase identifies web users; local PostgreSQL remains user/authorization truth after identity verification.
+- Admin auth/session boundary must remain separate from web auth/session boundary.
+- PostgreSQL remains business source of truth; API auth checks must not introduce a second state owner.
+- Signed-out web payloads must not leak source URLs, domains, source names, author names, ids, raw metadata or media URLs.
 
 ## Context Manifest
 
 - `.aidp/AGENTS.md`: lifecycle/work route, pre-write active item and canonicalization rules.
-- `.aidp/routes.md`: `sweep` route, high-risk approval and proof obligations.
-- `.aidp/blueprint.md`: data/state ownership, API/control-plane, source/content pipeline, selection/personalization and AIDP/process boundaries checked.
-- `.aidp/engineering.md`: route-aware sweep discipline, breaking contract/deprecation rules and runtime/config naming discipline.
-- `.aidp/verification.md`: high-risk sweep proof, migration/runtime/API/MCP/queue proof and release verification gates.
-- accepted tool-native plan in the operator message from 2026-06-04.
+- `.aidp/routes.md`: `capability` route, planning and high-risk approval obligations.
+- `.aidp/blueprint.md`: User web work, Auth/session boundary, UI/BFF boundary, Public API vs admin/operator API, PostgreSQL source-of-truth checked.
+- `.aidp/engineering.md`: secure-by-design, runtime config, auth/session proof and dependency discipline checked.
+- `.aidp/verification.md`: capability proof, high-risk auth proof and runtime/route proof expectations checked.
+- `.aidp/contracts/auth-session-boundary.md`: web/admin auth separation, cookie/session and proof expectations checked.
+- accepted tool-native plan in the operator message from 2026-06-05.
 
 ## Implementation Expectations
 
-- Perform a repo-wide terminology sweep, then repair semantic fallout around SQL migrations, generated query aliases, SDK/MCP contracts, route paths, content item IDs, event/module names, tests and docs.
-- Do not keep compatibility aliases for old `signal_candidates`, `/signal-candidates`, `signal_candidates.*`, `signal_candidate.*`, old SDK names or old event names.
-- Preserve external/library/source `news`/`article` terms exactly when they describe third-party protocols, URLs, schemas or package APIs.
-- Treat old AIDP proof artifact paths and historical item ids as historical evidence only.
+- Keep implementation local to web auth/UI/BFF, config/env, targeted API auth and tests.
+- Do not add a new dependency for Google sign-in; use Google Identity Services browser script and Firebase REST server exchange.
+- Optional API content auth defaults off and must not break internal API consumers when unset.
+- Test-only session support, if added, must be disabled by default and unreachable from normal UI.
 
 ## Proof Gates
 
 Required gates:
 
-- static sweeps for former product-owned article/news terminology with allowed external/historical residuals only;
-- `pnpm install --lockfile-only` if manifest/package script changes require lockfile regeneration;
 - `pnpm check:env-sync`;
-- `pnpm check:scaffold`;
-- `pnpm check:runtime-artifacts`;
-- `pnpm check:test-layout`;
 - `pnpm check:secret-leaks`;
 - `pnpm lint`;
 - `pnpm typecheck`;
 - `pnpm unit_tests`;
-- `pnpm test:migrations:smoke`;
-- `pnpm test:mcp:http:matrix`;
-- `pnpm test:website:compose`;
-- `pnpm test:website:admin:compose`;
-- `pnpm test:product:local:core`;
-- `pnpm release:verify`;
+- `pnpm test:web:viewports` if viewport harness is updated for the new auth fixture;
+- `pnpm test:mvp:internal` if proof-only session fixture is added to the product proof harness;
 - `git diff --check`.
 
 ## Current Proof Status
 
-- static no-hit sweep passed for legacy content-candidate column, counter and event tokens listed in the operator test plan.
-- static no-hit sweep passed for the old content item prefix listed in the operator test plan.
-- static no-hit sweep passed for old product-owned active-news and yield-script labels listed in the operator test plan.
-- broad legacy content-candidate sweep passed with only allowed external/library/schema residuals in code/tests: Google News wrapper URLs, IMF source URLs, Hacker News source-url literals, structured-data content types, and extractor library type names.
-- broad `news` sweep reviewed; remaining current hits are external/source/search-protocol/fixture/doc-example semantics such as Google News, Hacker News, DuckDuckGo/SearXNG `news`, third-party `/news` URLs and historical AIDP references.
-- `pnpm check:env-sync` passed.
-- `pnpm check:scaffold` passed.
-- `pnpm check:runtime-artifacts` passed.
-- `pnpm check:test-layout` passed.
-- `pnpm check:secret-leaks` passed.
-- `pnpm lint` passed.
-- `pnpm typecheck` passed.
-- `pnpm unit_tests` passed.
-- `pnpm test:migrations:smoke` passed after recreating disposable local Docker/Postgres state.
-- `pnpm test:mcp:http:matrix` passed.
-- `pnpm test:website:compose` passed.
-- `pnpm test:website:admin:compose` passed.
-- `pnpm test:product:local:core` passed with `/tmp/signalops-product-local-core-b63a0d81.*` artifacts.
-- `pnpm release:verify` passed with summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-14015942/release-verify-summary.json`; full live website residuals were classified as truthful external unsupported/blocked or partial shapes, not rename regressions.
-- `git diff --check` passed.
+- Proof passed on 2026-06-05:
+  - `pnpm check:env-sync`;
+  - `pnpm check:secret-leaks`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm unit_tests`;
+  - `pnpm test:web:viewports`;
+  - `pnpm test:mvp:internal`;
+  - `git diff --check`.
+- Notes:
+  - `pnpm test:web:viewports` passed with the proof-only Google web session enabled by the harness.
+  - `pnpm test:mvp:internal` passed after updating stale anonymous-bootstrap assertions to the new Google-gated public landing contract.
 
 ## Cleanup Notes
 
-- Existing local Docker/Postgres state using former `signal_candidates` schema/defaults is treated as disposable and may need recreation during proof.
-- Current proof artifacts should use `/tmp/signalops-*` prefixes and signal-candidate terminology where product-owned.
+- Stateful auth/API proofs may create local `users` and `user_profiles` rows; record residual state or cleanup if compose proof is run.
 
 ## Historical Archive: Previous Completed Item
 

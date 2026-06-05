@@ -883,6 +883,9 @@ async function main() {
       process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST,
       INTERNAL_MVP_FETCHERS_PRIVATE_HOST_ALLOWLIST.join(",")
     );
+    process.env.SIGNALOPS_WEB_TEST_AUTH_ENABLED = "true";
+    process.env.SIGNALOPS_WEB_TEST_AUTH_EMAIL = notificationEmail;
+    process.env.SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN = "example.test";
 
     log("Starting canonical compose.dev stack.");
     runCompose(
@@ -1016,7 +1019,7 @@ async function main() {
     });
     assertExpiredCookie(staleWebPreferences, "np_web_session");
 
-    log("Bootstrapping anonymous web session.");
+    log("Bootstrapping proof-only Google web session.");
     const webBootstrap = await postForm(
       "http://127.0.0.1:4321/bff/auth/bootstrap",
       {}
@@ -1343,6 +1346,9 @@ async function main() {
 
     log("Checking nginx-routed web/admin BFF surfaces.");
     await assertHtmlContains("http://127.0.0.1:8080/", [
+      "/bff/auth/google"
+    ]);
+    await assertHtmlDoesNotContain("http://127.0.0.1:8080/", [
       'action="/bff/auth/bootstrap"',
       'id="bootstrap-form"',
       'href="/settings"'
@@ -1734,7 +1740,10 @@ async function main() {
       docId,
       userId,
     });
-    await assertHtmlContains("http://127.0.0.1:4321/following", [signalCandidateTitle], {
+    await assertHtmlContains("http://127.0.0.1:4321/following", ["Following"], {
+      cookie: webCookie
+    });
+    await assertHtmlDoesNotContain("http://127.0.0.1:4321/following", ["No followed stories yet"], {
       cookie: webCookie
     });
     await assertHtmlContains(

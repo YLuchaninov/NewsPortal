@@ -12,7 +12,7 @@
 
 ## Ответственности
 
-- Web app создает или переиспользует anonymous Firebase sessions для публичных пользовательских flows.
+- Web app accepts only authorized Google Firebase sessions for full end-user functionality. Signed-out users may access only the redacted `/` landing surface.
 - Admin app входит через Firebase email/password и затем требует allowlisted/local admin authorization.
 - Local PostgreSQL владеет долговечным user/profile/role state после identity verification.
 - nginx держит web и admin BFF paths раздельно: `/bff/*` идет в web, `/admin/bff/*` и `/admin/*` идут в admin.
@@ -25,10 +25,12 @@
 - Mutating public web BFF actions use the shared web action kit to reject explicit cross-site browser metadata before session resolution or payload reads, then validate declared web BFF action payload schemas for routes that read payload through the kit. The guard treats mismatched `Origin`/absolute `Referer` and `Sec-Fetch-Site: cross-site` as CSRF failures while preserving local/scripted requests that do not send browser site metadata; `auth/bootstrap` and `auth/logout` are sessionless special cases but still use the metadata guard.
 - Admin mutating BFF actions that use the shared action kit reject explicit cross-site browser metadata before session resolution or payload reads. The guard treats mismatched `Origin`/absolute `Referer` and `Sec-Fetch-Site: cross-site` as CSRF failures while preserving local/scripted requests that do not send browser site metadata.
 - Mutating admin BFF routes that use the shared admin action kit require signed admin action tokens unless they are documented read-only exceptions. Tokens are HMAC-signed with `APP_SECRET`, short-lived, and bound to admin user id, normalized BFF target path and route-level action scope. AdminShell publishes the scoped token set for server-rendered forms and same-origin admin React-island POST requests; the BFF validates the route scope before handler work.
-- Web auth использует Firebase anonymous `accounts:signUp`, refresh-token reuse и `accounts:lookup`.
+- Web auth использует Google Identity Services credential exchange through Firebase `accounts:signInWithIdp`, refresh-token reuse и `accounts:lookup`.
+- Web Google auth may enforce one exact email domain through `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN`; when unset, any verified Google email is allowed.
+- Proof-only web test auth can mint a `firebase_google`-shaped local session only when `SIGNALOPS_WEB_TEST_AUTH_ENABLED` is explicitly enabled. It must not be exposed in the UI or enabled in normal runtime.
 - Admin auth использует Firebase `accounts:signInWithPassword` плюс `accounts:lookup`.
 - `ADMIN_ALLOWLIST_EMAILS` принимает точные emails и domain entries с префиксом `@`; aliases точного email нормализуются admin auth code.
-- Anonymous Firebase users не должны проходить admin authorization.
+- Anonymous Firebase users must not pass web full-access or admin authorization.
 
 ## Модель данных или состояния
 
@@ -40,6 +42,7 @@
 ## Runtime и delivery concerns
 
 - Required env включает `FIREBASE_WEB_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_CONFIG`, `FIREBASE_ADMIN_CREDENTIALS`, `ADMIN_ALLOWLIST_EMAILS` и `APP_SECRET`; auth-cookie runtime также читает `SIGNALOPS_COOKIE_SECURE_POLICY`.
+- End-user Google auth additionally reads `SIGNALOPS_WEB_GOOGLE_CLIENT_ID`, optional `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN` and optional `SIGNALOPS_API_CONTENT_AUTH_REQUIRED`.
 - Admin bootstrap может назначать local `admin` role только после allowlist verification.
 - nginx должен сохранять `X-Forwarded-Prefix /admin` для admin routes.
 - Auth flows являются stateful tests, потому что создают или переиспользуют users/profiles/roles.

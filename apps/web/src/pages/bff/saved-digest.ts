@@ -59,7 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
   const returnTo = String(formData.get("returnTo") ?? "/saved/digest").trim() || "/saved/digest";
 
   try {
-    const items = await loadSavedDigestItems(getPool(), session.userId, itemIds);
+    const items = await loadSavedDigestItems(getPool(), session.userId, itemIds, request);
     if (items.length === 0) {
       return buildReturnRedirect(request, returnTo, "error", "No saved items were available for this digest.");
     }

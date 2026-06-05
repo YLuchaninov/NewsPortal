@@ -62,12 +62,12 @@ export const POST: APIRoute = async ({ request }) => {
     );
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "Anonymous bootstrap failed.";
+      error instanceof Error ? error.message : "Web test session bootstrap failed.";
     if (browserRequest) {
       return buildFlashRedirect(request, {
         section: "auth",
         status: "error",
-        message: "Unable to start a session right now."
+        message: "Google sign-in is required."
       });
     }
 
@@ -76,7 +76,7 @@ export const POST: APIRoute = async ({ request }) => {
         error: errorMessage
       },
       {
-        status: 500
+        status: 403
       }
     );
   }

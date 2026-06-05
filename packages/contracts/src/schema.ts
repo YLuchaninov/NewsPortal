@@ -72,6 +72,14 @@ export const WEB_BFF_ACTION_PAYLOAD_SCHEMAS = {
     type: "object",
     additionalProperties: false,
   },
+  "auth.google": {
+    type: "object",
+    required: ["credential"],
+    properties: {
+      credential: FLEXIBLE_STRING_SCHEMA,
+    },
+    additionalProperties: false,
+  },
   "auth.logout": {
     type: "object",
     additionalProperties: false,

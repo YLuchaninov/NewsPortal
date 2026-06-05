@@ -1,7 +1,5 @@
 ---
 import { DEFAULT_PAGE, type ContentItemDetail } from "@signalops/contracts";
-import { readRuntimeConfig } from "@signalops/config";
-import { createSignalOpsSdk } from "@signalops/sdk";
 import { PaginationNav } from "@signalops/ui";
 
 import Shell from "../layouts/Shell.astro";
@@ -9,6 +7,7 @@ import { ContentItemCard } from "../components/ContentItemCard";
 import { getPool, queryOne } from "../lib/server/db";
 import { resolveWebSession } from "../lib/server/auth";
 import { readFlash } from "../lib/server/browser-flow";
+import { createWebServerSdk } from "../lib/server/sdk";
 import { getUserContentStateMap, listFollowedStoryRefs } from "../lib/server/user-content-state";
 import { WEB_CARD_GRID_PAGE_SIZE, createPageHrefResolver, parsePositivePage } from "../lib/view-helpers";
 
@@ -20,11 +19,7 @@ if (!session) {
 }
 
 const flash = readFlash(Astro.url);
-const runtimeConfig = readRuntimeConfig(process.env, { defaultAppBaseUrl: "http://127.0.0.1:4321/" });
-const sdk = createSignalOpsSdk({
-  baseUrl: runtimeConfig.apiBaseUrl,
-  fetchImpl: fetch,
-});
+const sdk = createWebServerSdk(Astro.request);
 
 const pageBaseUrl = new URL(Astro.url);
 if (!pageBaseUrl.pathname.endsWith("/")) pageBaseUrl.pathname += "/";

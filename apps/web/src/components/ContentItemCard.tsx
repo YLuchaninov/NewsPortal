@@ -107,14 +107,17 @@ export function ContentItemCard({
     className: "bg-muted text-muted-foreground",
     label: decisionKey,
   };
-  const detailHref = resolveInternalContentHref(contentItem.content_item_id);
-  const sourceHref = resolveSafeContentHref(contentItem.url);
-  const previewMediaUrl = String(contentItem.primary_media_url ?? "").trim() || null;
-  const previewMediaKind = String(contentItem.primary_media_kind ?? "").trim() || null;
-  const sourceLabel = String(contentItem.source_name ?? "").trim() || null;
-  const authorLabel = String(contentItem.author_name ?? "").trim() || null;
+  const detailHref = isLoggedIn ? resolveInternalContentHref(contentItem.content_item_id) : null;
+  const sourceHref = isLoggedIn ? resolveSafeContentHref(contentItem.url) : null;
+  const previewMediaUrl = isLoggedIn ? String(contentItem.primary_media_url ?? "").trim() || null : null;
+  const previewMediaKind = isLoggedIn ? String(contentItem.primary_media_kind ?? "").trim() || null : null;
+  const sourceLabel = isLoggedIn ? String(contentItem.source_name ?? "").trim() || null : null;
+  const authorLabel = isLoggedIn ? String(contentItem.author_name ?? "").trim() || null : null;
   const readTimeLabel = formatReadTime(contentItem.read_time_seconds ?? null);
-  const summary = String(contentItem.summary ?? contentItem.lead ?? "").trim() || null;
+  const summary = isLoggedIn ? String(contentItem.summary ?? contentItem.lead ?? "").trim() || null : null;
+  const title = isLoggedIn
+    ? String(contentItem.title ?? "Untitled content item")
+    : "Verified signal details are available after Google sign-in";
   const contentKindLabel = String(contentItem.content_kind ?? "content").trim() || "content";
   const isUnread = !!userState && !userState.is_new && !userState.is_seen;
   const previewContent = (
@@ -123,7 +126,7 @@ export function ContentItemCard({
         <div className="relative h-40 overflow-hidden bg-muted" aria-hidden="true">
           <img
             src={previewMediaUrl}
-            alt={String(contentItem.primary_media_alt_text ?? contentItem.title ?? "Content preview")}
+            alt={String(contentItem.primary_media_alt_text ?? title)}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
             loading="lazy"
           />
@@ -208,7 +211,7 @@ export function ContentItemCard({
         )}
 
         <h3 className="font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-          {String(contentItem.title ?? "Untitled content item")}
+            {title}
         </h3>
 
         {contextNote && (

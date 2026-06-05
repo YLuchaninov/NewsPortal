@@ -1,5 +1,6 @@
 import type { AuthIdentity, AuthSession } from "@signalops/contracts";
 import { shouldMarkCookieSecure } from "@signalops/config";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { queryOne, queryRows } from "./db";
 
@@ -13,11 +14,66 @@ interface AuthCookieOptions {
 interface FirebaseLookupUser {
   localId: string;
   email?: string;
+  emailVerified?: boolean;
   providerUserInfo?: Array<{ providerId?: string }>;
+}
+
+interface VerifiedFirebaseIdentity {
+  identity: AuthIdentity;
+  emailVerified: boolean;
+}
+
+interface TestWebSessionPayload {
+  v: 1;
+  kind: "web-test-google";
+  sub: string;
+  email: string;
+  exp: number;
 }
 
 function readFirebaseApiKey(): string {
   return process.env.FIREBASE_WEB_API_KEY ?? "";
+}
+
+function readGoogleAllowedDomain(env: Record<string, string | undefined> = process.env): string | null {
+  const normalized = String(env.SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
+  return normalized || null;
+}
+
+function readTestAuthEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const normalized = String(env.SIGNALOPS_WEB_TEST_AUTH_ENABLED ?? "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
+function readWebAuthSecret(): string {
+  const secret = String(process.env.APP_SECRET ?? "").trim();
+  if (!secret) {
+    throw new Error("APP_SECRET is required for web test auth tokens.");
+  }
+  return secret;
+}
+
+function emailMatchesAllowedDomain(
+  email: string | null | undefined,
+  allowedDomain = readGoogleAllowedDomain()
+): boolean {
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  if (!normalizedEmail || !allowedDomain) {
+    return Boolean(normalizedEmail);
+  }
+  const atIndex = normalizedEmail.lastIndexOf("@");
+  return atIndex > 0 && normalizedEmail.slice(atIndex + 1) === allowedDomain;
+}
+
+export function isAuthorizedGoogleIdentity(identity: AuthIdentity): boolean {
+  return (
+    identity.provider === "firebase_google" &&
+    !identity.isAnonymous &&
+    emailMatchesAllowedDomain(identity.email)
+  );
 }
 
 function parseCookies(cookieHeader: string | null): Record<string, string> {
@@ -90,43 +146,144 @@ async function firebaseTokenRequest(payload: URLSearchParams): Promise<any> {
   return data;
 }
 
-function normalizeIdentity(lookupUser: FirebaseLookupUser, fallbackAnonymous = false): AuthIdentity {
+function normalizeIdentity(lookupUser: FirebaseLookupUser, fallbackAnonymous = false): VerifiedFirebaseIdentity {
   const providerIds = lookupUser.providerUserInfo?.map((item) => item.providerId ?? "") ?? [];
   const providerId = providerIds[0] ?? "";
   const isAnonymous = fallbackAnonymous || providerIds.length === 0;
 
   return {
-    subject: lookupUser.localId,
-    provider: isAnonymous
-      ? "firebase_anonymous"
-      : providerId.includes("google")
-        ? "firebase_google"
-        : providerId.includes("password")
-          ? "firebase_email_link"
-          : "firebase_other",
-    email: lookupUser.email ?? null,
-    isAnonymous
+    identity: {
+      subject: lookupUser.localId,
+      provider: isAnonymous
+        ? "firebase_anonymous"
+        : providerId.includes("google")
+          ? "firebase_google"
+          : providerId.includes("password")
+            ? "firebase_email_link"
+            : "firebase_other",
+      email: lookupUser.email ?? null,
+      isAnonymous
+    },
+    emailVerified: lookupUser.emailVerified === true
   };
 }
 
-export async function bootstrapAnonymousFirebaseSession(): Promise<{
+function assertAuthorizedGoogleSession(verified: VerifiedFirebaseIdentity): AuthIdentity {
+  if (!verified.emailVerified) {
+    throw new Error("Google email must be verified.");
+  }
+  if (!isAuthorizedGoogleIdentity(verified.identity)) {
+    throw new Error("Only authorized Google accounts can sign in.");
+  }
+  return verified.identity;
+}
+
+function encodeBase64Url(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function decodeBase64Url(value: string): string | null {
+  try {
+    return Buffer.from(value, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function signTestWebPayload(encodedPayload: string): string {
+  return createHmac("sha256", `web-test-auth:${readWebAuthSecret()}`)
+    .update(encodedPayload)
+    .digest("base64url");
+}
+
+function signatureMatches(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function buildTestWebToken(email: string, nowMs = Date.now()): string {
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const payload: TestWebSessionPayload = {
+    v: 1,
+    kind: "web-test-google",
+    sub: `test-google:${normalizedEmail}`,
+    email: normalizedEmail,
+    exp: nowMs + 60 * 60 * 1000
+  };
+  const encodedPayload = encodeBase64Url(JSON.stringify(payload));
+  return `test-google.${encodedPayload}.${signTestWebPayload(encodedPayload)}`;
+}
+
+function verifyTestWebToken(token: string, nowMs = Date.now()): AuthIdentity | null {
+  if (!readTestAuthEnabled() || !token.startsWith("test-google.")) {
+    return null;
+  }
+  const [, encodedPayload, signature, ...extra] = token.split(".");
+  if (!encodedPayload || !signature || extra.length > 0) {
+    return null;
+  }
+  const expected = signTestWebPayload(encodedPayload);
+  if (!signatureMatches(signature, expected)) {
+    return null;
+  }
+  const decoded = decodeBase64Url(encodedPayload);
+  if (!decoded) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+  const payload = parsed as Partial<TestWebSessionPayload>;
+  if (
+    payload.v !== 1 ||
+    payload.kind !== "web-test-google" ||
+    typeof payload.sub !== "string" ||
+    typeof payload.email !== "string" ||
+    typeof payload.exp !== "number" ||
+    payload.exp < nowMs
+  ) {
+    return null;
+  }
+  const identity: AuthIdentity = {
+    subject: payload.sub,
+    provider: "firebase_google",
+    email: payload.email,
+    isAnonymous: false
+  };
+  return isAuthorizedGoogleIdentity(identity) ? identity : null;
+}
+
+export async function bootstrapWebTestGoogleSession(): Promise<{
   idToken: string;
   refreshToken: string;
   identity: AuthIdentity;
 }> {
-  const response = await firebaseRequest("accounts:signUp", {
-    returnSecureToken: true
-  });
+  if (!readTestAuthEnabled()) {
+    throw new Error("Web test auth is disabled.");
+  }
+  const email = String(process.env.SIGNALOPS_WEB_TEST_AUTH_EMAIL ?? "web-user@signalops.local").trim();
+  const identity: AuthIdentity = {
+    subject: `test-google:${email.toLowerCase()}`,
+    provider: "firebase_google",
+    email,
+    isAnonymous: false
+  };
+  if (!isAuthorizedGoogleIdentity(identity)) {
+    throw new Error("Configured web test auth email is not allowed.");
+  }
+  const token = buildTestWebToken(email);
 
   return {
-    idToken: String(response.idToken),
-    refreshToken: String(response.refreshToken),
-    identity: {
-      subject: String(response.localId),
-      provider: "firebase_anonymous",
-      email: response.email ? String(response.email) : null,
-      isAnonymous: true
-    }
+    idToken: token,
+    refreshToken: token,
+    identity
   };
 }
 
@@ -153,7 +310,7 @@ async function restoreFirebaseSession(
     return null;
   }
 
-  const identity = await verifyFirebaseIdToken(idToken);
+  const identity = await verifyAuthorizedWebIdToken(idToken);
   if (!identity) {
     return null;
   }
@@ -181,6 +338,14 @@ export async function bootstrapWebFirebaseSession(request: Request): Promise<{
   identity: AuthIdentity;
   reusedExisting: boolean;
 }> {
+  if (readTestAuthEnabled()) {
+    const session = await bootstrapWebTestGoogleSession();
+    return {
+      ...session,
+      reusedExisting: false
+    };
+  }
+
   const cookies = parseCookies(request.headers.get("cookie"));
   const refreshToken = readCookie(cookies, WEB_REFRESH_COOKIE);
   if (refreshToken) {
@@ -193,18 +358,14 @@ export async function bootstrapWebFirebaseSession(request: Request): Promise<{
         };
       }
     } catch {
-      // Fall back to a new anonymous session when the stored refresh token is stale.
+      // Fall through to the explicit error below when the stored refresh token is stale.
     }
   }
 
-  const session = await bootstrapAnonymousFirebaseSession();
-  return {
-    ...session,
-    reusedExisting: false
-  };
+  throw new Error("Google sign-in is required.");
 }
 
-async function verifyFirebaseIdToken(idToken: string): Promise<AuthIdentity | null> {
+async function lookupFirebaseIdToken(idToken: string): Promise<VerifiedFirebaseIdentity | null> {
   if (!idToken) {
     return null;
   }
@@ -218,6 +379,60 @@ async function verifyFirebaseIdToken(idToken: string): Promise<AuthIdentity | nu
   }
 
   return normalizeIdentity(user);
+}
+
+async function verifyAuthorizedWebIdToken(idToken: string): Promise<AuthIdentity | null> {
+  const testIdentity = verifyTestWebToken(idToken);
+  if (testIdentity) {
+    return testIdentity;
+  }
+  const verified = await lookupFirebaseIdToken(idToken);
+  if (!verified) {
+    return null;
+  }
+  try {
+    return assertAuthorizedGoogleSession(verified);
+  } catch {
+    return null;
+  }
+}
+
+export async function signInWebWithGoogleCredential(credential: string): Promise<{
+  idToken: string;
+  refreshToken: string;
+  identity: AuthIdentity;
+}> {
+  const normalizedCredential = String(credential ?? "").trim();
+  if (!normalizedCredential) {
+    throw new Error("Google credential is required.");
+  }
+
+  const response = await firebaseRequest("accounts:signInWithIdp", {
+    postBody: new URLSearchParams({
+      id_token: normalizedCredential,
+      providerId: "google.com"
+    }).toString(),
+    requestUri: "http://localhost",
+    returnIdpCredential: true,
+    returnSecureToken: true
+  });
+
+  const idToken = String(response.idToken ?? "").trim();
+  const refreshToken = String(response.refreshToken ?? "").trim();
+  if (!idToken || !refreshToken) {
+    throw new Error("Firebase did not return a web session.");
+  }
+
+  const verified = await lookupFirebaseIdToken(idToken);
+  if (!verified) {
+    throw new Error("Firebase session lookup failed.");
+  }
+
+  return {
+    idToken,
+    refreshToken,
+    identity: assertAuthorizedGoogleSession(verified)
+  };
 }
 
 export async function syncLocalUser(identity: AuthIdentity): Promise<{ userId: string; roles: string[] }> {
@@ -279,7 +494,7 @@ export async function resolveWebSession(request: Request): Promise<(AuthSession 
   }
 
   try {
-    const identity = await verifyFirebaseIdToken(idToken);
+    const identity = await verifyAuthorizedWebIdToken(idToken);
     if (!identity) {
       return null;
     }
@@ -323,4 +538,8 @@ export function buildWebAuthCookies(tokens: {
 
 export function buildExpiredSessionCookie(options: AuthCookieOptions = {}): string {
   return `${WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${buildCookieSuffix(options)}`;
+}
+
+export function buildExpiredRefreshCookie(options: AuthCookieOptions = {}): string {
+  return `${WEB_REFRESH_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${buildCookieSuffix(options)}`;
 }
