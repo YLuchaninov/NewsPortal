@@ -456,15 +456,27 @@ function parseFeedsmithFeedData(body: string, context: FeedParseContext): { data
 function parseFeedData(input: ParseFeedInput): { data: FeedData | null; format: ParsedFeedFormat } {
   const format = detectFeedFormatFromBody(input.body, input.contentType);
   const context = createContext(input);
-  let data = format === "jsonfeed"
-    ? parseJsonFeedData(input.body, context)
-    : parseXmlFeedData(input.body, format, context);
+  let xmlParseError: unknown = null;
+  let data: FeedData | null = null;
+  if (format === "jsonfeed") {
+    data = parseJsonFeedData(input.body, context);
+  } else {
+    try {
+      data = parseXmlFeedData(input.body, format, context);
+    } catch (error) {
+      xmlParseError = error;
+    }
+  }
   let resolvedFormat = format;
 
   if (!data) {
     const feedsmith = parseFeedsmithFeedData(input.body, context);
     data = feedsmith.data;
     resolvedFormat = feedsmith.format ?? resolvedFormat;
+  }
+
+  if (!data && xmlParseError) {
+    throw xmlParseError;
   }
 
   if (data) {

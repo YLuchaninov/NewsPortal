@@ -2,6 +2,9 @@
 
 SignalOps использует Firebase как identity layer. После входа локальная PostgreSQL-модель users/roles решает authorization.
 
+Для текущего end-user web входа через Google account используйте отдельный runbook:
+[Google/Firebase Web Auth Setup](./google_firebase_web_auth_setup.md).
+
 Для локального MVP нужны:
 
 - Firebase project;

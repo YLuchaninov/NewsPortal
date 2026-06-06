@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import "@xyflow/react/dist/style.css";
 
@@ -34,6 +34,7 @@ import { AutomationEditorHeader } from "./automation-editor-header";
 import { AutomationEditorInspectorPanel } from "./automation-editor-inspector-panel";
 import { AutomationEditorPalette } from "./automation-editor-palette";
 import { AutomationEditorRunDialog } from "./automation-editor-run-dialog";
+import { reportAdminActionError } from "./admin-client-helpers";
 import {
   buildEdges,
   moduleToKey,
@@ -96,7 +97,7 @@ export function AutomationEditorWorkspace({
   );
   const [moduleSearch, setModuleSearch] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const lastOptionsJsonErrorRef = useRef<string | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runContextJson, setRunContextJson] = useState("{}");
@@ -313,7 +314,6 @@ export function AutomationEditorWorkspace({
 
   async function handleSave(): Promise<void> {
     setSaveState("saving");
-    setErrorMessage(null);
     try {
       await postJson(automationBffPath, {
         intent: "update_sequence",
@@ -335,12 +335,14 @@ export function AutomationEditorWorkspace({
       setSaveState("saved");
     } catch (error) {
       setSaveState("error");
-      setErrorMessage(error instanceof Error ? error.message : "Unable to save workflow.");
+      reportAdminActionError(error, {
+        context: "Save automation workflow",
+        fallbackMessage: "Unable to save workflow.",
+      });
     }
   }
 
   async function handleArchive(): Promise<void> {
-    setErrorMessage(null);
     try {
       await postJson(automationBffPath, {
         intent: "archive_sequence",
@@ -348,12 +350,14 @@ export function AutomationEditorWorkspace({
       });
       window.location.href = automationRootPath;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to archive workflow.");
+      reportAdminActionError(error, {
+        context: "Archive automation workflow",
+        fallbackMessage: "Unable to archive workflow.",
+      });
     }
   }
 
   async function handleRunNow(): Promise<void> {
-    setErrorMessage(null);
     try {
       await postJson(automationBffPath, {
         intent: "run_sequence",
@@ -364,8 +368,26 @@ export function AutomationEditorWorkspace({
       setRunDialogOpen(false);
       window.location.href = executionsHref;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to request run.");
+      reportAdminActionError(error, {
+        context: "Run automation workflow",
+        fallbackMessage: "Unable to request run.",
+      });
     }
+  }
+
+  function handleOptionsJsonError(message: string | null): void {
+    if (!message) {
+      lastOptionsJsonErrorRef.current = null;
+      return;
+    }
+    if (lastOptionsJsonErrorRef.current === message) {
+      return;
+    }
+    lastOptionsJsonErrorRef.current = message;
+    reportAdminActionError(new Error(message), {
+      context: "Automation editor options JSON",
+      fallbackMessage: message,
+    });
   }
 
   function applyAdvancedJson(): void {
@@ -388,9 +410,11 @@ export function AutomationEditorWorkspace({
       setNodes(nextGraph.nodes);
       setSelectedNodeId(nextGraph.nodes.find((node) => node.data.type === "task")?.id ?? null);
       setSaveState("idle");
-      setErrorMessage(null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Invalid advanced JSON.");
+      reportAdminActionError(error, {
+        context: "Automation editor advanced JSON",
+        fallbackMessage: "Invalid advanced JSON.",
+      });
     }
   }
 
@@ -407,12 +431,6 @@ export function AutomationEditorWorkspace({
         onSave={() => void handleSave()}
         onArchive={() => setArchiveDialogOpen(true)}
       />
-
-      {errorMessage && (
-        <p className="rounded-[1.2rem] border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {errorMessage}
-        </p>
-      )}
 
       <div className="grid min-h-[74vh] gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
         <AutomationEditorPalette
@@ -457,7 +475,7 @@ export function AutomationEditorWorkspace({
           selectedTaskNode={selectedTaskNode}
           pluginRecords={pluginRecords}
           onTaskUpdate={updateSelectedTask}
-          onOptionsJsonError={setErrorMessage}
+          onOptionsJsonError={handleOptionsJsonError}
           onMoveTask={moveTask}
           onRemoveTask={removeTask}
           title={title}

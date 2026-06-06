@@ -174,6 +174,7 @@ export interface BulkOnboardingPlanItem {
   warnings: string[];
   errors: string[];
   requiresOverride: boolean;
+  recommendedAction?: string;
   validation?: ChannelProviderShapeValidation;
 }
 
@@ -1089,6 +1090,49 @@ function fingerprintPlan(input: unknown): string {
     .slice(0, 24);
 }
 
+async function readExistingChannelIdRows(
+  pool: Pool,
+  parsedRows: ParsedBulkImportChannel[]
+): Promise<Map<string, { channelId: string; providerType: AdminChannelProviderType; name: string | null; fetchUrl: string | null }>> {
+  const channelIds = Array.from(
+    new Set(
+      parsedRows
+        .map((row) => normalizeString(row.channel.channelId))
+        .filter(Boolean)
+    )
+  );
+  if (channelIds.length === 0) {
+    return new Map();
+  }
+  const result = await pool.query<{
+    channel_id: string;
+    provider_type: AdminChannelProviderType;
+    name: string | null;
+    fetch_url: string | null;
+  }>(
+    `
+      select channel_id::text as channel_id,
+             provider_type,
+             name,
+             fetch_url
+      from source_channels
+      where channel_id::text = any($1::text[])
+    `,
+    [channelIds]
+  );
+  return new Map(
+    result.rows.map((row) => [
+      row.channel_id,
+      {
+        channelId: row.channel_id,
+        providerType: row.provider_type,
+        name: row.name ?? null,
+        fetchUrl: row.fetch_url ?? null
+      }
+    ])
+  );
+}
+
 function nextBulkReadBack(channelIds: string[] = []) {
   return [
     {
@@ -1201,9 +1245,81 @@ export async function planChannelBulkOnboardingWithPool(
     parsedRows.push(parsed.parsed);
   });
 
+  const existingChannelIdRows = await readExistingChannelIdRows(pool, parsedRows);
+  const validParsedRows: ParsedBulkImportChannel[] = [];
+  for (const parsed of parsedRows) {
+    const channelId = normalizeString(parsed.channel.channelId);
+    if (!channelId) {
+      validParsedRows.push(parsed);
+      continue;
+    }
+    const existing = existingChannelIdRows.get(channelId);
+    const rawPayload =
+      sources[parsed.index] != null &&
+      typeof sources[parsed.index] === "object" &&
+      !Array.isArray(sources[parsed.index])
+        ? (sources[parsed.index] as Record<string, unknown>)
+        : {};
+    if (!existing) {
+      earlyItems.push({
+        index: parsed.index,
+        status: "invalid_schema",
+        providerType: parsed.providerType,
+        name: parsed.channel.name,
+        fetchUrl: "fetchUrl" in parsed.channel ? parsed.channel.fetchUrl : null,
+        action: "skip",
+        matchType: "channelId",
+        channelId,
+        existingName: null,
+        existingFetchUrl: null,
+        warnings: [
+          "channelId is for updating existing channels only; omit channelId when creating a source."
+        ],
+        errors: [`Channel ${channelId} was not found.`],
+        requiresOverride: false,
+        recommendedAction:
+          "Omit channelId for creates; use an existing channelId only for updates.",
+        validation: buildProviderShapeValidation(
+          parsed.providerType,
+          "fetchUrl" in parsed.channel ? parsed.channel.fetchUrl : null,
+          rawPayload
+        )
+      });
+      continue;
+    }
+    if (existing.providerType !== parsed.providerType) {
+      earlyItems.push({
+        index: parsed.index,
+        status: "invalid_schema",
+        providerType: parsed.providerType,
+        name: parsed.channel.name,
+        fetchUrl: "fetchUrl" in parsed.channel ? parsed.channel.fetchUrl : null,
+        action: "skip",
+        matchType: "channelId",
+        channelId,
+        existingName: existing.name,
+        existingFetchUrl: existing.fetchUrl,
+        warnings: [
+          `Existing channelId belongs to providerType=${existing.providerType}, not ${parsed.providerType}.`
+        ],
+        errors: ["Provider mismatch for existing channelId."],
+        requiresOverride: false,
+        recommendedAction:
+          "Use the existing channel's providerType for updates, or omit channelId to plan a new source.",
+        validation: buildProviderShapeValidation(
+          parsed.providerType,
+          "fetchUrl" in parsed.channel ? parsed.channel.fetchUrl : null,
+          rawPayload
+        )
+      });
+      continue;
+    }
+    validParsedRows.push(parsed);
+  }
+
   const importPlan =
-    parsedRows.length > 0
-      ? await planBulkImportWithPool(pool, parsedRows)
+    validParsedRows.length > 0
+      ? await planBulkImportWithPool(pool, validParsedRows)
       : {
           channels: [],
           wouldCreate: 0,
@@ -1218,7 +1334,7 @@ export async function planChannelBulkOnboardingWithPool(
   importPlan.items.forEach((item) => plannedItems.set(item.index, item));
 
   const items: BulkOnboardingPlanItem[] = [...earlyItems];
-  for (const parsed of parsedRows) {
+  for (const parsed of validParsedRows) {
     const planned = plannedItems.get(parsed.index);
     if (!planned) {
       items.push({

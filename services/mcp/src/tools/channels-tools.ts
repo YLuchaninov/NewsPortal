@@ -234,6 +234,64 @@ function readValidatedChannelPayload(args: Record<string, unknown>): Record<stri
   return payload;
 }
 
+function channelProviderHints(providerType: unknown): Record<string, unknown> {
+  const normalized = readOptionalString(providerType);
+  return {
+    channelId: "channelId is for existing channel updates only; omit it when creating a channel.",
+    polling:
+      normalized === "website"
+        ? "website channels use maxResourcesPerPoll in settings/config."
+        : normalized === "rss" || normalized === "api"
+          ? "RSS/API channels use maxItemsPerPoll in settings/config."
+          : "Use provider-specific polling fields: website maxResourcesPerPoll; RSS/API maxItemsPerPoll.",
+  };
+}
+
+function readCreateChannelPayload(args: Record<string, unknown>): Record<string, unknown> {
+  const payload = readValidatedChannelPayload(args);
+  if (Object.prototype.hasOwnProperty.call(payload, "channelId") && readOptionalString(payload.channelId)) {
+    throw new JsonRpcError(
+      -32602,
+      "channelId is for existing channel updates only; omit it when creating a channel",
+      {
+        statusCode: 400,
+        data: {
+          path: "payload.channelId",
+          expectedShape: "omit channelId for channels.create",
+          hints: channelProviderHints(payload.providerType),
+        },
+      }
+    );
+  }
+  return payload;
+}
+
+async function readResolvedChannelPayload(
+  pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
+  args: Record<string, unknown>,
+  options: { requireChannelId?: boolean } = {}
+): Promise<Record<string, unknown>> {
+  const payload = readValidatedChannelPayload(args);
+  const channelId = readOptionalString(payload.channelId);
+  if (!channelId) {
+    if (options.requireChannelId) {
+      throw new JsonRpcError(-32602, "channels.update requires an existing channelId.", {
+        statusCode: 400,
+        data: {
+          path: "payload.channelId",
+          expectedShape: "full UUID or unique UUID prefix",
+          hints: channelProviderHints(payload.providerType),
+        },
+      });
+    }
+    return payload;
+  }
+  return {
+    ...payload,
+    channelId: await resolveChannelId(pool, channelId),
+  };
+}
+
 async function resolveChannelId(
   pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
   value: unknown
@@ -547,8 +605,17 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     "Create a channel through the shared control-plane service.",
     "write.channels",
     channelMutationSchema,
-    async ({ pool, token }, args) =>
-      saveChannelFromPayload(pool, token.issuedByUserId, readValidatedChannelPayload(args))
+    async ({ pool, token }, args) => {
+      try {
+        return await saveChannelFromPayload(
+          pool,
+          token.issuedByUserId,
+          readCreateChannelPayload(args)
+        );
+      } catch (error) {
+        return asMcpInvalidRequest(error, "channels.create");
+      }
+    }
   ),
   createWriteTool(
     "channels.bulk_onboard.apply",
@@ -670,8 +737,17 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     "Update a channel through the shared control-plane service. This requires a complete provider-specific channel payload with providerType, name, fetchUrl, and settings. For activation/deactivation only, use channels.set_active.",
     "write.channels",
     channelMutationSchema,
-    async ({ pool, token }, args) =>
-      saveChannelFromPayload(pool, token.issuedByUserId, readValidatedChannelPayload(args))
+    async ({ pool, token }, args) => {
+      try {
+        return await saveChannelFromPayload(
+          pool,
+          token.issuedByUserId,
+          await readResolvedChannelPayload(pool, args, { requireChannelId: true })
+        );
+      } catch (error) {
+        return asMcpInvalidRequest(error, "channels.update");
+      }
+    }
   ),
   createWriteTool(
     "channels.set_active",
@@ -733,6 +809,43 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
           }),
         ]
       );
+      await pool.query(
+        `
+        insert into source_channel_runtime_state (
+          channel_id,
+          adaptive_enabled,
+          effective_poll_interval_seconds,
+          max_poll_interval_seconds,
+          next_due_at,
+          adaptive_step,
+          consecutive_no_change_polls,
+          consecutive_failures,
+          adaptive_reason,
+          updated_at
+        )
+        values (
+          $1,
+          true,
+          (select poll_interval_seconds from source_channels where channel_id = $1),
+          (select least(poll_interval_seconds * 16, 604800) from source_channels where channel_id = $1),
+          now(),
+          0,
+          0,
+          0,
+          'mcp_sync_request',
+          now()
+        )
+        on conflict (channel_id)
+        do update
+        set
+          next_due_at = now(),
+          adaptive_step = 0,
+          consecutive_failures = 0,
+          adaptive_reason = 'mcp_sync_request',
+          updated_at = now()
+        `,
+        [channelId]
+      );
       const event = result.rows[0] as Record<string, unknown>;
       await writeMcpMutationAudit(pool, token, {
         actionType: "channel_sync_requested",
@@ -747,6 +860,7 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...event,
         nextReadBack: [
           { tool: "channels.read", arguments: { channelId } },
+          { tool: "fetch_runs.list", arguments: { channelId, page: 1, pageSize: 5 } },
           {
             tool: "outbox.events.list",
             arguments: {

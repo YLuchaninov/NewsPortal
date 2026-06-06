@@ -212,7 +212,7 @@ class ContentAnalysisTests(unittest.TestCase):
             enabled=True,
             mode="observe",
             provider="gemini",
-            model_key="gemini-2.0-flash",
+            model_key="gemini-3.1-flash-lite",
             model_version="1",
             config={},
             failure_policy="skip",

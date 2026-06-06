@@ -33,6 +33,8 @@ export type ChannelBottleneckRepairLane =
   | "polite_retry"
   | "projection_repair";
 
+export type ChannelSourceClass = "operator_like" | "test_or_audit_like" | "unknown";
+
 export interface ChannelBottleneckListOptions {
   page?: number;
   pageSize?: number;
@@ -51,6 +53,7 @@ export interface ChannelBottleneckRow {
   researchMode: string | null;
   tosRisk: string | null;
   sourceRole: string | null;
+  sourceClass: ChannelSourceClass;
   fetchUrl: string | null;
   isActive: boolean;
   activeState: "active" | "paused";
@@ -124,6 +127,12 @@ export interface ChannelBottleneckSummary {
   byFailureBucket: Array<{ failureBucket: ChannelBottleneckFailureBucket; count: number }>;
   byRepairLane: Array<{ repairLane: ChannelBottleneckRepairLane; count: number }>;
   byProvider: Array<{ providerType: string; count: number; technicalBottlenecks: number }>;
+  bySourceClass: Array<{
+    sourceClass: ChannelSourceClass;
+    count: number;
+    activeChannels: number;
+    technicalBottlenecks: number;
+  }>;
   nextReadBack: Array<Record<string, unknown>>;
 }
 
@@ -142,6 +151,8 @@ interface RawChannelBottleneckRow {
   researchMode: string | null;
   tosRisk: string | null;
   sourceRole: string | null;
+  sourceClassConfig: string | null;
+  testArtifactMarker: string | null;
   fetchUrl: string | null;
   isActive: boolean;
   pollIntervalSeconds: number;
@@ -405,6 +416,21 @@ function isLegacyDdgsInternalBridge(row: Pick<RawChannelBottleneckRow, "adapterK
   }
 }
 
+function classifyChannelSourceClass(row: Pick<RawChannelBottleneckRow, "name" | "sourceClassConfig" | "testArtifactMarker" | "isActive">): ChannelSourceClass {
+  const configured = normalizeString(row.sourceClassConfig);
+  if (configured === "operator_like" || configured === "test_or_audit_like" || configured === "unknown") {
+    return configured;
+  }
+  if (normalizeString(row.testArtifactMarker)) {
+    return "test_or_audit_like";
+  }
+  const name = normalizeString(row.name).toLowerCase();
+  if (/(^|[\s-])(audit|ui audit|viewport|test)([\s-]|$)/u.test(name)) {
+    return "test_or_audit_like";
+  }
+  return toBoolean(row.isActive) ? "operator_like" : "unknown";
+}
+
 function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
   const validation = buildProviderShapeValidation(row.providerType, row.fetchUrl);
   const failureBucket = classifyFailureBucket(row, validation);
@@ -412,6 +438,7 @@ function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
   const nextDueAt = normalizeStringOrNull(row.nextDueAt);
   const nextDueTime = nextDueAt ? new Date(nextDueAt).getTime() : Number.NaN;
   const legacyDdgsInternalBridge = isLegacyDdgsInternalBridge(row);
+  const sourceClass = classifyChannelSourceClass(row);
 
   return {
     channelId: normalizeString(row.channelId),
@@ -421,6 +448,7 @@ function mapRow(row: RawChannelBottleneckRow): ChannelBottleneckRow {
     researchMode: normalizeStringOrNull(row.researchMode),
     tosRisk: normalizeStringOrNull(row.tosRisk),
     sourceRole: normalizeStringOrNull(row.sourceRole),
+    sourceClass,
     fetchUrl: normalizeStringOrNull(row.fetchUrl),
     isActive: toBoolean(row.isActive),
     activeState: toBoolean(row.isActive) ? "active" : "paused",
@@ -496,6 +524,8 @@ async function readRawBottleneckRows(
         coalesce(sc.config_json #>> '{api,researchMode}', sc.config_json #>> '{adapter,researchMode}', sc.config_json #>> '{researchMode}') as "researchMode",
         coalesce(sc.config_json #>> '{api,tosRisk}', sc.config_json #>> '{adapter,tosRisk}', sc.config_json #>> '{tosRisk}') as "tosRisk",
         coalesce(sc.config_json #>> '{api,sourceRole}', sc.config_json #>> '{adapter,sourceRole}', sc.config_json #>> '{discovery,sourceRole}', sc.config_json #>> '{sourceRole}') as "sourceRole",
+        coalesce(sc.config_json #>> '{sourceClass}', sc.config_json #>> '{operator,sourceClass}') as "sourceClassConfig",
+        coalesce(sc.config_json #>> '{testArtifact}', sc.config_json #>> '{audit,kind}', sc.config_json #>> '{uiAudit,kind}') as "testArtifactMarker",
         sc.fetch_url as "fetchUrl",
         sc.is_active as "isActive",
         sc.poll_interval_seconds as "pollIntervalSeconds",
@@ -676,6 +706,12 @@ export async function summarizeChannelBottlenecksWithPool(
   const byBucket = new Map<ChannelBottleneckFailureBucket, number>();
   const byLane = new Map<ChannelBottleneckRepairLane, number>();
   const byProvider = new Map<string, { providerType: string; count: number; technicalBottlenecks: number }>();
+  const bySourceClass = new Map<ChannelSourceClass, {
+    sourceClass: ChannelSourceClass;
+    count: number;
+    activeChannels: number;
+    technicalBottlenecks: number;
+  }>();
   for (const row of rows) {
     increment(byBucket, row.failureBucket);
     increment(byLane, row.repairLane);
@@ -689,6 +725,20 @@ export async function summarizeChannelBottlenecksWithPool(
       provider.technicalBottlenecks += 1;
     }
     byProvider.set(row.providerType, provider);
+    const sourceClass = bySourceClass.get(row.sourceClass) ?? {
+      sourceClass: row.sourceClass,
+      count: 0,
+      activeChannels: 0,
+      technicalBottlenecks: 0,
+    };
+    sourceClass.count += 1;
+    if (row.isActive) {
+      sourceClass.activeChannels += 1;
+    }
+    if (isTechnicalBucket(row.failureBucket)) {
+      sourceClass.technicalBottlenecks += 1;
+    }
+    bySourceClass.set(row.sourceClass, sourceClass);
   }
 
   return {
@@ -705,6 +755,9 @@ export async function summarizeChannelBottlenecksWithPool(
       .map(([repairLane, count]) => ({ repairLane, count }))
       .sort((left, right) => right.count - left.count || left.repairLane.localeCompare(right.repairLane)),
     byProvider: [...byProvider.values()].sort(
+      (left, right) => right.technicalBottlenecks - left.technicalBottlenecks || right.count - left.count,
+    ),
+    bySourceClass: [...bySourceClass.values()].sort(
       (left, right) => right.technicalBottlenecks - left.technicalBottlenecks || right.count - left.count,
     ),
     nextReadBack: [
@@ -731,6 +784,7 @@ export async function explainChannelBottleneckWithPool(
       lowYieldIsFailure: false,
       failureBucket: row.failureBucket,
       repairLane: row.repairLane,
+      sourceClass: row.sourceClass,
       providerShapeBlocker: row.providerShapeValidation.blocker,
       legacyDdgsInternalBridge: row.legacyDdgsInternalBridge,
       legacyBridgeWarning: row.legacyBridgeWarning,

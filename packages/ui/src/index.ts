@@ -49,6 +49,12 @@ export { PaginationNav } from "./components/ui/pagination-nav";
 
 // Utilities
 export { cn } from "./lib/utils";
+export {
+  ClientActionError,
+  createClientActionError,
+  readClientErrorMessage,
+  reportClientError,
+} from "./lib/client-errors";
 
 // Legacy — kept for backward compatibility during migration
 export const APP_SHELL_STYLES = "";

@@ -22,6 +22,7 @@ import {
   postJson,
   readCount,
   readText,
+  reportAdminActionError,
   type JsonRecord,
 } from "./admin-client-helpers";
 
@@ -71,7 +72,6 @@ export function AutomationOverviewBoard({
   const [query, setQuery] = useState("");
   const [creatingBlank, setCreatingBlank] = useState(false);
   const [creatingSuggested, setCreatingSuggested] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [liveSummary, setLiveSummary] = useState(summary);
   const [liveRuns, setLiveRuns] = useState(recentRuns);
   const [liveOutbox, setLiveOutbox] = useState(outboxEvents);
@@ -128,7 +128,6 @@ export function AutomationOverviewBoard({
 
   async function handleCreateBlank(): Promise<void> {
     setCreatingBlank(true);
-    setErrorMessage(null);
     try {
       const result = await postJson(automationBffPath, {
         intent: "create_sequence",
@@ -140,7 +139,10 @@ export function AutomationOverviewBoard({
       }
       window.location.href = `${automationRootPath}/${encodeURIComponent(sequenceId)}`;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create workflow.");
+      reportAdminActionError(error, {
+        context: "Create blank automation workflow",
+        fallbackMessage: "Unable to create workflow.",
+      });
     } finally {
       setCreatingBlank(false);
     }
@@ -148,7 +150,6 @@ export function AutomationOverviewBoard({
 
   async function handleCreateSuggested(): Promise<void> {
     setCreatingSuggested(true);
-    setErrorMessage(null);
     try {
       const firstTemplate = AUTOMATION_TEMPLATES[0];
       const response = await postJson(automationBffPath, {
@@ -170,7 +171,10 @@ export function AutomationOverviewBoard({
       }
       window.location.href = `${automationRootPath}/${encodeURIComponent(sequenceId)}`;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create workflow.");
+      reportAdminActionError(error, {
+        context: "Create suggested automation workflow",
+        fallbackMessage: "Unable to create workflow.",
+      });
     } finally {
       setCreatingSuggested(false);
     }
@@ -226,11 +230,6 @@ export function AutomationOverviewBoard({
                 Manage MCP Tokens
               </a>
             </div>
-            {errorMessage && (
-              <p className="rounded-2xl border border-rose-300/60 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200">
-                {errorMessage}
-              </p>
-            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

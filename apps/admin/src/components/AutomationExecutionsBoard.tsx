@@ -18,6 +18,7 @@ import {
   postJson,
   readCount,
   readText,
+  reportAdminActionError,
   type JsonRecord,
 } from "./admin-client-helpers";
 
@@ -53,7 +54,6 @@ export function AutomationExecutionsBoard({
   outboxEvents,
 }: AutomationExecutionsBoardProps) {
   const [selectedRunId, setSelectedRunId] = useState(initialSelectedRunId);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState(
     new URL(currentPath, "http://127.0.0.1").searchParams.get("status") ?? "all"
   );
@@ -105,7 +105,6 @@ export function AutomationExecutionsBoard({
   const selectedTaskRuns = taskRunsByRunId[selectedRunId] ?? [];
 
   async function handleCancelRun(runId: string): Promise<void> {
-    setActionError(null);
     try {
       await postJson(automationBffPath, {
         intent: "cancel_run",
@@ -114,12 +113,14 @@ export function AutomationExecutionsBoard({
       });
       window.location.reload();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to cancel run.");
+      reportAdminActionError(error, {
+        context: "Cancel automation run",
+        fallbackMessage: "Unable to cancel run.",
+      });
     }
   }
 
   async function handleRetryRun(runId: string): Promise<void> {
-    setActionError(null);
     try {
       await postJson(automationBffPath, {
         intent: "retry_run",
@@ -129,7 +130,10 @@ export function AutomationExecutionsBoard({
       });
       window.location.reload();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to retry run.");
+      reportAdminActionError(error, {
+        context: "Retry automation run",
+        fallbackMessage: "Unable to retry run.",
+      });
     }
   }
 
@@ -187,12 +191,6 @@ export function AutomationExecutionsBoard({
           </div>
         </div>
       </section>
-
-      {actionError && (
-        <p className="rounded-[1.2rem] border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {actionError}
-        </p>
-      )}
 
       <div className="grid gap-6 xl:grid-cols-[0.96fr_1.04fr]">
         <Card className={ADMIN_AUTOMATION_CARD_CLASS}>

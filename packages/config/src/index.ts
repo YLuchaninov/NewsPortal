@@ -142,7 +142,7 @@ export function readRuntimeConfig(
       String(env.DISCOVERY_ENABLED ?? "").trim().toLowerCase() === "true",
     discoveryCron: env.DISCOVERY_CRON ?? "0 */6 * * *",
     discoverySearchProvider: env.DISCOVERY_SEARCH_PROVIDER ?? "ddgs",
-    discoveryLlmModel: env.DISCOVERY_GEMINI_MODEL ?? env.GEMINI_MODEL ?? "gemini-2.0-flash",
+    discoveryLlmModel: env.DISCOVERY_GEMINI_MODEL ?? env.GEMINI_MODEL ?? "gemini-3.5-flash",
     discoveryMonthlyBudgetCents: Number.parseInt(
       env.DISCOVERY_MONTHLY_BUDGET_CENTS ?? "0",
       10

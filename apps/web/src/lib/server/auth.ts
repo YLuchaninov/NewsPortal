@@ -31,6 +31,26 @@ interface TestWebSessionPayload {
   exp: number;
 }
 
+export interface WebAuthErrorPayload {
+  error: string;
+  errorCode?: string;
+  technicalError?: string;
+}
+
+class FirebaseRequestError extends Error {
+  readonly code: string | null;
+  readonly status: number;
+  readonly path: string;
+
+  constructor(message: string, options: { code?: string | null; status: number; path: string }) {
+    super(message);
+    this.name = "FirebaseRequestError";
+    this.code = options.code ?? null;
+    this.status = options.status;
+    this.path = options.path;
+  }
+}
+
 function readFirebaseApiKey(): string {
   return process.env.FIREBASE_WEB_API_KEY ?? "";
 }
@@ -115,7 +135,13 @@ async function firebaseRequest(path: string, payload: Record<string, unknown>): 
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error?.message ?? `Firebase request failed for ${path}.`);
+    const message = String(data.error?.message ?? `Firebase request failed for ${path}.`).trim();
+    const code = message.split(":")[0]?.trim() || null;
+    throw new FirebaseRequestError(message, {
+      code,
+      status: response.status,
+      path,
+    });
   }
 
   return data;
@@ -432,6 +458,49 @@ export async function signInWebWithGoogleCredential(credential: string): Promise
     idToken,
     refreshToken,
     identity: assertAuthorizedGoogleSession(verified)
+  };
+}
+
+export function buildGoogleSignInErrorPayload(error: unknown): WebAuthErrorPayload {
+  const technicalError = error instanceof Error ? error.message : "Google sign-in failed.";
+  const firebaseCode = error instanceof FirebaseRequestError ? error.code : null;
+
+  if (firebaseCode === "OPERATION_NOT_ALLOWED") {
+    return {
+      error: "Google sign-in is not enabled in Firebase Authentication.",
+      errorCode: "firebase_provider_not_enabled",
+      technicalError,
+    };
+  }
+
+  if (firebaseCode === "INVALID_IDP_RESPONSE") {
+    return {
+      error: "Google sign-in is not configured for this Firebase project.",
+      errorCode: "firebase_invalid_idp_response",
+      technicalError,
+    };
+  }
+
+  if (technicalError === "FIREBASE_WEB_API_KEY is not configured.") {
+    return {
+      error: "Google sign-in is not configured.",
+      errorCode: "firebase_api_key_missing",
+      technicalError,
+    };
+  }
+
+  if (technicalError === "Google credential is required.") {
+    return {
+      error: "Google did not return a sign-in credential.",
+      errorCode: "google_credential_missing",
+      technicalError,
+    };
+  }
+
+  return {
+    error: technicalError || "Google sign-in failed.",
+    errorCode: firebaseCode ? `firebase_${firebaseCode.toLowerCase()}` : undefined,
+    technicalError,
   };
 }
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { UserContentStateView } from "@signalops/contracts";
+import { createClientActionError, reportClientError } from "@signalops/ui";
 
 interface UserContentStateControlsProps {
   contentItemId: string;
@@ -27,10 +28,15 @@ async function postAction(
 
   const payload = (await response.json()) as {
     error?: string;
+    technicalError?: string;
+    errorCode?: string;
     userState?: UserContentStateView;
   };
   if (!response.ok || !payload.userState) {
-    throw new Error(payload.error ?? `Request failed with ${response.status}.`);
+    throw createClientActionError(payload, {
+      fallbackMessage: `Request failed with ${response.status}.`,
+      status: response.status,
+    });
   }
   return payload.userState;
 }
@@ -57,6 +63,11 @@ export function UserContentStateControls({
       });
       setUserState(nextState);
       onUserStateChange?.(nextState);
+    } catch (error) {
+      reportClientError(error, {
+        context: `Content state action: ${action}`,
+        fallbackMessage: "Unable to update this item.",
+      });
     } finally {
       setPendingAction(null);
     }
@@ -74,6 +85,11 @@ export function UserContentStateControls({
       });
       setUserState(nextState);
       onUserStateChange?.(nextState);
+    } catch (error) {
+      reportClientError(error, {
+        context: `Story follow action: ${action}`,
+        fallbackMessage: "Unable to update story follow state.",
+      });
     } finally {
       setPendingAction(null);
     }

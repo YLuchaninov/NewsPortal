@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from psycopg.types.json import Json
 
 from services.api.app.database import query_all, query_count, query_one
@@ -173,13 +173,42 @@ class DiscoveryVNextBriefPreviewPayload(BaseModel):
     interest_id: str | None = Field(default=None, alias="interestId")
     name: str = "System interest"
     description: str = ""
-    positive_texts: list[str] = Field(default_factory=list, alias="positive_texts")
-    negative_texts: list[str] = Field(default_factory=list, alias="negative_texts")
-    candidate_positive_signals: list[str] = Field(default_factory=list, alias="candidate_positive_signals")
-    candidate_negative_signals: list[str] = Field(default_factory=list, alias="candidate_negative_signals")
+    positive_texts: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("positiveTexts", "positive_texts"),
+    )
+    negative_texts: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("negativeTexts", "negative_texts"),
+    )
+    candidate_positive_signals: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("candidatePositiveSignals", "candidate_positive_signals"),
+    )
+    candidate_negative_signals: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("candidateNegativeSignals", "candidate_negative_signals"),
+    )
     geographies: list[str] = Field(default_factory=list)
     languages: list[str] = Field(default_factory=list)
     operator_constraints: dict[str, Any] = Field(default_factory=dict, alias="operatorConstraints")
+
+    @field_validator(
+        "positive_texts",
+        "negative_texts",
+        "candidate_positive_signals",
+        "candidate_negative_signals",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_text_list(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in re.split(r"[,;\n]", value) if item.strip()]
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return value
 
 
 class DiscoveryVNextArtifactValidatePayload(BaseModel):
@@ -510,14 +539,24 @@ def start_run(payload: DiscoveryVNextRunStartPayload) -> dict[str, Any]:
         if payload.live_provider_execution is None
         else bool(payload.live_provider_execution)
     )
+    effective_budget = _effective_run_budget(
+        runtime_policy=runtime_policy,
+        request=payload.request,
+        budget=payload.budget,
+        live_provider_execution=live_provider_execution,
+    )
     if live_provider_execution:
-        _assert_live_runtime_allowed(runtime_policy, payload.budget)
+        _assert_live_runtime_allowed(
+            runtime_policy,
+            effective_budget,
+            provider=_search_provider_from_request(payload.request),
+        )
     run = create_run(
         DiscoveryVNextRunCreatePayload(
             runKind=payload.run_kind,
             triggerKind=payload.trigger_kind,
             request=payload.request,
-            budget={**payload.budget, "liveProviderExecution": live_provider_execution},
+            budget=effective_budget,
             createdBy=payload.created_by,
         )
     )
@@ -527,7 +566,7 @@ def start_run(payload: DiscoveryVNextRunStartPayload) -> dict[str, Any]:
             run_id=run_id,
             run_kind=payload.run_kind,
             request=payload.request,
-            budget=payload.budget,
+            budget=effective_budget,
             live_provider_execution=live_provider_execution,
             created_by=payload.created_by,
         )
@@ -1589,7 +1628,7 @@ def run_llm_gateway(payload: DiscoveryVNextLlmGatewayPayload) -> dict[str, Any]:
             payload.vnext_run_id or payload.run_id,
             payload.artifact_id,
             payload.task,
-            payload.model or _env("DISCOVERY_GEMINI_MODEL") or _env("GEMINI_MODEL") or "gemini-2.0-flash",
+            payload.model or _env("DISCOVERY_GEMINI_MODEL") or _env("GEMINI_MODEL") or "gemini-3.5-flash",
             Json({"prompt": payload.prompt}),
             Json({"task": payload.task, "payload": payload.payload, "temperature": payload.temperature}),
             payload.live_provider_execution,
@@ -1655,8 +1694,13 @@ def execute_run_steps(
     live_provider_execution: bool,
     created_by: str,
 ) -> dict[str, Any]:
-    del budget
-    result: dict[str, Any] = {"liveProviderExecution": live_provider_execution, "steps": []}
+    effective_budget = _effective_run_budget(
+        runtime_policy=resolve_required_policy_payload({}, "discovery-runtime"),
+        request=request,
+        budget=budget,
+        live_provider_execution=live_provider_execution,
+    )
+    result: dict[str, Any] = {"liveProviderExecution": live_provider_execution, "budget": effective_budget, "steps": []}
     interest = _request_interest(request)
 
     if run_kind in {"brief_compile", "full"}:
@@ -1698,6 +1742,7 @@ def execute_run_steps(
             DiscoveryVNextLlmGatewayPayload(
                 task="discovery_compile_interest_graph",
                 payload=brief_payload,
+                budget=effective_budget,
                 vnextRunId=run_id,
                 artifactId=str((result.get("briefArtifact") or {}).get("artifact_id") or ""),
                 liveProviderExecution=live_provider_execution,
@@ -1717,6 +1762,15 @@ def execute_run_steps(
                 locale=request.get("locale"),
             )
         )
+        if preview.get("status") == "failed":
+            error = preview.get("error") if isinstance(preview.get("error"), dict) else {}
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": error.get("code") or "mega_loop_failed",
+                    "message": error.get("message") or "Discovery MegaLoop preview failed.",
+                },
+            )
         artifacts = [
             create_artifact(
                 "HypothesisBatch",
@@ -1747,6 +1801,7 @@ def execute_run_steps(
             interest_id=interest.get("interestId"),
             hypothesis_artifacts=result.get("hypothesisArtifacts") if isinstance(result.get("hypothesisArtifacts"), list) else [],
             request=request,
+            budget=effective_budget,
             live_provider_execution=live_provider_execution,
             created_by=created_by,
         )
@@ -2262,15 +2317,22 @@ def execute_candidate_acquisition(
     interest_id: str | None,
     hypothesis_artifacts: list[dict[str, Any]],
     request: dict[str, Any],
+    budget: dict[str, Any],
     live_provider_execution: bool,
     created_by: str,
 ) -> dict[str, Any]:
     runtime_policy = resolve_required_policy_payload({}, "discovery-runtime")
+    effective_budget = _effective_run_budget(
+        runtime_policy=runtime_policy,
+        request=request,
+        budget=budget,
+        live_provider_execution=live_provider_execution,
+    )
+    provider = _search_provider_from_request(request)
     if live_provider_execution:
-        _assert_live_runtime_allowed(runtime_policy, request.get("budget") if isinstance(request.get("budget"), dict) else {})
+        _assert_live_runtime_allowed(runtime_policy, effective_budget, provider=provider)
     max_attempts = max(1, min(50, int(runtime_policy.get("maxQueryAttemptsPerRun") or 20)))
     max_results = max(1, min(20, int(runtime_policy.get("maxResultsPerQuery") or 10)))
-    provider = str(request.get("searchProvider") or _env("DISCOVERY_SEARCH_PROVIDER") or "ddgs")
     adapter = _search_adapter(provider) if live_provider_execution else StubWebSearchAdapter()
     attempts: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
@@ -3156,13 +3218,72 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def _assert_live_runtime_allowed(runtime_policy: dict[str, Any], budget: dict[str, Any] | None) -> None:
+def _discovery_unavailable(code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=503, detail={"code": code, "message": message})
+
+
+def _effective_run_budget(
+    *,
+    runtime_policy: dict[str, Any],
+    request: dict[str, Any] | None,
+    budget: dict[str, Any] | None,
+    live_provider_execution: bool,
+) -> dict[str, Any]:
+    request_budget = request.get("budget") if isinstance(request, dict) and isinstance(request.get("budget"), dict) else {}
+    policy_budget = {
+        key: runtime_policy[key]
+        for key in ("maxRunCostCents", "maxQueryAttemptsPerRun", "maxResultsPerQuery")
+        if runtime_policy.get(key) is not None
+    }
+    return {
+        **policy_budget,
+        **request_budget,
+        **(budget if isinstance(budget, dict) else {}),
+        "liveProviderExecution": live_provider_execution,
+    }
+
+
+def _search_provider_from_request(request: dict[str, Any] | None) -> str:
+    provider = request.get("searchProvider") if isinstance(request, dict) else None
+    return str(provider or _env("DISCOVERY_SEARCH_PROVIDER") or "ddgs").strip().lower()
+
+
+def _assert_search_provider_runtime_ready(provider: str) -> None:
+    normalized = provider.strip().lower()
+    if normalized in {"stub", ""}:
+        return
+    if normalized == "brave" and not _env("DISCOVERY_BRAVE_API_KEY"):
+        raise _discovery_unavailable(
+            "runtime_credentials_missing",
+            "Discovery live execution requires DISCOVERY_BRAVE_API_KEY for searchProvider=brave.",
+        )
+    if normalized == "serper" and not _env("DISCOVERY_SERPER_API_KEY"):
+        raise _discovery_unavailable(
+            "runtime_credentials_missing",
+            "Discovery live execution requires DISCOVERY_SERPER_API_KEY for searchProvider=serper.",
+        )
+
+
+def _assert_live_runtime_allowed(
+    runtime_policy: dict[str, Any],
+    budget: dict[str, Any] | None,
+    *,
+    provider: str | None = None,
+) -> None:
     if runtime_policy.get("requireDiscoveryEnabled", True) and not _env_flag("DISCOVERY_ENABLED"):
-        raise HTTPException(status_code=503, detail="Discovery live execution requires DISCOVERY_ENABLED=1.")
+        raise _discovery_unavailable(
+            "runtime_disabled",
+            "Discovery live execution requires DISCOVERY_ENABLED=1.",
+        )
     effective_budget = budget if isinstance(budget, dict) else {}
     max_cost = int(effective_budget.get("maxRunCostCents") or runtime_policy.get("maxRunCostCents") or 0)
     if runtime_policy.get("requireRunBudget", True) and max_cost <= 0:
-        raise HTTPException(status_code=503, detail="Discovery live execution requires a positive maxRunCostCents budget.")
+        raise _discovery_unavailable(
+            "budget_missing",
+            "Discovery live execution requires a positive maxRunCostCents budget.",
+        )
+    if provider:
+        _assert_search_provider_runtime_ready(provider)
 
 
 def _complete_run(run_id: str, *, status: str, result: dict[str, Any] | None = None, error: dict[str, Any] | None = None) -> None:

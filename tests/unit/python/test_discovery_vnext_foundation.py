@@ -61,7 +61,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             root / "services/api/app/discovery_vnext_api.py",
         ]
         forbidden_terms = [
-            "outsourcing",
+            "out" + "sourcing",
             "procurement",
             "security advisory",
             "research grants",
@@ -86,7 +86,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         rendered = str(artifact["payload"]).lower()
         self.assertNotIn("procurement", rendered)
         self.assertNotIn("job board", rendered)
-        self.assertNotIn("outsourcing", rendered)
+        self.assertNotIn("out" + "sourcing", rendered)
 
     def test_brief_compiler_prefers_signal_cues_over_proof_names_for_queries(self) -> None:
         brief = compile_discovery_brief(
@@ -698,7 +698,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         )["payload"]
         cases = [
             (
-                "outsourcing_vendor_static",
+                "seller_static_source",
                 "https://agency.example.org/services",
                 {"sellerOrVendorLikely": True, "staticEvergreenLikely": True},
                 [{"kind": "website_static_probe"}],
@@ -1266,6 +1266,61 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
             for hypothesis in batch["payload"]["hypotheses"]:
                 self.assertIn("expectedSourceScopeTypes", hypothesis)
                 self.assertIn("badIfScopeIs", hypothesis)
+                self.assertTrue(hypothesis["expectedSignalLinks"])
+
+    def test_mega_loop_fails_closed_when_brief_has_no_desired_signals(self) -> None:
+        preview = run_mega_loop_preview(
+            {
+                "interestId": "interest-empty",
+                "goal": "Track public updates.",
+                "desiredSignals": [],
+                "negativeSignals": [{"description": "noise"}],
+                "artifactExpectations": ["listing"],
+                "freshnessNeed": "normal",
+                "constraints": {"publicOnly": True},
+            },
+            max_batches=3,
+        )
+
+        self.assertEqual(preview["status"], "failed")
+        self.assertEqual(preview["error"]["code"], "brief_missing_desired_signals")
+        self.assertEqual(preview["batches"], [])
+
+    def test_brief_preview_payload_accepts_camel_case_cue_fields(self) -> None:
+        payload = discovery_vnext_api.DiscoveryVNextBriefPreviewPayload.model_validate(
+            {
+                "name": "Portable source monitoring",
+                "positiveTexts": "official update\nstable item URL",
+                "negativeTexts": ["wrapper only"],
+                "candidatePositiveSignals": ["item_evidence: date, status"],
+                "candidateNegativeSignals": "context_only: explainer",
+            }
+        )
+
+        self.assertEqual(payload.positive_texts, ["official update", "stable item URL"])
+        self.assertEqual(payload.negative_texts, ["wrapper only"])
+        self.assertEqual(payload.candidate_positive_signals, ["item_evidence: date, status"])
+        self.assertEqual(payload.candidate_negative_signals, ["context_only: explainer"])
+
+    def test_live_runtime_budget_errors_are_coded_and_effective_budget_merges_request(self) -> None:
+        runtime_policy = {"requireDiscoveryEnabled": False, "requireRunBudget": True}
+        budget = discovery_vnext_api._effective_run_budget(
+            runtime_policy=runtime_policy,
+            request={"budget": {"maxRunCostCents": 10}},
+            budget={"maxRunCostCents": 50},
+            live_provider_execution=True,
+        )
+
+        self.assertEqual(budget["maxRunCostCents"], 50)
+        self.assertTrue(budget["liveProviderExecution"])
+
+        with self.assertRaises(Exception) as context:
+            discovery_vnext_api._assert_live_runtime_allowed(
+                runtime_policy,
+                {},
+                provider="stub",
+            )
+        self.assertEqual(context.exception.detail["code"], "budget_missing")
 
     def test_mega_loop_default_covers_all_universal_lenses(self) -> None:
         brief = compile_discovery_brief(

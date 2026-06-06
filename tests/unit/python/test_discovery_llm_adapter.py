@@ -34,8 +34,8 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "GEMINI_MODEL": "gemini-legacy",
-                "DISCOVERY_GEMINI_MODEL": "gemini-discovery",
+                "GEMINI_MODEL": "legacy-model-placeholder",
+                "DISCOVERY_GEMINI_MODEL": "discovery-model-placeholder",
             },
             clear=False,
         ):
@@ -48,7 +48,7 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
                 output_schema=None,
             )
 
-        self.assertEqual(result["meta"]["model"], "gemini-discovery")
+        self.assertEqual(result["meta"]["model"], "discovery-model-placeholder")
         self.assertEqual(result["meta"]["request_count"], 0)
         self.assertEqual(result["meta"]["cost_usd"], 0.0)
         self.assertTrue(result["meta"]["deterministic_fallback"])
@@ -89,7 +89,7 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
                 os.environ,
                 {
                     "DISCOVERY_GEMINI_API_KEY": "discovery-key",
-                    "DISCOVERY_GEMINI_MODEL": "gemini-discovery",
+                    "DISCOVERY_GEMINI_MODEL": "discovery-model-placeholder",
                     "DISCOVERY_GEMINI_BASE_URL": "https://example.test/v1beta",
                     "DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD": "0.50",
                     "DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD": "1.50",
@@ -112,14 +112,14 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
 
         self.assertEqual(result["result"], {"ok": True})
         self.assertEqual(result["meta"]["provider"], "gemini")
-        self.assertEqual(result["meta"]["model"], "gemini-discovery")
+        self.assertEqual(result["meta"]["model"], "discovery-model-placeholder")
         self.assertEqual(result["meta"]["request_count"], 1)
         self.assertEqual(result["meta"]["prompt_tokens"], 1000)
         self.assertEqual(result["meta"]["completion_tokens"], 500)
         self.assertEqual(result["meta"]["price_card_source"], "discovery_env_override")
         self.assertAlmostEqual(result["meta"]["cost_usd"], 0.00125, places=6)
         self.assertIn(
-            "https://example.test/v1beta/models/gemini-discovery:generateContent?key=discovery-key",
+            "https://example.test/v1beta/models/discovery-model-placeholder:generateContent?key=discovery-key",
             captured_urls[0],
         )
 

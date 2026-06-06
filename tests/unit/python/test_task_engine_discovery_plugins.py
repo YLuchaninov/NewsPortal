@@ -497,7 +497,7 @@ class _EnvelopeLlmAnalyzerAdapter:
             "result": {"summary": f"{size} analyzed"},
             "meta": {
                 "provider": "gemini",
-                "model": "gemini-2.5-pro",
+                "model": "gemini-3.5-flash",
                 "request_count": 1,
                 "prompt_tokens": 111,
                 "completion_tokens": 22,
@@ -599,7 +599,7 @@ class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["source_hypothesis"]["summary"], "1 analyzed")
         self.assertEqual(result["source_hypothesis_meta"]["provider"], "gemini")
-        self.assertEqual(result["source_hypothesis_meta"]["model"], "gemini-2.5-pro")
+        self.assertEqual(result["source_hypothesis_meta"]["model"], "gemini-3.5-flash")
         self.assertEqual(result["source_hypothesis_meta"]["request_count"], 1)
 
 

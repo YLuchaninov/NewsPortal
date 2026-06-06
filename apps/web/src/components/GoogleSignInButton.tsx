@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { createClientActionError, reportClientError } from "@signalops/ui";
 
 interface GoogleSignInButtonProps {
   clientId: string;
@@ -63,12 +64,14 @@ function loadGoogleScript(): Promise<void> {
 
 export function GoogleSignInButton({ clientId, authPath }: GoogleSignInButtonProps) {
   const buttonRef = useRef<HTMLDivElement | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     if (!clientId) {
-      setError("Google sign-in is not configured.");
+      reportClientError(new Error("Missing SIGNALOPS_WEB_GOOGLE_CLIENT_ID."), {
+        context: "Google sign-in configuration",
+        fallbackMessage: "Google sign-in is not configured.",
+      });
       return;
     }
 
@@ -82,10 +85,12 @@ export function GoogleSignInButton({ clientId, authPath }: GoogleSignInButtonPro
           callback: (response) => {
             const credential = String(response.credential ?? "").trim();
             if (!credential) {
-              setError("Google did not return a sign-in credential.");
+              reportClientError(new Error("Google credential response was empty."), {
+                context: "Google sign-in credential callback",
+                fallbackMessage: "Google did not return a sign-in credential.",
+              });
               return;
             }
-            setError(null);
             void fetch(authPath, {
               method: "POST",
               headers: {
@@ -97,14 +102,22 @@ export function GoogleSignInButton({ clientId, authPath }: GoogleSignInButtonPro
                 const payload = (await authResponse.json().catch(() => ({}))) as {
                   redirectTo?: string;
                   error?: string;
+                  technicalError?: string;
+                  errorCode?: string;
                 };
                 if (!authResponse.ok) {
-                  throw new Error(payload.error || "Google sign-in failed.");
+                  throw createClientActionError(payload, {
+                    fallbackMessage: "Google sign-in failed.",
+                    status: authResponse.status,
+                  });
                 }
                 window.location.assign(payload.redirectTo || "/");
               })
               .catch((authError) => {
-                setError(authError instanceof Error ? authError.message : "Google sign-in failed.");
+                reportClientError(authError, {
+                  context: "Google sign-in",
+                  fallbackMessage: "Google sign-in failed.",
+                });
               });
           },
         });
@@ -119,7 +132,10 @@ export function GoogleSignInButton({ clientId, authPath }: GoogleSignInButtonPro
       })
       .catch((scriptError) => {
         if (!cancelled) {
-          setError(scriptError instanceof Error ? scriptError.message : "Google sign-in failed.");
+          reportClientError(scriptError, {
+            context: "Google sign-in script",
+            fallbackMessage: "Google sign-in failed.",
+          });
         }
       });
 
@@ -129,9 +145,8 @@ export function GoogleSignInButton({ clientId, authPath }: GoogleSignInButtonPro
   }, [authPath, clientId]);
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end">
       <div ref={buttonRef} className="min-h-10" />
-      {error && <p className="max-w-56 text-right text-xs text-destructive">{error}</p>}
     </div>
   );
 }

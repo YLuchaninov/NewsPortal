@@ -2917,10 +2917,10 @@ async def run_llm_cost_proof_smoke() -> dict[str, Any]:
             with temporary_environment(
                 {
                     "GEMINI_API_KEY": "local-proof-key",
-                    "GEMINI_MODEL": "gemini-2.0-flash",
+                    "GEMINI_MODEL": "gemini-3.1-flash-lite",
                     "GEMINI_BASE_URL": base_url,
-                    "LLM_INPUT_COST_PER_MILLION_USD": "0.10",
-                    "LLM_OUTPUT_COST_PER_MILLION_USD": "0.40",
+                    "LLM_INPUT_COST_PER_MILLION_USD": "0.25",
+                    "LLM_OUTPUT_COST_PER_MILLION_USD": "1.50",
                 }
             ):
                 result = await process_llm_review(
@@ -2946,7 +2946,7 @@ async def run_llm_cost_proof_smoke() -> dict[str, Any]:
             raise RuntimeError("LLM cost proof smoke failed: total_tokens did not match provider usage.")
 
         cost_text = str(review_row.get("cost_estimate_usd") or "").strip()
-        if Decimal(cost_text or "0").quantize(Decimal("0.000001")) != Decimal("0.000060"):
+        if Decimal(cost_text or "0").quantize(Decimal("0.000001")) != Decimal("0.000200"):
             raise RuntimeError("LLM cost proof smoke failed: cost_estimate_usd did not match the expected tariff.")
 
         provider_usage = review_row.get("provider_usage_json")
@@ -3036,7 +3036,7 @@ async def run_llm_budget_stop_smoke() -> dict[str, Any]:
                 with temporary_environment(
                     {
                         "GEMINI_API_KEY": "local-budget-stop-proof-key",
-                        "GEMINI_MODEL": "gemini-2.0-flash",
+                        "GEMINI_MODEL": "gemini-3.1-flash-lite",
                         "GEMINI_BASE_URL": base_url,
                         "LLM_REVIEW_ENABLED": "1",
                         "LLM_REVIEW_MONTHLY_BUDGET_CENTS": "100",
@@ -3165,14 +3165,14 @@ async def run_discovery_enabled_smoke() -> dict[str, Any]:
             "totalTokenCount": 320,
         },
     }
-    discovered_model = os.getenv("DISCOVERY_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.0-flash"
+    discovered_model = os.getenv("DISCOVERY_GEMINI_MODEL") or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash"
     discovered_base_url = os.getenv("DISCOVERY_GEMINI_BASE_URL") or os.getenv("GEMINI_BASE_URL") or "https://generativelanguage.googleapis.com/v1beta"
     discovered_input_cost = os.getenv("DISCOVERY_LLM_INPUT_COST_PER_MILLION_USD") or os.getenv(
         "LLM_INPUT_COST_PER_MILLION_USD"
-    ) or "0.10"
+    ) or "1.50"
     discovered_output_cost = os.getenv("DISCOVERY_LLM_OUTPUT_COST_PER_MILLION_USD") or os.getenv(
         "LLM_OUTPUT_COST_PER_MILLION_USD"
-    ) or "0.40"
+    ) or "9.00"
 
     with fake_gemini_server(fake_payload) as (base_url, request_paths):
         with fake_ddgs_client() as ddgs_calls:

@@ -147,7 +147,7 @@ services:
       HNSW_INDEX_ROOT: ${HNSW_INDEX_ROOT:-/workspace/data/indices}
       HNSW_SNAPSHOT_ROOT: ${HNSW_SNAPSHOT_ROOT:-/workspace/data/snapshots}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-0}
       DISCOVERY_CRON: ${DISCOVERY_CRON:-0 */6 * * *}

@@ -228,7 +228,7 @@ class GeminiLlmAnalyzerAdapter:
         resolved_model = model or _read_env(
             DISCOVERY_GEMINI_MODEL,
             FALLBACK_GEMINI_MODEL,
-            "gemini-2.0-flash",
+            "gemini-3.5-flash",
         )
         fallback_result = self._fallback_result(task=task, prompt=prompt, payload=payload)
         api_key = _read_env(DISCOVERY_GEMINI_API_KEY, FALLBACK_GEMINI_API_KEY)

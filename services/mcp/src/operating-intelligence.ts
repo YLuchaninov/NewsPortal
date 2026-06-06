@@ -219,10 +219,375 @@ function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function readCountField(row: Record<string, unknown> | undefined, field: string): number {
+  return Number(row?.[field] ?? 0);
+}
+
 async function queryCount(pool: Pool, sql: string, params: unknown[] = []): Promise<number> {
   const result = await pool.query<Record<string, unknown>>(sql, params);
   const row = result.rows[0] ?? {};
   return Number(row.total ?? row.count ?? 0);
+}
+
+function classifyLlmProviderError(errorText: string): string {
+  const normalized = errorText.toLowerCase();
+  if (normalized.includes("404") || normalized.includes("not found")) {
+    return "provider_endpoint_error";
+  }
+  if (normalized.includes("401") || normalized.includes("403") || normalized.includes("unauthorized") || normalized.includes("forbidden")) {
+    return "provider_credentials_missing";
+  }
+  if (normalized.includes("model") || normalized.includes("endpoint")) {
+    return "provider_endpoint_error";
+  }
+  return "provider_error";
+}
+
+const SELECTION_COUNTER_SEMANTICS = {
+  filterReasonCounts:
+    "Backward-compatible row counts from interest_filter_results; one candidate can contribute one row per matching criterion, so these are not unique candidate counts.",
+  filterReasonBreakdown:
+    "Use distinctCandidateCount to estimate unique candidate impact; use filterRows only to understand processor/result-row volume.",
+  criteriaMatches:
+    "Backfill criteriaMatches are processor/result rows, not selected-signal proof and not unique candidates.",
+  interestMatches:
+    "Backfill interestMatches are processor diagnostics and must be verified through final_selection_results, content_items, residual samples, or operator.report.verify.",
+  selectedProof:
+    "Final selected proof comes from final_selection_results/content_items plus representative selected and rejected samples.",
+};
+
+function sourceClassExpression(): string {
+  return `
+    case
+      when coalesce(sc.config_json #>> '{sourceClass}', sc.config_json #>> '{operator,sourceClass}', '') in ('test_or_audit_like', 'operator_like', 'unknown')
+        then coalesce(sc.config_json #>> '{sourceClass}', sc.config_json #>> '{operator,sourceClass}')
+      when coalesce(sc.config_json #>> '{testArtifact}', sc.config_json #>> '{audit,kind}', '') <> ''
+        then 'test_or_audit_like'
+      when sc.name ~* '(^|[[:space:]-])(audit|ui audit|viewport|test)([[:space:]-]|$)'
+        then 'test_or_audit_like'
+      when sc.is_active = true
+        then 'operator_like'
+      else 'unknown'
+    end
+  `;
+}
+
+async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<string, unknown>> {
+  const [
+    pipelineStats,
+    filterReasonRows,
+    filterReasonBreakdownRows,
+    processingStats,
+    invalidShortTokenRows,
+    contentKindRows,
+    contentKindMismatchRows,
+    topAffectedRows,
+    llmProviderErrorRows,
+    activeTestChannelRows,
+  ] = await Promise.all([
+    countQuery(
+      pool,
+      `
+        select
+          count(*) filter (where technical_filter_state = 'filtered_out')::int as "technicalFilterRows",
+          count(*) filter (where coalesce(semantic_decision, 'not_evaluated') <> 'not_evaluated')::int as "semanticEvaluatedRows",
+          count(*) filter (where coalesce(semantic_decision, 'not_evaluated') = 'not_evaluated')::int as "semanticNotEvaluatedRows"
+        from interest_filter_results
+        where filter_scope = 'system_criterion'
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select reason, count(*)::int as count
+        from interest_filter_results ifr
+        cross join lateral jsonb_array_elements_text(
+          case
+            when jsonb_typeof(coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)) = 'array'
+            then coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)
+            else '[]'::jsonb
+          end
+        ) as reasons(reason)
+        where ifr.filter_scope = 'system_criterion'
+        group by reason
+        order by count desc, reason asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        with reason_rows as (
+          select
+            reasons.reason,
+            ifr.doc_id,
+            ifr.criterion_id,
+            coalesce(sc.name, 'unknown') as channel_name
+          from interest_filter_results ifr
+          left join signal_candidates a on a.doc_id = ifr.doc_id
+          left join source_channels sc on sc.channel_id = a.channel_id
+          cross join lateral jsonb_array_elements_text(
+            case
+              when jsonb_typeof(coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)) = 'array'
+              then coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)
+              else '[]'::jsonb
+            end
+          ) as reasons(reason)
+          where ifr.filter_scope = 'system_criterion'
+        ),
+        reason_summary as (
+          select
+            reason,
+            count(*)::int as "filterRows",
+            count(distinct doc_id)::int as "distinctCandidateCount",
+            count(distinct criterion_id)::int as "affectedCriteriaCount"
+          from reason_rows
+          group by reason
+        ),
+        channel_counts as (
+          select
+            reason,
+            channel_name as "channelName",
+            count(distinct doc_id)::int as "distinctCandidateCount"
+          from reason_rows
+          group by reason, channel_name
+        ),
+        ranked_channels as (
+          select
+            *,
+            row_number() over (
+              partition by reason
+              order by "distinctCandidateCount" desc, "channelName" asc
+            ) as channel_rank
+          from channel_counts
+        )
+        select
+          rs.reason,
+          rs."filterRows",
+          rs."distinctCandidateCount",
+          rs."affectedCriteriaCount",
+          coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'channelName', rc."channelName",
+                'distinctCandidateCount', rc."distinctCandidateCount"
+              )
+              order by rc."distinctCandidateCount" desc, rc."channelName" asc
+            ) filter (where rc.channel_rank <= 5),
+            '[]'::jsonb
+          ) as "topChannels"
+        from reason_summary rs
+        left join ranked_channels rc on rc.reason = rs.reason
+        group by rs.reason, rs."filterRows", rs."distinctCandidateCount", rs."affectedCriteriaCount"
+        order by rs."filterRows" desc, rs.reason asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        with processed as (
+          select
+            count(distinct doc_id)::int as "processedCandidateCount",
+            count(distinct criterion_id)::int as "criteriaCount",
+            count(*)::int as "materializedResultRows"
+          from interest_filter_results
+          where filter_scope = 'system_criterion'
+        ),
+        raw as (
+          select count(*)::int as "rawCandidateCount"
+          from signal_candidates
+        )
+        select
+          processed."processedCandidateCount",
+          greatest(raw."rawCandidateCount" - processed."processedCandidateCount", 0)::int as "pendingCandidateCount",
+          processed."criteriaCount",
+          (processed."processedCandidateCount" * processed."criteriaCount")::int as "expectedResultRows",
+          processed."materializedResultRows"
+        from processed
+        cross join raw
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          it.interest_template_id::text as "interestTemplateId",
+          it.name,
+          jsonb_agg(token.value order by token.ordinality) as "invalidShortTokensRequired"
+        from interest_templates it
+        cross join lateral jsonb_array_elements_text(
+          case
+            when jsonb_typeof(coalesce(it.short_tokens_required, '[]'::jsonb)) = 'array'
+            then coalesce(it.short_tokens_required, '[]'::jsonb)
+            else '[]'::jsonb
+          end
+        ) with ordinality as token(value, ordinality)
+        where it.is_active = true
+          and token.value ~ '\\s'
+        group by it.interest_template_id, it.name
+        order by it.name asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select coalesce(content_kind, 'unknown') as "contentKind", count(*)::int as count
+        from signal_candidates
+        group by coalesce(content_kind, 'unknown')
+        order by count desc, "contentKind" asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        with observed as (
+          select coalesce(content_kind, 'unknown') as content_kind, count(*)::int as count
+          from signal_candidates
+          group by coalesce(content_kind, 'unknown')
+        )
+        select
+          it.interest_template_id::text as "interestTemplateId",
+          it.name,
+          it.allowed_content_kinds as "allowedContentKinds",
+          jsonb_agg(jsonb_build_object('contentKind', observed.content_kind, 'count', observed.count) order by observed.count desc) as "excludedObservedContentKinds"
+        from interest_templates it
+        cross join observed
+        where it.is_active = true
+          and jsonb_typeof(coalesce(it.allowed_content_kinds, '[]'::jsonb)) = 'array'
+          and not exists (
+            select 1
+            from jsonb_array_elements_text(coalesce(it.allowed_content_kinds, '[]'::jsonb)) allowed(value)
+            where allowed.value = observed.content_kind
+          )
+        group by it.interest_template_id, it.name, it.allowed_content_kinds
+        order by count(*) desc, it.name asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          ifr.criterion_id::text as "criterionId",
+          c.source_interest_template_id::text as "interestTemplateId",
+          coalesce(it.name, ifr.criterion_id::text) as "name",
+          reasons.reason,
+          count(*)::int as count
+        from interest_filter_results ifr
+        left join criteria c on c.criterion_id = ifr.criterion_id
+        left join interest_templates it on it.interest_template_id = c.source_interest_template_id
+        cross join lateral jsonb_array_elements_text(
+          case
+            when jsonb_typeof(coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)) = 'array'
+            then coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)
+            else '[]'::jsonb
+          end
+        ) as reasons(reason)
+        where ifr.filter_scope = 'system_criterion'
+          and ifr.technical_filter_state = 'filtered_out'
+        group by ifr.criterion_id, c.source_interest_template_id, it.name, reasons.reason
+        order by count desc, "name" asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          ${"coalesce(response_json ->> 'error', response_json #>> '{error,message}', '')"} as "errorText",
+          count(*)::int as count,
+          max(created_at) as "lastSeenAt"
+        from llm_review_log
+        where created_at >= now() - interval '7 days'
+          and coalesce(response_json ->> 'error', response_json #>> '{error,message}', '') <> ''
+        group by 1
+        order by count desc, "lastSeenAt" desc
+        limit 10
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          ${sourceClassExpression()} as "sourceClass",
+          count(*)::int as count,
+          count(*) filter (where coalesce(scrs.consecutive_failures, 0) > 0)::int as "activeFailures"
+        from source_channels sc
+        left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+        where sc.is_active = true
+        group by "sourceClass"
+        order by "activeFailures" desc, count desc
+      `
+    ),
+  ]);
+
+  const stats = pipelineStats[0] ?? {};
+  const processing = processingStats[0] ?? {};
+  const filterReasonCounts = Object.fromEntries(
+    filterReasonRows.map((row) => [String(row.reason ?? "unknown"), Number(row.count ?? 0)])
+  );
+  const filterReasonBreakdown = filterReasonBreakdownRows.map((row) => ({
+    reason: String(row.reason ?? "unknown"),
+    filterRows: Number(row.filterRows ?? 0),
+    distinctCandidateCount: Number(row.distinctCandidateCount ?? 0),
+    affectedCriteriaCount: Number(row.affectedCriteriaCount ?? 0),
+    topChannels: Array.isArray(row.topChannels) ? row.topChannels : [],
+  }));
+  const technicalFilterRows = readCountField(stats, "technicalFilterRows");
+  const semanticEvaluatedRows = readCountField(stats, "semanticEvaluatedRows");
+  const invalidShortTokenPhraseCount = invalidShortTokenRows.length;
+  const llmProviderErrors = llmProviderErrorRows.map((row) => ({
+    ...row,
+    classification: classifyLlmProviderError(String(row.errorText ?? "")),
+  }));
+  const providerEndpointErrorCount = llmProviderErrors
+    .filter((row) => row.classification === "provider_endpoint_error")
+    .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
+  const activeTestOrAuditFailureCount = activeTestChannelRows
+    .filter((row) => row.sourceClass === "test_or_audit_like")
+    .reduce((sum, row) => sum + Number(row.activeFailures ?? 0), 0);
+  const filterRowsNotCandidateRows = filterReasonBreakdown.some(
+    (row) => row.distinctCandidateCount > 0 && row.filterRows >= row.distinctCandidateCount * 2
+  );
+
+  return {
+    technicalFilterRows,
+    semanticEvaluatedRows,
+    semanticNotEvaluatedRows: readCountField(stats, "semanticNotEvaluatedRows"),
+    processedCandidateCount: readCountField(processing, "processedCandidateCount"),
+    pendingCandidateCount: readCountField(processing, "pendingCandidateCount"),
+    criteriaCount: readCountField(processing, "criteriaCount"),
+    expectedResultRows: readCountField(processing, "expectedResultRows"),
+    materializedResultRows: readCountField(processing, "materializedResultRows"),
+    filterReasonCounts,
+    filterReasonBreakdown,
+    counterSemantics: SELECTION_COUNTER_SEMANTICS,
+    sampleBeforeTuningGuidance: [
+      "For wrapper_directory_noise, time_window, must_not and other hard-filter residuals, inspect representative rejected candidates before changing config.",
+      "Do not globally remove generic filters or switch broad from row counts alone; compare filterRows with distinctCandidateCount and verify false negatives.",
+      "Use bounded maintenance.reindex.request docIds replay and operator.report.verify after any calibration.",
+    ],
+    topAffectedCriteria: topAffectedRows,
+    invalidShortTokensRequired: invalidShortTokenRows,
+    contentKindDistribution: contentKindRows,
+    contentKindMismatches: contentKindMismatchRows,
+    llmProviderErrors,
+    sourceHealthNoise: {
+      bySourceClass: activeTestChannelRows,
+      activeTestOrAuditFailureCount,
+    },
+    diagnosticFlags: {
+      hardFilterCollapseSuspected: technicalFilterRows > 0 && semanticEvaluatedRows < technicalFilterRows,
+      shortTokenPhraseMismatch: invalidShortTokenPhraseCount > 0 || Number(filterReasonCounts.short_tokens_required ?? 0) > 0,
+      contentKindMismatch: contentKindMismatchRows.length > 0 || Number(filterReasonCounts.content_kind ?? 0) > 0,
+      llmProviderEndpointError: providerEndpointErrorCount > 0,
+      activeTestChannelNoise: activeTestOrAuditFailureCount > 0,
+      filterRowsNotCandidateRows,
+    },
+  };
 }
 
 export async function buildSelectionDashboard(context: McpToolContext) {
@@ -232,6 +597,7 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     blockedSignalCandidateObservations,
     pendingSelectionRows,
     decisionRows,
+    selectionPipelineDiagnostics,
     contentItemsPage,
   ] = await Promise.all([
     queryCount(pool, "select count(*)::int as total from signal_candidates"),
@@ -270,6 +636,7 @@ export async function buildSelectionDashboard(context: McpToolContext) {
       order by decision
       `
     ),
+    readSelectionPipelineDiagnostics(pool),
     sdk.listContentItemsPage<Record<string, unknown>>({ page: 1, pageSize: 1 }),
   ]);
   const byDecision = decisionRows.rows.map((row) => ({
@@ -289,6 +656,26 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     byDecision.find((entry) => entry.decision === decision)?.count ?? 0;
   const materializedSelectionRows = byDecision.reduce((sum, entry) => sum + entry.count, 0);
   const visibleContentItems = Number(contentItemsPage.total ?? 0);
+  const rejectedRows = countForDecision("rejected");
+  const grayZoneRows = countForDecision("gray_zone");
+  const diagnosticFlags = isRecord(selectionPipelineDiagnostics.diagnosticFlags)
+    ? selectionPipelineDiagnostics.diagnosticFlags
+    : {};
+  const diagnosticHints = {
+    zeroSelectedHighRejection: selectedSignalCandidateSignals === 0 && rejectedRows > 0,
+    grayZoneCollapseSuspected: selectedSignalCandidateSignals === 0 && rejectedRows > 0 && grayZoneRows <= 1,
+    pendingRowsPresent: pendingSelectionRows > 0,
+    staleReplayPossible:
+      pendingSelectionRows > 0 || materializedSelectionRows < rawSignalCandidateObservations,
+    hardFilterCollapseSuspected: Boolean(diagnosticFlags.hardFilterCollapseSuspected),
+    shortTokenPhraseMismatch: Boolean(diagnosticFlags.shortTokenPhraseMismatch),
+    contentKindMismatch: Boolean(diagnosticFlags.contentKindMismatch),
+    llmProviderEndpointError: Boolean(diagnosticFlags.llmProviderEndpointError),
+    activeTestChannelNoise: Boolean(diagnosticFlags.activeTestChannelNoise),
+    filterRowsNotCandidateRows: Boolean(diagnosticFlags.filterRowsNotCandidateRows),
+    note:
+      "Gray-zone collapse is not automatically precision improvement; verify replay freshness, residual distribution, rejected samples, selected quality, and hold quality.",
+  };
   return {
     readOnly: true,
     sourceOfTruth: {
@@ -302,25 +689,65 @@ export async function buildSelectionDashboard(context: McpToolContext) {
       pendingSelectionRows,
       selectedSignalCandidateSignals,
       visibleContentItems,
-      rejectedRows: countForDecision("rejected"),
-      grayZoneRows: countForDecision("gray_zone"),
+      rejectedRows,
+      grayZoneRows,
       holdRows,
       llmReviewPendingRows,
       blockedSignalCandidateObservations,
+      technicalFilterRows: Number(selectionPipelineDiagnostics.technicalFilterRows ?? 0),
+      semanticEvaluatedRows: Number(selectionPipelineDiagnostics.semanticEvaluatedRows ?? 0),
+      processedCandidateCount: Number(selectionPipelineDiagnostics.processedCandidateCount ?? 0),
+      pendingCandidateCount: Number(selectionPipelineDiagnostics.pendingCandidateCount ?? 0),
+      criteriaCount: Number(selectionPipelineDiagnostics.criteriaCount ?? 0),
+      expectedResultRows: Number(selectionPipelineDiagnostics.expectedResultRows ?? 0),
+      materializedResultRows: Number(selectionPipelineDiagnostics.materializedResultRows ?? 0),
     },
     byDecision,
+    filterReasonCounts: selectionPipelineDiagnostics.filterReasonCounts ?? {},
+    filterReasonBreakdown: selectionPipelineDiagnostics.filterReasonBreakdown ?? [],
+    counterSemantics: selectionPipelineDiagnostics.counterSemantics ?? SELECTION_COUNTER_SEMANTICS,
+    selectionPipelineDiagnostics,
     discrepancyExplanation:
       "signal_candidates.list and the admin Signal Candidates page show raw editorial observations. content_items.list and final_selection_results selected rows show public selected lead signals.",
     operatorGuidance:
       visibleContentItems === 0 && rawSignalCandidateObservations > 0
-        ? "The corpus still exists for audit/replay, but strict selection currently exposes zero public selected signals. Tune interests/templates or discovery sources before broad replay."
+        ? "The corpus still exists for audit/replay, but strict selection currently exposes zero public selected signals. Classify acquisition, filter, semantic, gray-zone, LLM, and staleness layers before tuning."
         : "Compare rawSignalCandidateObservations with visibleContentItems before reporting signal yield.",
+    diagnosticHints,
     readBackChecks: [
       "signal_candidates.list",
       "content_items.list",
+      "signal_candidates.residuals.summary",
+      "signal_candidates.residuals.list",
+      "signal_candidates.explain",
+      "system_interests.compile_status.list",
       "operator.report.verify reportKind=selection",
       "operator.selection.reindex_plan",
     ],
+    sourceStatusGuidance:
+      "Do not treat user-provided report channel counts or historical/transient failures as current truth. Read channels.bottlenecks.summary/list for current active source count and active failures now.",
+    nextReadBack: {
+      residualSummary: {
+        tool: "signal_candidates.residuals.summary",
+        arguments: {},
+      },
+      residualList: {
+        tool: "signal_candidates.residuals.list",
+        arguments: { pageSize: 25 },
+      },
+      representativeExplains: {
+        tool: "signal_candidates.explain",
+        arguments: { docId: "<docId-from-residuals-list>" },
+      },
+      compileStatus: {
+        tool: "system_interests.compile_status.list",
+        arguments: {},
+      },
+      selectionReport: {
+        tool: "operator.report.verify",
+        arguments: { reportKind: "selection", includeSamples: true },
+      },
+    },
   };
 }
 
@@ -1793,6 +2220,34 @@ export function getDiagnosticsGuide(domain: string) {
 
 export function getTuningGuide(domain: string) {
   const guide = OPERATING_DOMAIN_REGISTRY[domain as OperatingDomain];
+  const selectionAddendum =
+    domain === "selection"
+      ? {
+          zeroSelectedCalibration: [
+            "Read admin.summary.get, signal_candidates.residuals.summary/list, and 1-3 representative signal_candidates.explain rows before writes.",
+            "For semantic_rejected/no_system_match, inspect the affected system_interests.read output, compile status, and candidateSignals before changing strictness or templates.",
+            "Apply one-interest/one-candidate calibration only: bounded write, MCP read-back, bounded maintenance.reindex.request docIds replay, then operator.report.verify.",
+          ],
+          semanticRejectedNoSystemMatch: {
+            meaning:
+              "The item did not reach a matching criterion or reviewable gray-zone path, so LLM template tuning alone cannot recover it.",
+            recovery:
+              "Use signal families, representative positive prototypes, near-miss negatives, and candidateSignals cue groups to create item-level evidence for the affected interest.",
+            invariant: "llmReviewMode=always does not bypass semantic_rejected/no_system_match.",
+          },
+          llmDiagnostics: [
+            "0 LLM spend can mean no_pending_gray_zone, semantic rejection before LLM, llm_review_disabled, budget_exhausted, worker_not_running, or provider_credentials_missing.",
+            "Classify the reason with llm_budget.summary, operator.system.health, operator.issue.explain, and representative explains before editing budgets/templates.",
+          ],
+          antiPatterns: [
+            "Do not mass-set strictness=broad for 0 selected.",
+            "Do not mass edit interests or rewrite LLM templates without representative explains.",
+            "Do not treat RSS/channel volume as selected-signal proof.",
+            "Do not mask API/portal/search sources as RSS/website.",
+          ],
+          primaryScenario: "signalops://guide/scenarios/selection-calibration",
+        }
+      : {};
   return guide
     ? {
         domain,
@@ -1811,6 +2266,7 @@ export function getTuningGuide(domain: string) {
           "debug_source",
           "stabilize_discovery",
         ],
+        ...selectionAddendum,
       }
     : {
         domain,
@@ -1839,6 +2295,8 @@ export async function buildSystemHealth(
     sequences,
     cleanup,
     mcpErrors,
+    llmProviderErrors,
+    channelSourceClasses,
     apiSummaries,
   ] = await Promise.all([
     countQuery(
@@ -1980,6 +2438,36 @@ export async function buildSystemHealth(
       `,
       [sinceHours]
     ),
+    countQuery(
+      pool,
+      `
+        select
+          coalesce(response_json ->> 'error', response_json #>> '{error,message}', '') as "errorText",
+          count(*)::int as count,
+          max(created_at) as "lastSeenAt"
+        from llm_review_log
+        where created_at >= now() - ($1::int * interval '1 hour')
+          and coalesce(response_json ->> 'error', response_json #>> '{error,message}', '') <> ''
+        group by 1
+        order by count desc, "lastSeenAt" desc
+        limit 10
+      `,
+      [sinceHours]
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          ${sourceClassExpression()} as "sourceClass",
+          count(*)::int as count,
+          count(*) filter (where coalesce(scrs.consecutive_failures, 0) > 0)::int as "activeFailures"
+        from source_channels sc
+        left join source_channel_runtime_state scrs on scrs.channel_id = sc.channel_id
+        where sc.is_active = true
+        group by "sourceClass"
+        order by "activeFailures" desc, count desc
+      `
+    ),
     allSettledRecord({
       dashboardSummary: sdk.getDashboardSummary<Record<string, unknown>>(),
       discoveryRuns: sdk.listDiscoveryVNextRecords<Record<string, unknown>>("runs", {
@@ -2003,6 +2491,8 @@ export async function buildSystemHealth(
     sequences,
     cleanup: cleanup[0] ?? {},
     mcpErrors: mcpErrors[0] ?? {},
+    llmProviderErrors,
+    channelSourceClasses,
   });
 
   const samples = includeSamples
@@ -2029,6 +2519,11 @@ export async function buildSystemHealth(
       sequences,
       cleanup: cleanup[0] ?? {},
       mcpErrors: mcpErrors[0] ?? {},
+      llmProviderErrors: llmProviderErrors.map((row) => ({
+        ...row,
+        classification: classifyLlmProviderError(String(row.errorText ?? "")),
+      })),
+      channelSourceClasses,
       apiSummaries,
     },
     issues: issues.filter((entry) => domains.includes(entry.domain)),
@@ -2056,6 +2551,10 @@ function buildIssuesFromHealth(input: Record<string, unknown>) {
   const discoveryRows = Array.isArray(input.discovery) ? input.discovery as Record<string, unknown>[] : [];
   const cleanup = isRecord(input.cleanup) ? input.cleanup : {};
   const mcpErrors = isRecord(input.mcpErrors) ? input.mcpErrors : {};
+  const llmProviderErrorRows =
+    Array.isArray(input.llmProviderErrors) ? input.llmProviderErrors as Record<string, unknown>[] : [];
+  const channelSourceClassRows =
+    Array.isArray(input.channelSourceClasses) ? input.channelSourceClasses as Record<string, unknown>[] : [];
   const issues = [];
 
   const failedFetches = fetchRows
@@ -2113,6 +2612,50 @@ function buildIssuesFromHealth(input: Record<string, unknown>) {
         "Use signal_candidates.residuals.summary and signal_candidates.explain before changing review policy.",
         "Tune one interest/template/profile at a time if this is too conservative.",
       ])
+    );
+  }
+
+  const endpointErrors = llmProviderErrorRows
+    .filter((row) => classifyLlmProviderError(String(row.errorText ?? "")) === "provider_endpoint_error")
+    .reduce((sum, row) => sum + Number(row.count ?? 0), 0);
+  if (endpointErrors > 0) {
+    issues.push(
+      issue(
+        "critical",
+        "llm_budget",
+        "Recent LLM reviews failed with provider endpoint/model errors.",
+        {
+          reason: "provider_endpoint_error",
+          provider404: llmProviderErrorRows.some((row) =>
+            String(row.errorText ?? "").toLowerCase().includes("404")
+          ),
+          samples: llmProviderErrorRows.slice(0, 5),
+        },
+        [
+          "Treat this as provider preflight failure, not budget tuning.",
+          "Check provider base URL/model configuration and credentials through existing operator config paths.",
+          "If no candidates reach gray-zone/review, diagnose hard filters first; provider errors only explain attempted reviews.",
+        ]
+      )
+    );
+  }
+
+  const activeTestOrAuditFailures = channelSourceClassRows
+    .filter((row) => row.sourceClass === "test_or_audit_like")
+    .reduce((sum, row) => sum + Number(row.activeFailures ?? 0), 0);
+  if (activeTestOrAuditFailures > 0) {
+    issues.push(
+      issue(
+        "warning",
+        "channels",
+        "Active test/audit-like channels are contributing source-health failure noise.",
+        { activeTestOrAuditFailures, bySourceClass: channelSourceClassRows },
+        [
+          "Separate operator_like failures from test_or_audit_like failures in channels.bottlenecks.summary/list.",
+          "Use channels.set_active with a reason and read-back proof if the operator wants to pause test artifacts.",
+          "Do not delete channels automatically.",
+        ]
+      )
     );
   }
 
@@ -2565,11 +3108,168 @@ function buildTuningRecommendations(
     );
     return base;
   }
+  const normalizedResidual = normalizeText(residualBucket);
+  const hardFilterRecallResidual =
+    domain === "selection" &&
+    objective === "increase_recall" &&
+    (normalizedResidual.includes("technical_filter_rejected") ||
+      normalizedResidual.includes("hard_filter") ||
+      normalizedResidual.includes("short_tokens_required") ||
+      normalizedResidual.includes("content_kind") ||
+      normalizedResidual.includes("time_window") ||
+      normalizedResidual.includes("must_have") ||
+      normalizedResidual.includes("wrapper") ||
+      normalizedResidual.includes("must_not"));
+  if (hardFilterRecallResidual) {
+    base.riskLevel = "medium";
+    base.expectedEffect =
+      "Recover candidates that are blocked before semantic evaluation by fixing the specific hard-filter constraint, then proving movement with bounded replay.";
+    base.recommendedChanges.push(
+      {
+        target: "technical filter diagnosis",
+        action:
+          "Read operator.selection.dashboard filterReasonBreakdown first, compare filterRows with distinctCandidateCount, then inspect 10-30 representative rejected candidates before proposing any write.",
+        reason:
+          "technical_filter_rejected means candidates did not reach semantic or LLM review paths, and filter rows can overstate unique candidate impact when one candidate is evaluated across many criteria.",
+      },
+      {
+        target: "affected system interest/profile",
+        action:
+          "Read the affected interest and compile status; repair short-token, content-kind, time-window, must-not or wrapper collapse only when representative rejected explains prove false negatives.",
+        reason:
+          "short_tokens_required is an extracted-token requirement; phrase gates belong in must_have_terms only when truly mandatory, and hidden-signal recovery belongs in candidateSignals.",
+      },
+      {
+        target: "generic hard-filter guardrails",
+        action:
+          "Do not globally remove wrapper_directory_noise or switch strictness=broad as a first response. Treat broad mode only as a temporary bounded experiment with explicit docIds replay and selected/rejected sample verification.",
+        reason:
+          "Generic wrapper, time-window and must-not filters often block listing wrappers, source navigation, stale items, advice pages or seller noise; row counts alone do not prove recall loss.",
+      },
+      {
+        target: "bounded proof",
+        action:
+          "Replay 25-50 explicit docIds from the dominant technical-filter residual, wait for maintenance.reindex_jobs.list, then verify operator.report.verify reportKind=selection includeSamples=true.",
+        reason:
+          "criteriaMatches/interestMatches and gray-zone collapse are not selected-signal proof.",
+      }
+    );
+    base.suggestedToolCalls.push(
+      { toolName: "operator.selection.dashboard", argumentsTemplate: {} },
+      { toolName: "signal_candidates.residuals.summary", argumentsTemplate: { downstreamLossBucket: "technical_filter_rejected" } },
+      { toolName: "signal_candidates.residuals.list", argumentsTemplate: { downstreamLossBucket: "technical_filter_rejected", pageSize: 30 } },
+      { toolName: "signal_candidates.explain", argumentsTemplate: { docId: "<docId-from-residuals-list>" } },
+      { toolName: "system_interests.read", argumentsTemplate: { interestTemplateId: "<affected-interest-id>" } },
+      { toolName: "system_interests.compile_status.list", argumentsTemplate: {} },
+      {
+        toolName: "system_interests.update",
+        argumentsTemplate: {
+          interestTemplateId: "<interestId>",
+          payload: {
+            short_tokens_required: ["<token-like-values-only-or-empty>"],
+            allowed_content_kinds: ["<preserve-existing-and-add-proven-observed-kind-if-needed>"],
+            candidateSignals: "<bounded cue groups from representative evidence>",
+          },
+        },
+      },
+      {
+        toolName: "maintenance.reindex.request",
+        argumentsTemplate: {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+            options: {
+              docIds: ["<bounded-doc-id-list>"],
+              batchSize: 25,
+              includeEnrichment: false,
+              forceEnrichment: false,
+              reason: "selection-hard-filter-calibration",
+            },
+          },
+        },
+      },
+      { toolName: "maintenance.reindex_jobs.list", argumentsTemplate: { pageSize: 10 } },
+      { toolName: "operator.report.verify", argumentsTemplate: { reportKind: "selection", includeSamples: true } }
+    );
+    return base;
+  }
+  const semanticRecallResidual =
+    domain === "selection" &&
+    objective === "increase_recall" &&
+    (normalizedResidual.includes("semantic_rejected") ||
+      normalizedResidual.includes("no_system_match") ||
+      normalizedResidual.includes("0 selected") ||
+      normalizedResidual.includes("zero selected"));
+  if (semanticRecallResidual) {
+    base.riskLevel = "medium";
+    base.expectedEffect =
+      "Recover repeated near-miss candidates into reviewable paths through item-level evidence calibration without loosening unrelated interests or source acquisition.";
+    base.recommendedChanges.push(
+      {
+        target: "selection residual diagnosis",
+        action:
+          "Inspect residual summary/list and 1-3 representative signal_candidates.explain rows before writing anything.",
+        reason:
+          "semantic_rejected/no_system_match means candidates did not reach a reviewable path; LLM review mode and broad positive terms do not bypass this layer.",
+      },
+      {
+        target: "affected system interest",
+        action:
+          "Read the affected interest and compile status, then adjust candidateSignals and near-miss negative cue groups from repeated item-level evidence. Keep positive_texts edits secondary and use only representative full-text prototypes.",
+        reason:
+          "Hidden or operational signals often need cue-group evidence recovery rather than keyword expansion.",
+      },
+      {
+        target: "bounded selection replay",
+        action:
+          "Replay only explicit docIds from the diagnosed residual bucket, wait for maintenance.reindex_jobs.list, then verify with operator.report.verify and operator.effect.verify.",
+        reason:
+          "Backfill counters and gray-zone collapse are not selected-signal proof.",
+      }
+    );
+    base.suggestedToolCalls.push(
+      { toolName: "signal_candidates.residuals.summary", argumentsTemplate: {} },
+      { toolName: "signal_candidates.residuals.list", argumentsTemplate: { downstreamLossBucket: residualBucket ?? "semantic_rejected", pageSize: 25 } },
+      { toolName: "signal_candidates.explain", argumentsTemplate: { docId: "<docId-from-residuals-list>" } },
+      { toolName: "system_interests.read", argumentsTemplate: { interestTemplateId: "<affected-interest-id>" } },
+      { toolName: "system_interests.compile_status.list", argumentsTemplate: {} },
+      { toolName: "system_interests.update", argumentsTemplate: { interestTemplateId: "<interestId>", payload: { candidateSignals: "<bounded cue groups from representative evidence>" } } },
+      {
+        toolName: "maintenance.reindex.request",
+        argumentsTemplate: {
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+            options: {
+              docIds: ["<bounded-doc-id-list>"],
+              batchSize: 25,
+              includeEnrichment: false,
+              forceEnrichment: false,
+              reason: "selection-semantic-recall-calibration",
+            },
+          },
+        },
+      },
+      { toolName: "maintenance.reindex_jobs.list", argumentsTemplate: { pageSize: 10 } },
+      { toolName: "operator.report.verify", argumentsTemplate: { reportKind: "selection", includeSamples: true } },
+      {
+        toolName: "operator.effect.verify",
+        argumentsTemplate: {
+          domain: "selection",
+          changeRef: "selection-semantic-recall-calibration",
+          baselineWindowHours: 24,
+          comparisonWindowHours: 6,
+        },
+      }
+    );
+    return base;
+  }
   if (objective === "increase_recall") {
-    base.expectedEffect = "Let more borderline items reach review/selection while monitoring false positives.";
+    base.expectedEffect = "Let more repeated near-miss items reach reviewable paths while monitoring false positives.";
     base.recommendedChanges.push({
       target: "system interest/profile",
-      action: "Broaden positive signals or lower strictness for a repeated under-selection pattern.",
+      action:
+        "Calibrate from residual summaries, representative explains, affected interest read-back, candidateSignals, near-miss negatives, and bounded docIds replay before changing strictness or semantic prototypes.",
       reason: residualBucket ?? "recall objective",
     });
   } else {
@@ -2786,11 +3486,14 @@ export async function buildOperationalReportVerification(
   }
   if (reportKind === "selection" || reportKind === "selection_precision") {
     const docIds = readStringArray(entityIds.docIds);
-    const audit = await buildSelectionPrecisionAudit(context, {
-      docIds,
-      pageSize: includeSamples ? 100 : 50,
-      includeSamples,
-    });
+    const [audit, pipelineDiagnostics] = await Promise.all([
+      buildSelectionPrecisionAudit(context, {
+        docIds,
+        pageSize: includeSamples ? 100 : 50,
+        includeSamples,
+      }),
+      readSelectionPipelineDiagnostics(context.pool),
+    ]);
     return {
       reportKind,
       verifiedAt: new Date().toISOString(),
@@ -2802,8 +3505,34 @@ export async function buildOperationalReportVerification(
         weakSelectedCount: audit.weakSelectedCount,
         buckets: audit.buckets,
         staleSelection: audit.staleSelection,
+        technicalFilterRows: pipelineDiagnostics.technicalFilterRows,
+        semanticEvaluatedRows: pipelineDiagnostics.semanticEvaluatedRows,
+        processedCandidateCount: pipelineDiagnostics.processedCandidateCount,
+        pendingCandidateCount: pipelineDiagnostics.pendingCandidateCount,
+        criteriaCount: pipelineDiagnostics.criteriaCount,
+        expectedResultRows: pipelineDiagnostics.expectedResultRows,
+        materializedResultRows: pipelineDiagnostics.materializedResultRows,
+        filterReasonCounts: pipelineDiagnostics.filterReasonCounts,
       },
+      pipelineDiagnostics,
+      filterReasonBreakdown: pipelineDiagnostics.filterReasonBreakdown ?? [],
+      counterSemantics: pipelineDiagnostics.counterSemantics ?? SELECTION_COUNTER_SEMANTICS,
+      staleness: {
+        pendingCandidateCount: pipelineDiagnostics.pendingCandidateCount,
+        expectedResultRows: pipelineDiagnostics.expectedResultRows,
+        materializedResultRows: pipelineDiagnostics.materializedResultRows,
+        staleReplayPossible:
+          Number(pipelineDiagnostics.pendingCandidateCount ?? 0) > 0 ||
+          Number(pipelineDiagnostics.expectedResultRows ?? 0) !==
+            Number(pipelineDiagnostics.materializedResultRows ?? 0),
+      },
+      pendingRows: pipelineDiagnostics.pendingCandidateCount ?? 0,
       samples: includeSamples ? audit.samples : {},
+      proofWarnings: [
+        "criteriaMatches, interestMatches, filterReasonCounts, hard-filter counts and gray-zone changes are processor diagnostics, not selected-signal proof.",
+        "Use filterReasonBreakdown.distinctCandidateCount before estimating candidate impact from filter rows.",
+        "Do not report source/channel state from stale session notes; read channels.bottlenecks.summary/list for current active source count and active failures.",
+      ],
       warnings: [
         ...(audit.weakSelectedCount > 0
           ? [
@@ -2822,13 +3551,67 @@ export async function buildOperationalReportVerification(
               ),
             ]
           : []),
+        ...(isRecord(pipelineDiagnostics.diagnosticFlags) &&
+        pipelineDiagnostics.diagnosticFlags.hardFilterCollapseSuspected
+          ? [
+              issue(
+                "warning",
+                "selection",
+                "Hard filters are collapsing candidates before semantic evaluation.",
+                {
+                  technicalFilterRows: pipelineDiagnostics.technicalFilterRows,
+                  semanticEvaluatedRows: pipelineDiagnostics.semanticEvaluatedRows,
+                  filterReasonCounts: pipelineDiagnostics.filterReasonCounts,
+                  filterReasonBreakdown: pipelineDiagnostics.filterReasonBreakdown,
+                },
+                [
+                  "Start with filter reason breakdown, affected interest read-back and 10-30 representative rejected explains.",
+                  "Repair invalid short_tokens_required phrases and content-kind mismatch before semantic/prototype tuning.",
+                  "Replay only bounded docIds and verify after the replay completes.",
+                ],
+              ),
+            ]
+          : []),
       ],
       staleReportNotes: [
         "This verification is read-only and DB-backed.",
         "selected remains the only web truth; this report does not create internal/public selected divergence.",
+        "criteriaMatches/interestMatches and hard-filter row counts are processor diagnostics, not selected-signal proof.",
         "Source health, source capability, vNext routing telemetry, adapter risk, and search provider metadata are acquisition diagnostics only.",
       ],
       nextReadBack: audit.nextReadBack,
+    };
+  }
+  if (reportKind === "llm_budget") {
+    const health = await buildSystemHealth(context, {
+      domains: ["llm_budget"],
+      includeSamples,
+    });
+    const llmProviderErrors = isRecord(health.health)
+      && Array.isArray(health.health.llmProviderErrors)
+      ? health.health.llmProviderErrors
+      : [];
+    return {
+      reportKind,
+      verifiedAt: new Date().toISOString(),
+      entityIds,
+      domain,
+      counts: {
+        llmProviderErrors,
+        issueCount: health.issues.length,
+      },
+      warnings: health.issues,
+      staleReportNotes: [
+        "This verification is read-only and DB/API-backed.",
+        "0 LLM spend may mean no reviewable path, review disabled, budget exhausted, worker not running, missing credentials, or provider endpoint/model error.",
+        "Provider endpoint/model errors are preflight/provider failures, not budget tuning evidence.",
+      ],
+      nextReadBack: [
+        "llm_budget.summary",
+        "operator.system.health domains=[llm_budget,selection]",
+        "signal_candidates.residuals.summary",
+        "operator.issue.explain",
+      ],
     };
   }
   if (reportKind === "source_bottleneck") {
@@ -3299,6 +4082,40 @@ export function nextReadBackForTool(toolName: string): Record<string, unknown> {
         ],
         note:
           "channels.set_active only toggles activation state. Historical fetch failures remain visible in recent run history.",
+      },
+    };
+  }
+  if (toolName === "channels.sync.request") {
+    return {
+      nextReadBack: {
+        resources: [...OPERATIONAL_RESOURCE_URIS, "signalops://admin/summary"],
+        tools: [
+          {
+            name: "channels.read",
+            arguments: { channelId: "<channelId-from-response>" },
+            verify:
+              "Confirm the channel still has the expected provider config and inspect runtime next_due_at/readiness.",
+          },
+          {
+            name: "fetch_runs.list",
+            arguments: { channelId: "<channelId-from-response>", page: 1, pageSize: 5 },
+            verify:
+              "Poll recent fetch runs after the worker handles the request; completed or failed runs are the refetch proof.",
+          },
+          {
+            name: "outbox.events.list",
+            arguments: {
+              eventType: "source.channel.sync.requested",
+              aggregateType: "source_channel",
+              aggregateId: "<channelId-from-response>",
+              limit: 10,
+            },
+            verify:
+              "Confirm the operator refetch request was enqueued as source.channel.sync.requested for this channel.",
+          },
+        ],
+        note:
+          "channels.sync.request is an operator refetch request. Do not report new content until fetch run read-back proves the worker processed it.",
       },
     };
   }

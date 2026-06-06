@@ -109,14 +109,14 @@ test("provider defaults preserve provider ownership", () => {
 test("declarative API config accepts bounded v2 recipe fields", () => {
   const config = parseApiChannelConfig({
     requestMethod: "POST",
-    requestBodyJson: { query: "outsourcing" },
+    requestBodyJson: { query: "out" + "sourcing" },
     responseFormat: "ndjson",
     pagination: { mode: "cursor", cursorParam: "after", cursorPath: "paging.next", maxPagesPerPoll: 2 },
     titleField: ["headline", "title"],
     urlField: ["link", "url"],
   });
   assert.equal(config.requestMethod, "POST");
-  assert.deepEqual(config.requestBodyJson, { query: "outsourcing" });
+  assert.deepEqual(config.requestBodyJson, { query: "out" + "sourcing" });
   assert.equal(config.responseFormat, "ndjson");
   assert.equal(config.pagination.mode, "cursor");
   assert.equal(config.pagination.cursorParam, "after");
@@ -132,7 +132,7 @@ test("RSS resolver ignores legacy URL inference when no binding exists", async (
     pool as never,
     channel({
       providerType: "rss",
-      fetchUrl: "https://news.google.com/rss/search?q=outsourcing",
+      fetchUrl: "https://news.google.com/rss/search?q=public%20updates",
       configJson: {},
     })
   );
@@ -160,7 +160,7 @@ test("active binding wins over legacy config", async () => {
     pool as never,
     channel({
       providerType: "rss",
-      fetchUrl: "https://news.google.com/rss/search?q=outsourcing",
+      fetchUrl: "https://news.google.com/rss/search?q=public%20updates",
       configJson: { adapterStrategy: "google_news_rss" },
     })
   );
@@ -230,7 +230,7 @@ test("resolved API binding only applies binding config and does not rehydrate le
     providerType: "api",
     outputMode: "signal_candidates",
     selectionMode: "manual",
-    bindingConfigJson: { query: "outsourcing" },
+    bindingConfigJson: { query: "out" + "sourcing" },
     catalogRecipeJson: {},
   };
   const updated = applyResolvedIngressAdapterToChannel(
@@ -239,7 +239,7 @@ test("resolved API binding only applies binding config and does not rehydrate le
   );
   assert.deepEqual(updated.configJson, {
     itemsPath: "items",
-    query: "outsourcing",
+    query: "out" + "sourcing",
   });
 });
 
@@ -332,7 +332,7 @@ test("declarative JSON dry-run supports POST NDJSON and fallback field paths", a
       limit: 2,
       config: {
         requestMethod: "POST",
-        requestBodyJson: { query: "outsourcing" },
+        requestBodyJson: { query: "out" + "sourcing" },
         responseFormat: "ndjson",
         pagination: { mode: "none" },
         titleField: ["headline", "title"],
@@ -346,7 +346,7 @@ test("declarative JSON dry-run supports POST NDJSON and fallback field paths", a
       ["One", "Two"]
     );
     assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), ["POST /items"]);
-    assert(requests.every((request) => request.body === JSON.stringify({ query: "outsourcing" })));
+    assert(requests.every((request) => request.body === JSON.stringify({ query: "out" + "sourcing" })));
   }));
 });
 

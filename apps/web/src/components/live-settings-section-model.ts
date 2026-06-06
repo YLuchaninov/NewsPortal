@@ -3,6 +3,7 @@ import {
   type DigestCadence,
   type UserDigestSettingsView,
 } from "@signalops/contracts";
+import { createClientActionError } from "@signalops/ui";
 
 export interface NotificationPreferencesState {
   webPush: boolean;
@@ -140,16 +141,16 @@ export function paginateChannels(
 export async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
-    let errorMessage = `Request failed with ${response.status}.`;
+    let payload: unknown = {};
     try {
-      const payload = (await response.json()) as { error?: string };
-      if (payload.error) {
-        errorMessage = payload.error;
-      }
+      payload = await response.json();
     } catch {
       // Ignore JSON parsing errors and keep the fallback message.
     }
-    throw new Error(errorMessage);
+    throw createClientActionError(payload, {
+      fallbackMessage: `Request failed with ${response.status}.`,
+      status: response.status,
+    });
   }
   return (await response.json()) as T;
 }

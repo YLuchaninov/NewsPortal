@@ -91,16 +91,16 @@ function discoveryReport() {
 test("product mega-flow scenario metadata exists exactly for A/B/C with unique fixture namespaces", () => {
   assert.deepEqual(PRODUCT_MEGA_FLOW_SCENARIOS.map((item) => item.example), ["A", "B", "C"]);
   assert.deepEqual(PRODUCT_MEGA_FLOW_SCENARIOS.map((item) => item.key), [
-    "example_a_job_board",
-    "example_b_dev_news",
-    "example_c_outsourcing",
+    "example_a_listing_sources",
+    "example_b_editorial_updates",
+    "example_c_public_notices",
   ]);
   assert.equal(new Set(PRODUCT_MEGA_FLOW_SCENARIOS.map((item) => item.fixtureNamespace)).size, 3);
 });
 
 test("filter bucket summary requires selected, rejected/held policy and duplicate evidence", () => {
   const passing = summarizeFilterBucketEvidence({
-    caseRun: caseRun("example_a_job_board"),
+    caseRun: caseRun("example_a_listing_sources"),
     commandResults: PASSING_COMMANDS,
     mcpArtifact: MCP_ARTIFACT,
   });
@@ -113,7 +113,7 @@ test("filter bucket summary requires selected, rejected/held policy and duplicat
 
   const missingSelection = summarizeFilterBucketEvidence({
     caseRun: {
-      ...caseRun("example_a_job_board"),
+      ...caseRun("example_a_listing_sources"),
       baselineEvidence: [
         {
           interestFilterResults: [{ semanticDecision: "reject" }],
@@ -160,7 +160,7 @@ test("product mega-flow verdict passes only when all domains and child proof com
   assert.equal(passing.yieldVerdict, "pass");
   assert.equal(passing.finalVerdict, "pass");
   assert.equal(passing.scenarioSummaries.length, 3);
-  assert.equal(passing.scenarioSummaries[0]?.adminManagedTruth.profileKey, "example_a_job_board_proof");
+  assert.equal(passing.scenarioSummaries[0]?.adminManagedTruth.profileKey, "example_a_listing_sources_proof");
 
   const passingWithoutSeparateYieldProof = determineProductMegaFlowVerdict({
     discoveryReport: discoveryReport(),
@@ -175,9 +175,9 @@ test("product mega-flow verdict passes only when all domains and child proof com
     discoveryReport: {
       ...discoveryReport(),
       caseRuns: [
-        { ...caseRun("example_a_job_board"), yieldVerdict: "fail" },
-        caseRun("example_b_dev_news"),
-        caseRun("example_c_outsourcing"),
+        { ...caseRun("example_a_listing_sources"), yieldVerdict: "fail" },
+        caseRun("example_b_editorial_updates"),
+        caseRun("example_c_public_notices"),
       ],
     },
     commandResults: PASSING_COMMANDS,
@@ -192,20 +192,20 @@ test("product mega-flow verdict passes only when all domains and child proof com
 test("product mega-flow requires live selected signal_candidate evidence, not only deterministic fixture display", () => {
   const report = discoveryReport();
   report.caseRuns = [
-    caseRun("example_a_job_board"),
+    caseRun("example_a_listing_sources"),
     {
-      ...caseRun("example_b_dev_news"),
+      ...caseRun("example_b_editorial_updates"),
       baselineEvidence: [
         {
           fetchRuns: [{ outcomeKind: "success", httpStatus: 200 }],
-          signal_candidates: [{ docId: "example_b_dev_news-doc", title: "Live but not selected" }],
+          signal_candidates: [{ docId: "example_b_editorial_updates-doc", title: "Live update not selected" }],
           interestFilterResults: [{ semanticDecision: "approve", compatDecision: "approve" }],
           finalSelection: { total: 1, selected: 0 },
           systemFeed: { total: 1, eligible: 1 },
         },
       ],
     },
-    caseRun("example_c_outsourcing"),
+    caseRun("example_c_public_notices"),
   ];
 
   const failing = determineProductMegaFlowVerdict({
@@ -215,34 +215,34 @@ test("product mega-flow requires live selected signal_candidate evidence, not on
     yieldProofReport: { finalVerdict: "pass" },
   });
 
-  const devNewsSummary = failing.scenarioSummaries.find(
-    (scenario) => scenario.key === "example_b_dev_news"
+  const editorialSummary = failing.scenarioSummaries.find(
+    (scenario) => scenario.key === "example_b_editorial_updates"
   );
   assert.equal(failing.finalVerdict, "fail");
-  assert.equal(devNewsSummary?.status, "failed");
-  assert.equal(devNewsSummary?.filterEvidence.selected.passed, true);
-  assert.equal(devNewsSummary?.filterEvidence.selected.source, "deterministic-product-fixture-selection");
-  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.passed, false);
-  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.residualReason, "live_signal_candidates_not_selected_by_interest_policy");
+  assert.equal(editorialSummary?.status, "failed");
+  assert.equal(editorialSummary?.filterEvidence.selected.passed, true);
+  assert.equal(editorialSummary?.filterEvidence.selected.source, "deterministic-product-fixture-selection");
+  assert.equal(editorialSummary?.liveSelectedSignalCandidateEvidence.passed, false);
+  assert.equal(editorialSummary?.liveSelectedSignalCandidateEvidence.residualReason, "live_signal_candidates_not_selected_by_interest_policy");
 });
 
 test("product mega-flow can satisfy live selection through replayed live signal_candidate proof", () => {
   const report = discoveryReport();
   report.caseRuns = [
-    caseRun("example_a_job_board"),
+    caseRun("example_a_listing_sources"),
     {
-      ...caseRun("example_b_dev_news"),
+      ...caseRun("example_b_editorial_updates"),
       baselineEvidence: [
         {
           fetchRuns: [{ outcomeKind: "success", httpStatus: 200 }],
-          signal_candidates: [{ docId: "example_b_dev_news-doc", title: "Live dev news" }],
+          signal_candidates: [{ docId: "example_b_editorial_updates-doc", title: "Live editorial update" }],
           interestFilterResults: [{ semanticDecision: "no_match", compatDecision: "irrelevant" }],
           finalSelection: { total: 1, selected: 0 },
           systemFeed: { total: 1, eligible: 0 },
         },
       ],
     },
-    caseRun("example_c_outsourcing"),
+    caseRun("example_c_public_notices"),
   ];
 
   const passing = determineProductMegaFlowVerdict({
@@ -251,11 +251,11 @@ test("product mega-flow can satisfy live selection through replayed live signal_
     mcpArtifact: MCP_ARTIFACT,
     yieldProofReport: { finalVerdict: "pass" },
     liveSelectionProof: {
-      example_b_dev_news: {
+      example_b_editorial_updates: {
         selectedSignalCandidates: [
           {
-            docId: "example_b_dev_news-doc",
-            title: "Live dev news",
+            docId: "example_b_editorial_updates-doc",
+            title: "Live editorial update",
             finalDecision: "selected",
           },
         ],
@@ -263,13 +263,13 @@ test("product mega-flow can satisfy live selection through replayed live signal_
     },
   });
 
-  const devNewsSummary = passing.scenarioSummaries.find(
-    (scenario) => scenario.key === "example_b_dev_news"
+  const editorialSummary = passing.scenarioSummaries.find(
+    (scenario) => scenario.key === "example_b_editorial_updates"
   );
   assert.equal(passing.finalVerdict, "pass");
-  assert.equal(devNewsSummary?.status, "passed");
-  assert.equal(devNewsSummary?.liveSelectedSignalCandidateEvidence.source, "live-proof-selection-replay");
-  assert.equal(devNewsSummary?.liveDiscovery.selectedFinalRows, 1);
-  assert.equal(devNewsSummary?.liveDiscovery.discoverySelectedFinalRows, 0);
-  assert.equal(devNewsSummary?.liveDiscovery.replaySelectedFinalRows, 1);
+  assert.equal(editorialSummary?.status, "passed");
+  assert.equal(editorialSummary?.liveSelectedSignalCandidateEvidence.source, "live-proof-selection-replay");
+  assert.equal(editorialSummary?.liveDiscovery.selectedFinalRows, 1);
+  assert.equal(editorialSummary?.liveDiscovery.discoverySelectedFinalRows, 0);
+  assert.equal(editorialSummary?.liveDiscovery.replaySelectedFinalRows, 1);
 });

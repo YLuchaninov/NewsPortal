@@ -460,7 +460,7 @@ test("parseInterestTemplateInput accepts blank time_window_hours as any-time and
   assert.ok(blankParsed.allowedContentKinds.includes("editorial"));
 
   const parsed = parseInterestTemplateInput({
-    name: "Outsourcing demand",
+    name: "Public signal demand",
     positive_texts: "Looking for an agency\nRFP for MVP build",
     time_window_hours: "336",
     priority: "0.8",
@@ -518,13 +518,13 @@ test("parseInterestTemplateInput accepts MCP string arrays and comma-separated t
 
 test("parseInterestTemplateInput preserves fine-grained priority decimals and accepts comma decimals", () => {
   const dotParsed = parseInterestTemplateInput({
-    name: "Outsourcing demand",
+    name: "Public signal demand",
     positive_texts: "Looking for an agency\nRFP for MVP build",
     priority: "0.845",
   });
 
   const commaParsed = parseInterestTemplateInput({
-    name: "Outsourcing demand",
+    name: "Public signal demand",
     positive_texts: "Looking for an agency\nRFP for MVP build",
     priority: "0,95",
   });
@@ -535,7 +535,7 @@ test("parseInterestTemplateInput preserves fine-grained priority decimals and ac
 
 test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
   const parsed = parseInterestTemplateInput({
-    name: "Outsourcing demand",
+    name: "Public signal demand",
     positive_texts: "Looking for an agency\nRFP for MVP build",
     selection_profile_strictness: "strict",
     selection_profile_unresolved_decision: "reject",
@@ -575,7 +575,7 @@ test("saveInterestTemplate keeps json casts aligned around nullable time windows
   const queryable = createQueryable([{ rows: [] }]);
 
   const result = await saveInterestTemplate(queryable as any, {
-    name: "Outsourcing demand",
+    name: "Public signal demand",
     description: "trace create path",
     positiveTexts: ["Need an agency"],
     negativeTexts: ["sports"],

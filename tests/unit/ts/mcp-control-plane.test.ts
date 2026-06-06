@@ -21,6 +21,7 @@ import {
   parseJsonRpcRequest,
   readOptionalArgumentsObject,
 } from "../../../services/mcp/src/protocol.ts";
+import { MCP_SERVER_INSTRUCTIONS } from "../../../services/mcp/src/context.ts";
 import { listMcpPrompts, resolveMcpPrompt } from "../../../services/mcp/src/prompts.ts";
 import { listMcpResources, resolveMcpResource } from "../../../services/mcp/src/resources.ts";
 import { executeMcpTool, listMcpTools } from "../../../services/mcp/src/tools.ts";
@@ -314,6 +315,42 @@ function createFakeChannelActivePool() {
   };
 }
 
+function createFakeChannelSyncRequestPool() {
+  const state = {
+    runtimeStateUpserts: [] as Array<{ sql: string; params: unknown[] }>,
+    outboxInserts: [] as Array<{ sql: string; params: unknown[] }>,
+    auditRows: [] as unknown[][],
+  };
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      if (/insert into outbox_events/i.test(sql)) {
+        state.outboxInserts.push({ sql, params });
+        return {
+          rows: [
+            {
+              event_id: "77777777-7777-4777-8777-777777777777",
+              event_type: "source.channel.sync.requested",
+              aggregate_type: "source_channel",
+              aggregate_id: String(params[0]),
+              payload_json: JSON.parse(String(params[1])),
+            },
+          ],
+        };
+      }
+      if (/insert into source_channel_runtime_state/i.test(sql)) {
+        state.runtimeStateUpserts.push({ sql, params });
+        return { rows: [] };
+      }
+      if (/insert into audit_log/i.test(sql)) {
+        state.auditRows.push(params);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in fake channel sync request pool: ${sql}`);
+    },
+  };
+}
+
 function createFakeTemplateDuplicateAuditPool() {
   const state = {
     queries: [] as Array<{ sql: string; params: unknown[] }>,
@@ -371,7 +408,7 @@ function createFakeTemplateDuplicateAuditPool() {
   const llmRows = [
     {
       id: "44444444-4444-4444-8444-444444444444",
-      name: "[odpt-alpha] Outsourcing demand gray-zone reviewer",
+      name: "[odpt-alpha] Public signal demand gray-zone reviewer",
       scope: "criteria",
       language: "en",
       template_text: "Review gray-zone buyer demand.",
@@ -380,7 +417,7 @@ function createFakeTemplateDuplicateAuditPool() {
     },
     {
       id: "55555555-5555-4555-8555-555555555555",
-      name: "[odpt-beta] Outsourcing demand gray-zone reviewer",
+      name: "[odpt-beta] Public signal demand gray-zone reviewer",
       scope: "criteria",
       language: "en",
       template_text: "Review gray-zone buyer demand.",
@@ -728,6 +765,46 @@ function createFakeSelectionPrecisionPool() {
     state,
     async query(sql: string, params: unknown[] = []) {
       state.queries.push({ sql, params });
+      if (/technicalFilterRows/i.test(sql)) {
+        return { rows: [{ technicalFilterRows: 0, semanticEvaluatedRows: 2, semanticNotEvaluatedRows: 0 }] };
+      }
+      if (/"filterRows"/i.test(sql) && /"distinctCandidateCount"/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/select reason,\s*count\(\*\)::int as count/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/"processedCandidateCount"/i.test(sql)) {
+        return {
+          rows: [
+            {
+              processedCandidateCount: 2,
+              pendingCandidateCount: 0,
+              criteriaCount: 1,
+              expectedResultRows: 2,
+              materializedResultRows: 2,
+            },
+          ],
+        };
+      }
+      if (/invalidShortTokensRequired/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from signal_candidates\s+group by coalesce\(content_kind/i.test(sql)) {
+        return { rows: [{ contentKind: "editorial", count: 2 }] };
+      }
+      if (/excludedObservedContentKinds/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/source_interest_template_id/i.test(sql) && /technical_filter_state = 'filtered_out'/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/from llm_review_log/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/sourceClass/i.test(sql) && /from source_channels sc/i.test(sql)) {
+        return { rows: [] };
+      }
       if (/from final_selection_results fsr\s+join signal_candidates a/i.test(sql) && /selectionEvidence/i.test(sql)) {
         return {
           rows: [
@@ -794,6 +871,113 @@ function createFakeSelectionDashboardPool() {
     state,
     async query(sql: string, params: unknown[] = []) {
       state.queries.push({ sql, params });
+      if (/technicalFilterRows/i.test(sql)) {
+        return {
+          rows: [
+            {
+              technicalFilterRows: 180,
+              semanticEvaluatedRows: 2,
+              semanticNotEvaluatedRows: 178,
+            },
+          ],
+        };
+      }
+      if (/"filterRows"/i.test(sql) && /"distinctCandidateCount"/i.test(sql)) {
+        return {
+          rows: [
+            {
+              reason: "wrapper_directory_noise",
+              filterRows: 120,
+              distinctCandidateCount: 12,
+              affectedCriteriaCount: 9,
+              topChannels: [
+                { channelName: "Forum source", distinctCandidateCount: 8 },
+                { channelName: "Listing source", distinctCandidateCount: 4 },
+              ],
+            },
+            {
+              reason: "time_window",
+              filterRows: 60,
+              distinctCandidateCount: 10,
+              affectedCriteriaCount: 6,
+              topChannels: [{ channelName: "Archive source", distinctCandidateCount: 10 }],
+            },
+          ],
+        };
+      }
+      if (/select reason,\s*count\(\*\)::int as count/i.test(sql)) {
+        return {
+          rows: [
+            { reason: "short_tokens_required", count: 120 },
+            { reason: "content_kind", count: 60 },
+          ],
+        };
+      }
+      if (/"processedCandidateCount"/i.test(sql)) {
+        return {
+          rows: [
+            {
+              processedCandidateCount: 180,
+              pendingCandidateCount: 5,
+              criteriaCount: 9,
+              expectedResultRows: 1620,
+              materializedResultRows: 1620,
+            },
+          ],
+        };
+      }
+      if (/invalidShortTokensRequired/i.test(sql)) {
+        return {
+          rows: [
+            {
+              interestTemplateId: "11111111-1111-4111-8111-111111111111",
+              name: "Hidden signal",
+              invalidShortTokensRequired: ["vendor needs to provide"],
+            },
+          ],
+        };
+      }
+      if (/from signal_candidates\s+group by coalesce\(content_kind/i.test(sql)) {
+        return { rows: [{ contentKind: "editorial", count: 185 }] };
+      }
+      if (/excludedObservedContentKinds/i.test(sql)) {
+        return {
+          rows: [
+            {
+              interestTemplateId: "11111111-1111-4111-8111-111111111111",
+              name: "Listing-only interest",
+              allowedContentKinds: ["listing"],
+              excludedObservedContentKinds: [{ contentKind: "editorial", count: 185 }],
+            },
+          ],
+        };
+      }
+      if (/topAffectedCriteria|source_interest_template_id/i.test(sql) && /technical_filter_state = 'filtered_out'/i.test(sql)) {
+        return {
+          rows: [
+            {
+              criterionId: "22222222-2222-4222-8222-222222222222",
+              interestTemplateId: "11111111-1111-4111-8111-111111111111",
+              name: "Hidden signal",
+              reason: "short_tokens_required",
+              count: 120,
+            },
+          ],
+        };
+      }
+      if (/from llm_review_log/i.test(sql)) {
+        return {
+          rows: [{ errorText: "HTTP Error 404: Not Found", count: 3, lastSeenAt: "2026-06-06T08:00:00.000Z" }],
+        };
+      }
+      if (/sourceClass/i.test(sql) && /from source_channels sc/i.test(sql)) {
+        return {
+          rows: [
+            { sourceClass: "test_or_audit_like", count: 2, activeFailures: 2 },
+            { sourceClass: "operator_like", count: 5, activeFailures: 1 },
+          ],
+        };
+      }
       if (/group by coalesce\(final_decision/i.test(sql)) {
         return {
           rows: [
@@ -1220,7 +1404,9 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("signalops://guide/scenarios/observability"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/cleanup"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/funnel-calibration"));
+  assert.ok(resourceUris.includes("signalops://guide/scenarios/selection-calibration"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery-live-gap-hunting"));
+  assert.ok(resourceUris.includes("signalops://guide/reference/selection-evidence-semantics"));
   assert.ok(resourceUris.includes("signalops://signal-candidates/residuals-summary"));
   const resource = resolveMcpResource("signalops://admin/summary");
   assert.equal(resource.name, "admin.summary");
@@ -1275,6 +1461,14 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.equal(funnelGuide.name, "guide.scenarios.funnel-calibration");
   const liveGapGuide = resolveMcpResource("signalops://guide/scenarios/discovery-live-gap-hunting");
   assert.equal(liveGapGuide.name, "guide.scenarios.discovery-live-gap-hunting");
+  const selectionCalibrationGuide = resolveMcpResource(
+    "signalops://guide/scenarios/selection-calibration"
+  );
+  assert.equal(selectionCalibrationGuide.name, "guide.scenarios.selection-calibration");
+  const selectionEvidenceGuide = resolveMcpResource(
+    "signalops://guide/reference/selection-evidence-semantics"
+  );
+  assert.equal(selectionEvidenceGuide.name, "guide.reference.selection-evidence-semantics");
   const liveGapPrompt = resolveMcpPrompt("discovery.live_gap_hunting.plan");
   const liveGapRendered = liveGapPrompt.render({
     objective: "prove real discovery gaps",
@@ -1311,6 +1505,137 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     structuredContent: { ok: true },
   });
   assert.equal(MCP_SCOPE_OPTIONS.includes("write.discovery"), true);
+});
+
+test("MCP selection calibration guidance explains zero-selected diagnostics", async () => {
+  const guide = resolveMcpResource("signalops://guide/scenarios/selection-calibration");
+  const guideText = JSON.stringify(await guide.read({} as any));
+  const evidenceGuide = resolveMcpResource("signalops://guide/reference/selection-evidence-semantics");
+  const evidenceGuideText = JSON.stringify(await evidenceGuide.read({} as any));
+  const tuningGuide = resolveMcpResource("signalops://guide/tuning/selection");
+  const tuningGuideText = JSON.stringify(await tuningGuide.read({} as any));
+
+  assert.match(evidenceGuideText, /must_have_terms/);
+  assert.match(evidenceGuideText, /any-of/);
+  assert.match(evidenceGuideText, /short_tokens_required/);
+  assert.match(evidenceGuideText, /extracted short-token/);
+  assert.match(evidenceGuideText, /positive_texts/);
+  assert.match(evidenceGuideText, /not keyword/);
+  assert.match(evidenceGuideText, /candidateSignals/);
+  assert.match(evidenceGuideText, /docIds/);
+  assert.match(evidenceGuideText, /operator\.report\.verify/);
+  assert.match(evidenceGuideText, /criteriaMatches/);
+  assert.match(evidenceGuideText, /interestMatches/);
+  assert.match(evidenceGuideText, /row counters/i);
+  assert.match(evidenceGuideText, /distinct candidates/i);
+  assert.match(evidenceGuideText, /filterReasonBreakdown\.distinctCandidateCount/);
+  assert.match(evidenceGuideText, /gray_zone/);
+  assert.match(guideText, /semantic_rejected\/no_system_match/);
+  assert.match(guideText, /llmReviewMode=always/);
+  assert.match(guideText, /candidateSignals/);
+  assert.match(guideText, /docIds/);
+  assert.match(guideText, /operator\.report\.verify/);
+  assert.match(guideText, /preflight\/not_applicable/);
+  assert.match(guideText, /criteriaMatches\/interestMatches/);
+  assert.match(guideText, /filterReasonBreakdown/);
+  assert.match(guideText, /distinctCandidateCount/);
+  assert.match(guideText, /Globally removing wrapper/);
+  assert.match(guideText, /gray[- ]zone collapse/i);
+  assert.match(tuningGuideText, /semantic_rejected\/no_system_match/);
+  assert.match(tuningGuideText, /candidateSignals/);
+  assert.match(tuningGuideText, /docIds/);
+
+  assert.match(MCP_SERVER_INSTRUCTIONS, /0 selected/i);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /semantic_rejected\/no_system_match/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /no_pending_gray_zone/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /runtime_credentials_missing/);
+
+  const selectionPrompt = resolveMcpPrompt("selection.tuning.plan").render({
+    objective: "increase_recall",
+    residualBucket: "semantic_rejected/no_system_match",
+  });
+  const selectionText = selectionPrompt.messages[0]?.content.text ?? "";
+  assert.match(selectionText, /semantic_rejected\/no_system_match/);
+  assert.match(selectionText, /candidateSignals/);
+  assert.match(selectionText, /filter rows are not distinct candidates/);
+  assert.match(selectionText, /docIds/);
+  assert.match(selectionText, /operator\.report\.verify/);
+  assert.doesNotMatch(selectionText, /positive-term expansion.*main|broaden positive signals/i);
+
+  const llmPrompt = resolveMcpPrompt("llm_budget.review").render({
+    question: "why is LLM spend zero",
+  });
+  const llmText = llmPrompt.messages[0]?.content.text ?? "";
+  assert.match(llmText, /no_pending_gray_zone/);
+  assert.match(llmText, /semantic rejection before LLM/);
+
+  const discoveryPrompt = resolveMcpPrompt("discovery.session.plan").render({
+    objective: "run live Discovery",
+  });
+  const discoveryText = discoveryPrompt.messages[0]?.content.text ?? "";
+  assert.match(discoveryText, /runtime_credentials_missing/);
+  assert.match(discoveryText, /preflight\/not_applicable/);
+
+  const systemInterestPrompt = resolveMcpPrompt("system_interest.create").render({
+    topic: "hidden operational signal family",
+  });
+  const systemInterestText = systemInterestPrompt.messages[0]?.content.text ?? "";
+  assert.match(systemInterestText, /real item-level evidence/i);
+  assert.match(systemInterestText, /candidate cue groups/i);
+  assert.match(systemInterestText, /Hidden\/operational signals/i);
+
+  const channelPrompt = resolveMcpPrompt("channel.health.review").render({
+    channelId: "rss-channel",
+  });
+  const channelText = channelPrompt.messages[0]?.content.text ?? "";
+  assert.match(channelText, /channels\.alternatives\.plan/);
+  assert.match(channelText, /website_fallback/);
+});
+
+test("Discovery brief preview MCP schema accepts portable cue fields", () => {
+  const tool = listMcpTools().find((item) => item.name === "discovery.brief.preview");
+  assert.ok(tool);
+  const properties = (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+  assert.ok(properties.positiveTexts);
+  assert.ok(properties.negativeTexts);
+  assert.ok(properties.candidatePositiveSignals);
+  assert.ok(properties.candidateNegativeSignals);
+  assert.ok(properties.operatorConstraints);
+});
+
+test("MCP channels.sync.request enqueues refetch and read-back hints without invalid runtime state", async () => {
+  const pool = createFakeChannelSyncRequestPool();
+  const channelId = "11111111-1111-4111-8111-111111111111";
+
+  const result = (await executeMcpTool(
+    {
+      sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
+      pool,
+      token: WRITE_CHANNELS_TOKEN,
+    },
+    "channels.sync.request",
+    {
+      channelId,
+      reason: "operator requested fresh fetch",
+    }
+  )) as Record<string, unknown>;
+
+  assert.equal(result.event_type, "source.channel.sync.requested");
+  assert.equal(pool.state.outboxInserts.length, 1);
+  assert.equal(pool.state.runtimeStateUpserts.length, 1);
+  const runtimeSql = pool.state.runtimeStateUpserts[0]?.sql ?? "";
+  assert.match(runtimeSql, /adaptive_enabled/i);
+  assert.match(runtimeSql, /max_poll_interval_seconds/i);
+  assert.match(runtimeSql, /least\(poll_interval_seconds \* 16, 604800\)/i);
+  const nextReadBack = result.nextReadBack as {
+    tools: Array<{ name: string; arguments: Record<string, unknown> }>;
+  };
+  assert.equal(nextReadBack.tools[0]?.name, "channels.read");
+  assert.equal(nextReadBack.tools[1]?.name, "fetch_runs.list");
+  assert.equal(nextReadBack.tools[2]?.name, "outbox.events.list");
+  assert.equal(nextReadBack.tools[0]?.arguments.channelId, "<channelId-from-response>");
+  assert.equal(nextReadBack.tools[1]?.arguments.channelId, "<channelId-from-response>");
+  assert.equal(nextReadBack.tools[2]?.arguments.aggregateId, "<channelId-from-response>");
 });
 
 test("MCP read tools accept common report aliases for system interest read-back", async () => {
@@ -1614,6 +1939,10 @@ test("MCP selection precision audit buckets selected rows without a public gate 
 
   assert.match(JSON.stringify(report), /weakSelectedCount/);
   assert.match(JSON.stringify(report), /Do not add a separate public selected gate/);
+  assert.match(JSON.stringify(report), /filterReasonBreakdown/);
+  assert.match(JSON.stringify(report), /distinctCandidateCount/);
+  assert.match(JSON.stringify(report), /processor diagnostics, not selected-signal proof/);
+  assert.match(JSON.stringify(report), /Use filterReasonBreakdown\.distinctCandidateCount/);
 });
 
 test("MCP selection dashboard explains raw signal_candidate totals versus selected signals", async () => {
@@ -1655,8 +1984,168 @@ test("MCP selection dashboard explains raw signal_candidate totals versus select
   assert.equal(counts.rawSignalCandidateObservations, 185);
   assert.equal(counts.selectedSignalCandidateSignals, 0);
   assert.equal(counts.visibleContentItems, 0);
+  assert.equal(counts.technicalFilterRows, 180);
+  assert.equal(counts.semanticEvaluatedRows, 2);
+  assert.equal(counts.processedCandidateCount, 180);
+  assert.equal(counts.pendingCandidateCount, 5);
+  assert.equal(counts.criteriaCount, 9);
+  assert.equal(counts.expectedResultRows, 1620);
+  assert.equal(counts.materializedResultRows, 1620);
+  assert.equal((dashboard.filterReasonCounts as Record<string, unknown>).short_tokens_required, 120);
+  const breakdown = dashboard.filterReasonBreakdown as Array<Record<string, unknown>>;
+  assert.equal(breakdown[0]?.reason, "wrapper_directory_noise");
+  assert.equal(breakdown[0]?.filterRows, 120);
+  assert.equal(breakdown[0]?.distinctCandidateCount, 12);
+  assert.equal(breakdown[0]?.affectedCriteriaCount, 9);
+  assert.match(JSON.stringify(dashboard.counterSemantics), /not unique candidate counts/);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).hardFilterCollapseSuspected, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).shortTokenPhraseMismatch, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).contentKindMismatch, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).llmProviderEndpointError, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).activeTestChannelNoise, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).filterRowsNotCandidateRows, true);
   assert.match(JSON.stringify(dashboard), /raw editorial observations/i);
+  assert.match(JSON.stringify(dashboard), /current active source count/i);
   assert.match(JSON.stringify(dashboard), /strict selection currently exposes zero/i);
+  assert.match(JSON.stringify(dashboard), /zeroSelectedHighRejection/);
+  assert.match(JSON.stringify(dashboard), /grayZoneCollapseSuspected/);
+  assert.match(JSON.stringify(dashboard), /invalidShortTokensRequired/);
+  assert.match(JSON.stringify(dashboard), /signal_candidates\.residuals\.summary/);
+  assert.match(JSON.stringify(dashboard), /system_interests\.compile_status\.list/);
+  assert.match(JSON.stringify(dashboard), /operator\.report\.verify/);
+});
+
+test("MCP operator tuning recommend avoids positive-term expansion for semantic recall", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const recommendation = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+      residualBucket: "semantic_rejected/no_system_match",
+    }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(recommendation);
+  assert.match(serialized, /candidateSignals/);
+  assert.match(serialized, /near-miss negative/);
+  assert.match(serialized, /maintenance\.reindex\.request/);
+  assert.match(serialized, /operator\.report\.verify/);
+  assert.doesNotMatch(serialized, /Broaden positive signals or lower strictness/);
+});
+
+test("MCP operator tuning recommend prioritizes technical-filter repair before semantic tuning", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const recommendation = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+      residualBucket: "technical_filter_rejected/wrapper_directory_noise/time_window/must_not",
+    }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(recommendation);
+  assert.match(serialized, /filterReasonBreakdown/);
+  assert.match(serialized, /distinctCandidateCount/);
+  assert.match(serialized, /10-30 representative rejected candidates/);
+  assert.match(serialized, /short_tokens_required is an extracted-token requirement/);
+  assert.match(serialized, /Do not globally remove wrapper_directory_noise/);
+  assert.match(serialized, /temporary bounded experiment/);
+  assert.match(serialized, /selection-hard-filter-calibration/);
+  assert.match(serialized, /operator\.selection\.dashboard/);
+  assert.doesNotMatch(serialized, /disable wrapper_directory_noise as first step/i);
+  assert.doesNotMatch(serialized, /positive-term expansion/);
+});
+
+test("MCP LLM budget report classifies provider 404 as endpoint error", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query(sql: string) {
+      if (/from llm_review_log/i.test(sql)) {
+        return {
+          rows: [{ errorText: "HTTP Error 404: Not Found", count: 2, lastSeenAt: "2026-06-06T08:00:00.000Z" }],
+        };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const report = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.report.verify",
+    { reportKind: "llm_budget", entityIds: {}, includeSamples: true }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(report);
+  assert.match(serialized, /provider_endpoint_error/);
+  assert.match(serialized, /provider404/);
+  assert.match(serialized, /preflight\/provider failures/);
 });
 
 test("MCP selection reindex planner builds bounded replay buckets and request templates", async () => {
@@ -1745,6 +2234,71 @@ test("MCP channel active-state tool avoids full provider payload guessing", asyn
   assert.equal((result as Record<string, unknown>).channelId, "abea2560-0000-4000-8000-000000000000");
   assert.match(JSON.stringify(result), /channels\.read/);
   assert.match(JSON.stringify(result), /operator\.report\.verify/);
+});
+
+test("MCP channels.create rejects supplied channelId before backend calls", async () => {
+  const pool = {
+    async query(sql: string) {
+      throw new Error(`channels.create should reject before DB calls: ${sql}`);
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
+          pool,
+          token: WRITE_CHANNELS_TOKEN,
+        },
+        "channels.create",
+        {
+          payload: {
+            providerType: "rss",
+            channelId: "11111111-1111-4111-8111-111111111111",
+            name: "Existing RSS by mistake",
+            fetchUrl: "https://example.com/feed.xml",
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /omit it when creating a channel/i.test(error.message) &&
+      JSON.stringify(error).includes("payload.channelId")
+  );
+});
+
+test("MCP channels.update requires an existing channelId", async () => {
+  const pool = {
+    async query(sql: string) {
+      throw new Error(`channels.update should reject before DB calls: ${sql}`);
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: createSignalOpsSdk({ baseUrl: "http://api.example.test" }),
+          pool,
+          token: WRITE_CHANNELS_TOKEN,
+        },
+        "channels.update",
+        {
+          payload: {
+            providerType: "rss",
+            name: "Missing update id",
+            fetchUrl: "https://example.com/feed.xml",
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      /requires an existing channelId/i.test(error.message) &&
+      JSON.stringify(error).includes("payload.channelId")
+  );
 });
 
 test("MCP Discovery vNext artifact lists validate filters before API calls", async () => {
@@ -2130,6 +2684,21 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
         },
       },
       expectedPath: "payload.interestTemplateId",
+    },
+    {
+      toolName: "system_interests.update",
+      token: WRITE_TEMPLATES_TOKEN,
+      args: {
+        payload: {
+          interestTemplateId: "11111111-1111-4111-8111-111111111111",
+          name: "Nope",
+          positive_texts: "representative signal evidence",
+          short_tokens_required: ["vendor needs to provide"],
+        },
+      },
+      expectedPath: "payload.short_tokens_required[0]",
+      expectedMessage:
+        "payload.short_tokens_required[0] must be a single extracted token, not a phrase.",
     },
     {
       toolName: "llm_templates.update",

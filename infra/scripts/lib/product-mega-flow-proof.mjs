@@ -2,28 +2,28 @@ export const PRODUCT_MEGA_FLOW_REQUIRED_FINAL_VERDICT = "pass";
 
 export const PRODUCT_MEGA_FLOW_SCENARIOS = [
   {
-    key: "example_a_job_board",
+    key: "example_a_listing_sources",
     example: "A",
-    label: "Example A — job board / hiring discovery",
-    productDomain: "job board / hiring discovery",
-    fixtureNamespace: "mega_flow_example_a_hiring",
-    discoveryCaseKey: "example_a_job_board",
+    label: "Example A — recurring listing sources",
+    productDomain: "recurring listing source discovery",
+    fixtureNamespace: "mega_flow_example_a_listings",
+    discoveryCaseKey: "example_a_listing_sources",
   },
   {
-    key: "example_b_dev_news",
+    key: "example_b_editorial_updates",
     example: "B",
-    label: "Example B — developer news discovery",
-    productDomain: "developer news discovery",
-    fixtureNamespace: "mega_flow_example_b_dev_news",
-    discoveryCaseKey: "example_b_dev_news",
+    label: "Example B — editorial update sources",
+    productDomain: "editorial update source discovery",
+    fixtureNamespace: "mega_flow_example_b_editorial",
+    discoveryCaseKey: "example_b_editorial_updates",
   },
   {
-    key: "example_c_outsourcing",
+    key: "example_c_public_notices",
     example: "C",
-    label: "Example C — outsourcing / procurement discovery",
-    productDomain: "outsourcing / procurement discovery",
-    fixtureNamespace: "mega_flow_example_c_procurement",
-    discoveryCaseKey: "example_c_outsourcing",
+    label: "Example C — public notice sources",
+    productDomain: "public notice source discovery",
+    fixtureNamespace: "mega_flow_example_c_notices",
+    discoveryCaseKey: "example_c_public_notices",
   },
 ];
 

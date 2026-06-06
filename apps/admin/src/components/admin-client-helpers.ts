@@ -1,3 +1,10 @@
+import {
+  ClientActionError,
+  createClientActionError,
+  reportClientError,
+  readClientErrorMessage,
+} from "@signalops/ui";
+
 export type JsonRecord = Record<string, unknown>;
 
 export function readText(value: unknown, fallback = "—"): string {
@@ -53,7 +60,28 @@ export async function postJson(path: string, payload: Record<string, unknown>): 
   });
   const json = (await response.json().catch(() => ({}))) as JsonRecord;
   if (!response.ok) {
-    throw new Error(readText(json.error ?? json.detail, `Request failed with ${response.status}`));
+    const error = createClientActionError(json, {
+      fallbackMessage: `Request failed with ${response.status}`,
+      status: response.status,
+    });
+    reportClientError(error, {
+      context: `Admin request failed: ${path}`,
+      fallbackMessage: readText(json.error ?? json.detail, `Request failed with ${response.status}`),
+    });
+    throw error;
   }
   return json;
+}
+
+export function reportAdminActionError(
+  error: unknown,
+  options: { context: string; fallbackMessage: string }
+): string {
+  if (error instanceof ClientActionError) {
+    return readClientErrorMessage(error, options.fallbackMessage);
+  }
+  return reportClientError(error, {
+    context: options.context,
+    fallbackMessage: options.fallbackMessage,
+  });
 }

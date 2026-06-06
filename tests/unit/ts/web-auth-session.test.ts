@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   bootstrapWebFirebaseSession,
+  buildGoogleSignInErrorPayload,
   buildWebAuthCookies,
   isAuthorizedGoogleIdentity,
   signInWebWithGoogleCredential,
@@ -119,6 +120,94 @@ test("signInWebWithGoogleCredential rejects non-Google or unverified identities"
       () => signInWebWithGoogleCredential("google-credential"),
       /Google email must be verified|Only authorized Google accounts/
     );
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv(previousEnv);
+  }
+});
+
+test("Google sign-in Firebase provider errors keep technical details out of the toast-facing message", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousEnv = {
+    FIREBASE_WEB_API_KEY: process.env.FIREBASE_WEB_API_KEY,
+  };
+
+  process.env.FIREBASE_WEB_API_KEY = "test-api-key";
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes("accounts:signInWithIdp")) {
+      return jsonResponse(
+        {
+          error: {
+            message: "OPERATION_NOT_ALLOWED : The identity provider configuration is not found.",
+          },
+        },
+        400
+      );
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  }) as typeof fetch;
+
+  try {
+    let thrown: unknown;
+    try {
+      await signInWebWithGoogleCredential("google-credential");
+    } catch (error) {
+      thrown = error;
+    }
+
+    const payload = buildGoogleSignInErrorPayload(thrown);
+    assert.deepEqual(payload, {
+      error: "Google sign-in is not enabled in Firebase Authentication.",
+      errorCode: "firebase_provider_not_enabled",
+      technicalError: "OPERATION_NOT_ALLOWED : The identity provider configuration is not found.",
+    });
+    assert.notEqual(payload.error, payload.technicalError);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv(previousEnv);
+  }
+});
+
+test("Google sign-in invalid IdP response errors keep project mismatch details out of the toast-facing message", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousEnv = {
+    FIREBASE_WEB_API_KEY: process.env.FIREBASE_WEB_API_KEY,
+  };
+  const technicalMessage =
+    "INVALID_IDP_RESPONSE : Invalid Idp Response: the Google id_token is not allowed to be used with this application. Its audience (OAuth 2.0 client ID) is 219076268448-kp160fnthpkohfr9vgfe4u033gg722ci.apps.googleusercontent.com, which is not authorized to be used in the project with project_number: 977137494819.";
+
+  process.env.FIREBASE_WEB_API_KEY = "test-api-key";
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    if (url.includes("accounts:signInWithIdp")) {
+      return jsonResponse(
+        {
+          error: {
+            message: technicalMessage,
+          },
+        },
+        400
+      );
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  }) as typeof fetch;
+
+  try {
+    let thrown: unknown;
+    try {
+      await signInWebWithGoogleCredential("google-credential");
+    } catch (error) {
+      thrown = error;
+    }
+
+    const payload = buildGoogleSignInErrorPayload(thrown);
+    assert.deepEqual(payload, {
+      error: "Google sign-in is not configured for this Firebase project.",
+      errorCode: "firebase_invalid_idp_response",
+      technicalError: technicalMessage,
+    });
+    assert.notEqual(payload.error, payload.technicalError);
   } finally {
     globalThis.fetch = previousFetch;
     restoreEnv(previousEnv);

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { WEB_BFF_ACTION_PAYLOAD_SCHEMAS } from "@signalops/contracts";
 
 import {
+  buildGoogleSignInErrorPayload,
   buildWebAuthCookies,
   signInWebWithGoogleCredential,
   syncLocalUser,
@@ -46,10 +47,9 @@ export const POST: APIRoute = async ({ request }) => {
       }
     );
   } catch (error) {
+    const payload = buildGoogleSignInErrorPayload(error);
     return Response.json(
-      {
-        error: error instanceof Error ? error.message : "Google sign-in failed.",
-      },
+      payload,
       {
         status: 403,
       }

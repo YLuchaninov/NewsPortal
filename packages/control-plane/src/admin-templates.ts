@@ -968,6 +968,9 @@ export function parseInterestTemplateInput(
     throw new Error('Template field "positive_texts" must contain at least one line.');
   }
 
+  const shortTokensRequired = readTextList(payload.short_tokens_required, { splitCommas: true });
+  validateShortTokensRequired(shortTokensRequired);
+
   return {
     interestTemplateId: readOptionalString(payload.interestTemplateId) ?? undefined,
     name,
@@ -982,7 +985,7 @@ export function parseInterestTemplateInput(
     allowedContentKinds: readTextList(payload.allowed_content_kinds, { splitCommas: true }).length
       ? readTextList(payload.allowed_content_kinds, { splitCommas: true })
       : [...DEFAULT_ALLOWED_CONTENT_KINDS],
-    shortTokensRequired: readTextList(payload.short_tokens_required, { splitCommas: true }),
+    shortTokensRequired,
     shortTokensForbidden: readTextList(payload.short_tokens_forbidden, { splitCommas: true }),
     candidatePositiveSignals: parseCandidateSignalGroups(payload.candidate_positive_signals),
     candidateNegativeSignals: parseCandidateSignalGroups(payload.candidate_negative_signals),
@@ -1007,6 +1010,18 @@ export function parseInterestTemplateInput(
     priority: readPositiveNumber(payload.priority, 1.0, "priority"),
     isActive: readBoolean(payload.isActive, true, "isActive"),
   };
+}
+
+export function validateShortTokensRequired(
+  values: readonly string[],
+  pathPrefix = "short_tokens_required"
+): void {
+  const invalidIndex = values.findIndex((value) => /\s/u.test(value.trim()));
+  if (invalidIndex >= 0) {
+    throw new Error(
+      `${pathPrefix}[${invalidIndex}] must be a single extracted short token with no internal whitespace; phrase gates belong in must_have_terms only when truly mandatory.`
+    );
+  }
 }
 
 export async function saveLlmTemplate(

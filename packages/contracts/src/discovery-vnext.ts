@@ -143,6 +143,7 @@ export const DISCOVERY_BRIEF_PAYLOAD_SCHEMA = {
     goal: STRING_SCHEMA,
     desiredSignals: {
       type: "array",
+      minItems: 1,
       items: {
         type: "object",
         required: ["description", "expectedEvidencePatterns"],
@@ -187,7 +188,7 @@ export const HYPOTHESIS_BATCH_PAYLOAD_SCHEMA = {
           description: STRING_SCHEMA,
           sourceRoleDescription: STRING_SCHEMA,
           expectedArtifacts: STRING_LIST_SCHEMA,
-          expectedSignalLinks: { type: "array", items: JSON_OBJECT_SCHEMA },
+          expectedSignalLinks: { type: "array", minItems: 1, items: JSON_OBJECT_SCHEMA },
           queryFamilies: { type: "array", items: JSON_OBJECT_SCHEMA },
           riskAssumption: STRING_SCHEMA,
           actionability: STRING_SCHEMA,

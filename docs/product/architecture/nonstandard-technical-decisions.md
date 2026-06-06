@@ -228,7 +228,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this gives the team a way to prove the funnel works from idea to source discovery to selected signal, and to honestly label gaps as source recall, adapter conversion, selection quality, LLM health or provider quality.
 
-**Implemented around:** `infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs`, `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`, `infra/scripts/run-ted-api-adapter-mcp-proof.mjs`, `pnpm test:mcp:http:discovery`, `pnpm test:discovery:vnext-flow`.
+**Implemented around:** `infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs`, `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`, `infra/scripts/test-discovery-vnext-mcp-scenario-verification.mjs`, `pnpm test:mcp:http:discovery`, `pnpm test:discovery:vnext-flow`.
 
 **Tradeoff:** live proof depends on local runtime, credentials and provider behavior; deterministic proofs still remain necessary for CI-style confidence.
 

@@ -3,6 +3,7 @@ import {
   deleteTemplateWithAudit,
   saveTemplateFromPayload,
   setTemplateActiveStateWithAudit,
+  validateShortTokensRequired,
 } from "@signalops/control-plane";
 
 import {
@@ -190,6 +191,34 @@ function summarizeCompileStatusRows(
   };
 }
 
+function withTemplateReadBack(
+  result: Record<string, unknown>,
+  readTool: string,
+  idField: string
+): Record<string, unknown> {
+  const entityId = String(result.entityId ?? "").trim();
+  if (!entityId) {
+    return result;
+  }
+  return {
+    ...result,
+    nextReadBack: [
+      {
+        tool: readTool,
+        arguments: { [idField]: entityId },
+      },
+      ...(result.kind === "interest"
+        ? [
+            {
+              tool: "system_interests.compile_status.list",
+              arguments: { includeInactive: true, includeSamples: true },
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
 function groupAuditItems<T extends Record<string, unknown>>(
   items: T[],
   keyFn: (item: T) => string
@@ -256,7 +285,40 @@ function readSystemInterestPayload(args: Record<string, unknown>): Record<string
       "payload.interestTemplateId"
     );
   }
+  validateSystemInterestShortTokensRequired(payload);
   return payload;
+}
+
+function validateSystemInterestShortTokensRequired(payload: Record<string, unknown>): void {
+  if (!Object.prototype.hasOwnProperty.call(payload, "short_tokens_required")) {
+    return;
+  }
+  const rawValue = payload.short_tokens_required;
+  const values = Array.isArray(rawValue)
+    ? rawValue.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : String(rawValue ?? "")
+        .split(/\r?\n|,/u)
+        .map((value) => value.trim())
+        .filter(Boolean);
+  const invalidIndex = values.findIndex((value) => /\s/u.test(value));
+  if (invalidIndex < 0) {
+    validateShortTokensRequired(values, "payload.short_tokens_required");
+    return;
+  }
+  throw new JsonRpcError(
+    -32602,
+    `payload.short_tokens_required[${invalidIndex}] must be a single extracted token, not a phrase.`,
+    {
+      statusCode: 400,
+      data: {
+        path: `payload.short_tokens_required[${invalidIndex}]`,
+        expectedShape:
+          "Array of token-like strings with no internal whitespace, e.g. RFP, RFQ, AI, US-, devops.",
+        hint:
+          "Phrase lexical gates belong in must_have_terms only when truly mandatory; hidden-signal recovery should use candidateSignals, representative evidence, near-miss negatives, bounded replay, and read-back proof.",
+      },
+    }
+  );
 }
 
 function readLlmTemplatePayload(args: Record<string, unknown>): Record<string, unknown> {
@@ -481,7 +543,12 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...readSystemInterestPayload(args),
         kind: "interest",
       };
-      return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      return withTemplateReadBack(
+        result as unknown as Record<string, unknown>,
+        "system_interests.read",
+        "interestTemplateId"
+      );
     }
   ),
   createWriteTool(
@@ -494,7 +561,12 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...readSystemInterestPayload(args),
         kind: "interest",
       };
-      return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      return withTemplateReadBack(
+        result as unknown as Record<string, unknown>,
+        "system_interests.read",
+        "interestTemplateId"
+      );
     }
   ),
   createWriteTool(
@@ -562,7 +634,12 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...readLlmTemplatePayload(args),
         kind: "llm",
       };
-      return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      return withTemplateReadBack(
+        result as unknown as Record<string, unknown>,
+        "llm_templates.read",
+        "promptTemplateId"
+      );
     }
   ),
   createWriteTool(
@@ -575,7 +652,12 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
         ...readLlmTemplatePayload(args),
         kind: "llm",
       };
-      return saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
+      return withTemplateReadBack(
+        result as unknown as Record<string, unknown>,
+        "llm_templates.read",
+        "promptTemplateId"
+      );
     }
   ),
   createWriteTool(

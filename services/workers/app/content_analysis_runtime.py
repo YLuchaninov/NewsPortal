@@ -119,7 +119,7 @@ def policy_result_json(policy: RuntimeAnalysisPolicy | None) -> dict[str, Any] |
 
 
 def default_model_for_module(module: str) -> tuple[str, str, str]:
-    structured_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+    structured_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
     defaults = {
         "ner": (HEURISTIC_NER_PROVIDER, HEURISTIC_NER_MODEL_KEY, HEURISTIC_NER_MODEL_VERSION),
         "sentiment": (SENTIMENT_PROVIDER, SENTIMENT_MODEL_KEY, SENTIMENT_MODEL_VERSION),

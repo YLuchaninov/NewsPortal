@@ -29,15 +29,15 @@ function passingMegaArtifact() {
     yieldVerdict: "pass",
     scenarios: [
       {
-        key: "example_a_job_board",
+        key: "example_a_listing_sources",
         liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
       {
-        key: "example_b_dev_news",
+        key: "example_b_editorial_updates",
         liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
       {
-        key: "example_c_outsourcing",
+        key: "example_c_public_notices",
         liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
       },
     ],

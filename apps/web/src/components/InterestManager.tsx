@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { createClientActionError, reportClientError } from "@signalops/ui";
 
 interface Interest {
   interest_id: string;
@@ -98,8 +99,17 @@ export function InterestManager({
         form.reset();
         await onMutationSuccess?.();
       } else {
-        toast.error("Failed to create interest");
+        const payload = await res.json().catch(() => ({}));
+        throw createClientActionError(payload, {
+          fallbackMessage: "Failed to create interest",
+          status: res.status,
+        });
       }
+    } catch (error) {
+      reportClientError(error, {
+        context: "Create interest",
+        fallbackMessage: "Failed to create interest",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -117,18 +127,29 @@ export function InterestManager({
     for (const [k, v] of data.entries()) body.append(k, String(v));
     body.set("_action", action);
 
-    const res = await fetch(buildInterestActionPath(id), { method: "POST", body });
-    if (res.ok || res.redirected) {
-      const msg =
-        action === "delete"
-          ? "Interest deleted"
-          : action === "clone"
-            ? "Interest cloned. Compilation and background match sync started."
-            : "Interest updated. Compilation and background match sync started.";
-      toast.success(msg);
-      await onMutationSuccess?.();
-    } else {
-      toast.error("Action failed");
+    try {
+      const res = await fetch(buildInterestActionPath(id), { method: "POST", body });
+      if (res.ok || res.redirected) {
+        const msg =
+          action === "delete"
+            ? "Interest deleted"
+            : action === "clone"
+              ? "Interest cloned. Compilation and background match sync started."
+              : "Interest updated. Compilation and background match sync started.";
+        toast.success(msg);
+        await onMutationSuccess?.();
+      } else {
+        const payload = await res.json().catch(() => ({}));
+        throw createClientActionError(payload, {
+          fallbackMessage: "Action failed",
+          status: res.status,
+        });
+      }
+    } catch (error) {
+      reportClientError(error, {
+        context: `Interest action: ${action}`,
+        fallbackMessage: "Action failed",
+      });
     }
   }
 

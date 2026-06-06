@@ -63,6 +63,34 @@ def run_mega_loop_preview(
     source_inventory: list[dict[str, Any]] | None = None,
     feedback_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    if not [
+        signal
+        for signal in discovery_brief.get("desiredSignals", [])
+        if isinstance(signal, dict)
+    ]:
+        return {
+            "artifactType": "HypothesisMegaLoopPreview",
+            "status": "failed",
+            "error": {
+                "code": "brief_missing_desired_signals",
+                "message": "DiscoveryBrief must include non-empty desiredSignals before MegaLoop can generate HypothesisBatch artifacts.",
+            },
+            "batches": [],
+            "comparison": {"missingLenses": [], "warnings": []},
+            "coveragePolicy": _coverage_policy(max_batches=max_batches, requested=coverage_policy),
+            "adaptivePolicy": _adaptive_policy(adaptive_policy),
+            "warnings": [
+                {
+                    "code": "brief_missing_desired_signals",
+                    "message": "DiscoveryBrief must include non-empty desiredSignals.",
+                }
+            ],
+            "limits": {
+                "maxBatches": max_batches,
+                "actualBatches": 0,
+                "liveProviderExecution": False,
+            },
+        }
     coverage_policy = _coverage_policy(max_batches=max_batches, requested=coverage_policy)
     adaptive_policy = _adaptive_policy(adaptive_policy)
     required_lenses = [lens for lens in coverage_policy["requiredLensCoverage"] if lens in UNIVERSAL_LENSES]

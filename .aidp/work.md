@@ -2,6 +2,600 @@
 
 ## Active Item
 
+- id: `SIGNALOPS-MCP-SELECTION-DIAGNOSTICS-HARDENING-1`
+- lifecycle: `normal`
+- route: `bugfix/capability`
+- route phase: `mcp-selection-counter-semantics-hardening`
+- route-specific next step: implement MCP/control-plane diagnostics and guidance so clients distinguish filter result rows from distinct candidates, avoid stale report/channel conclusions, and use bounded proof before tuning.
+- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-06 to implement the accepted MCP Selection Diagnostics Hardening Plan.
+- planning required: yes, because this changes MCP/control-plane diagnostics, report verification, operator recommendations and client-facing guidance.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection pipeline boundaries; `.aidp/engineering.md` observable diagnostics, configuration and no hidden domain logic rules; `.aidp/verification.md` MCP/control-plane proof expectations.
+- cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
+
+## Scope
+
+Harden MCP selection diagnostics so external clients do not confuse filter result rows with distinct candidates, do not treat hard-filter counters as selected proof, and do not recommend global generic-filter removal or broadening before representative evidence.
+
+In scope:
+
+- MCP/control-plane selection dashboard and report verification read models;
+- operator tuning recommendations for technical-filter residuals;
+- MCP resources, prompts and server instructions;
+- unit tests for MCP resources/prompts/dashboard/report/recommendations.
+
+Out of scope:
+
+- selection algorithm/runtime behavior changes;
+- domain-specific RFP, outsourcing or procurement runtime defaults;
+- automatic source/channel writes or source deactivation;
+- changing external provider credentials or live provider state.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- `anchored-summary.md` and `session-report-5.md` are evidence only, not canonical product truth.
+- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: `bugfix/capability` route and MCP/control-plane proof obligations.
+- `.aidp/blueprint.md`: MCP/control-plane, operator/admin and selection pipeline boundaries.
+- `.aidp/engineering.md`: observable diagnostics and no hidden domain logic.
+- `.aidp/verification.md`: MCP/control-plane proof and static guard expectations.
+- `docs/mcp_test/anchored-summary.md` and `docs/mcp_test/session-report-5.md`: evidence of external-client misinterpretation, not runtime canon.
+
+## Implementation Expectations
+
+- Preserve existing `filterReasonCounts` as row-count diagnostics while adding distinct-candidate breakdown.
+- Add counter semantics and staleness/read-back guidance to selection dashboard and selection report verification.
+- Make tuning recommendations sample-first and bounded-replay-first for wrapper, time-window, must-not and other technical-filter residuals.
+- Keep guidance domain-neutral and avoid RFP/outsourcing runtime logic.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane unit test;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- MCP/control-plane behavior:
+  - `operator.selection.dashboard` preserves `filterReasonCounts` as backward-compatible row counts and adds `filterReasonBreakdown` with `filterRows`, `distinctCandidateCount`, `affectedCriteriaCount` and top channels.
+  - Dashboard counts now expose processed/pending candidate counts, criteria count, expected result rows and materialized result rows.
+  - Dashboard/report diagnostics include `counterSemantics` and `filterRowsNotCandidateRows` so clients do not mistake result rows for unique candidates.
+  - `operator.report.verify reportKind=selection` returns the same breakdown, staleness fields, pending rows and proof warnings.
+  - `operator.tuning.recommend` for technical-filter residuals now requires distinct-candidate breakdown, 10-30 representative rejected samples, bounded repair and docId replay; it explicitly avoids global `wrapper_directory_noise` removal or `strictness=broad` as a first response.
+- MCP guidance:
+  - server instructions, selection evidence semantics, selection calibration and selection tuning prompts now explain row counters vs distinct candidates.
+  - guidance separates current source-health read-back from historical report/evidence and points clients to `channels.bottlenecks.summary/list`.
+  - domain-specific evidence stays out of runtime guidance and defaults.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (44/44);
+  - `pnpm unit_tests:ts` (438/438);
+  - `pnpm lint`;
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-WEB-GOOGLE-FIREBASE-AUTH-SETUP-DOC-1`
+- lifecycle: `normal`
+- route: `docs-operator`
+- route phase: `google-firebase-auth-setup-runbook`
+- route-specific next step: created operator documentation for configuring Firebase project, Google Cloud OAuth client, environment variables, allowed domain, and known Google Sign-In console errors.
+- route-specific proof: docs source inspection and diff check.
+- status: `done`
+- risk: `low`
+- approval: approved by operator request on 2026-06-06 to create setup documentation after successful auth.
+- planning required: no, because this is a narrow operator documentation addition.
+- blueprint context checked: not applicable; no architecture/API/session boundary change.
+- cleanup status: no external runtime state expected.
+
+## Scope
+
+Create a concise operator runbook for Google-gated web auth setup.
+
+In scope:
+
+- Firebase project / Google Cloud project relationship;
+- Firebase Authentication Google provider setup;
+- OAuth Web Client ID and Authorized JavaScript origins;
+- SignalOps env variables;
+- allowed email domain configuration;
+- explanation of common Google Sign-In/Firebase console errors.
+
+Out of scope:
+
+- changing code or external Google/Firebase state;
+- production deployment.
+
+Allowed paths:
+
+- `.aidp/**`
+- `docs/product/operator/setup/**`
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- Passed:
+  - source inspection of `docs/product/operator/setup/google_firebase_web_auth_setup.md`;
+  - source inspection of the cross-link in `docs/product/operator/setup/firebase_setup.md`;
+  - `git diff --check`.
+- Notes:
+  - Document includes the current `The given origin is not allowed for the given client ID` warning and explains Authorized JavaScript origins.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-WEB-GOOGLE-INVALID-IDP-FRIENDLY-ERROR-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `google-invalid-idp-response-error-mapping`
+- route-specific next step: mapped Firebase `INVALID_IDP_RESPONSE` Google auth failures to friendly toast text while keeping full Firebase detail in browser console.
+- route-specific proof: targeted web auth session unit test plus lint/typecheck/diff check.
+- status: `done`
+- risk: `low`
+- approval: approved by operator report of live Google/Firebase error on 2026-06-06.
+- planning required: no, because this is a narrow extension of existing Google auth error mapping.
+- blueprint context checked: not applicable; no architecture/API/session boundary change.
+- cleanup status: no external runtime state expected.
+
+## Scope
+
+Firebase `INVALID_IDP_RESPONSE` from Google sign-in should not appear as raw UI text. The user sees a friendly configuration message; the raw Firebase detail remains in browser console through `technicalError`.
+
+In scope:
+
+- Google auth BFF error payload mapping;
+- web auth unit regression for `INVALID_IDP_RESPONSE`;
+- static proof gates.
+
+Out of scope:
+
+- changing Google/Firebase console configuration;
+- changing Google auth success behavior;
+- broad rewrite of auth/session flow.
+
+Allowed paths:
+
+- `.aidp/**`
+- `apps/web/src/lib/server/auth.ts`
+- `tests/unit/ts/**`
+
+## Historical Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- Passed:
+  - `pnpm unit_tests:ts -- web-auth-session`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `git diff --check`
+- Notes:
+  - Targeted TS command executed the full TS unit suite and passed 430 tests.
+  - `INVALID_IDP_RESPONSE` now returns toast-facing `Google sign-in is not configured for this Firebase project.` with the raw Firebase detail only in `technicalError`.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-WEB-ADMIN-LOOSE-ERROR-TEXT-TOAST-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `loose-browser-error-text-to-toast`
+- route-specific next step: removed loose action error text outside specialized panels while preserving panel-local validation/status errors.
+- route-specific proof: targeted source inspection plus lint, typecheck and diff check.
+- status: `done`
+- risk: `low`
+- approval: approved by operator clarification on 2026-06-06.
+- planning required: no, because this is a narrow browser UX cleanup of existing error rendering.
+- blueprint context checked: not applicable; no architecture/API/session boundary change.
+- cleanup status: no external runtime state expected.
+
+## Scope
+
+Loose browser action errors should be toast-only when they are outside specialized panels. Specialized panels may keep inline error/status text when it is part of the panel's workflow.
+
+In scope:
+
+- remove loose admin/web action error text outside specialized panels;
+- preserve panel-local error/status text for dry-run/result/editor/credential panels;
+- avoid duplicate toasts for errors already reported by shared BFF helpers;
+- targeted source checks and static proof.
+
+Out of scope:
+
+- Firebase/Google provider configuration;
+- changing Google auth success behavior;
+- removing specialized panel-local validation/status text.
+
+Allowed paths:
+
+- `.aidp/**`
+- `apps/web/**`
+- `apps/admin/**`
+- `packages/ui/**`
+- `tests/unit/ts/**`
+
+## Historical Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- Passed:
+  - targeted `rg` source inspection for `setErrorMessage`, `setActionError`, `actionError`, and rose/destructive error text;
+  - `pnpm typecheck`;
+  - `pnpm lint`;
+  - `git diff --check`.
+- Notes:
+  - Remaining inline error text is scoped to specialized panels or persisted execution data, not loose action error display.
+  - Admin `postJson` already emits toast/console for BFF failures; added `reportAdminActionError` to avoid duplicate toasts while still reporting local client-only failures.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-WEB-ADMIN-TOAST-UX-FOLLOWUP-1`
+- lifecycle: `normal`
+- route: `micro-patch`
+- route phase: `toast-duration-and-google-inline-error-cleanup`
+- route-specific next step: removed duplicate Google sign-in inline auth error text after toast reporting and made browser error toasts stay visible for about seven seconds.
+- route-specific proof: targeted TS unit tests for client error reporting and Google sign-in component source inspection plus diff check.
+- status: `done`
+- risk: `low`
+- approval: approved by operator follow-up request on 2026-06-06.
+- planning required: no, because this is a small local UX patch within the existing browser error reporting implementation.
+- blueprint context checked: not applicable; no architecture/API/session boundary change.
+- cleanup status: no external runtime state expected.
+
+## Scope
+
+Fix browser toast UX follow-up from the friendly error reporting item.
+
+In scope:
+
+- default client error toast duration around 7 seconds;
+- Google sign-in component should not leave the same auth error text rendered on the page after toast reporting;
+- targeted tests/source checks and diff check.
+
+Out of scope:
+
+- Firebase/Google provider configuration;
+- changing Google auth success behavior;
+- broad rewrite of inline error panels outside the sign-in duplicate message case.
+
+Allowed paths:
+
+- `.aidp/**`
+- `apps/web/src/components/GoogleSignInButton.tsx`
+- `packages/ui/**`
+- `tests/unit/ts/**`
+
+## Historical Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- Passed:
+  - `pnpm unit_tests:ts -- client-error-reporting`
+  - `pnpm typecheck`
+  - `pnpm lint`
+  - `git diff --check`
+- Notes:
+  - `rg` source inspection confirmed `GoogleSignInButton` no longer renders inline auth error state.
+  - Targeted TS command executed the full TS unit suite and passed 429 tests.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-WEB-ADMIN-FRIENDLY-ERROR-TOASTS-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `web-admin-browser-error-reporting`
+- route-specific next step: normalize browser-facing BFF/client errors so web/admin show friendly toast messages and log technical details to the browser console.
+- route-specific proof: targeted TS unit tests for error reporting and Google auth mapping plus lint, typecheck and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-06 to implement the accepted unified web/admin error-display plan.
+- planning required: yes, because this touches shared browser UI error handling and BFF JSON error contracts across web/admin.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-provided unified web/admin error display plan from 2026-06-06.
+- blueprint context checked: auth/session and UI/BFF boundaries from prior Google-gated web work; current scope is browser-facing error reporting only.
+- cleanup status: no external runtime state expected; proof artifacts limited to local test/build output.
+
+## Scope
+
+Browser-facing technical errors on web/admin should show friendly toast messages while logging technical detail to browser console. The current Google/Firebase `OPERATION_NOT_ALLOWED` case must not surface raw Firebase text in the UI.
+
+In scope:
+
+- shared client-side error reporter in `@signalops/ui`;
+- web/admin client fetch/catch sites that surface BFF/API action errors;
+- web/admin BFF JSON error shape for friendly `error`, optional `errorCode`, and sanitized `technicalError`;
+- Google auth Firebase error mapping for `OPERATION_NOT_ALLOWED`;
+- targeted unit tests and static gates.
+
+Out of scope:
+
+- enabling Firebase/Google provider configuration;
+- server-only, worker, CLI, MCP or background runtime error display;
+- changing admin auth behavior or Google auth success behavior.
+
+Allowed paths:
+
+- `.aidp/**`
+- `apps/web/**`
+- `apps/admin/**`
+- `packages/ui/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Toast text is user-facing and friendly.
+- Technical details are browser-console-only and must not include request payloads or secrets.
+- Existing flash redirect behavior remains compatible.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: `bugfix` route and proof obligations.
+- `.aidp/work.md`: current active item and proof status.
+- Accepted operator plan in the current request from 2026-06-06.
+
+## Implementation Expectations
+
+- Prefer one shared browser helper over per-component ad hoc logging.
+- Preserve inline error state where it already exists, but also call shared reporter for toast and console.
+- Keep JSON `error` friendly and put raw/sanitized technical strings in `technicalError`.
+
+## Proof Gates
+
+Required gates:
+
+- `pnpm unit_tests:ts -- web-auth-session admin-action-kit web-action-kit`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-06.
+- Passed:
+  - `pnpm unit_tests:ts -- web-auth-session admin-action-kit web-action-kit client-error-reporting`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `git diff --check`
+- Notes:
+  - Targeted TS command executed the full TS unit suite and passed 428 tests.
+  - `pnpm typecheck` completed with existing Astro hints and no errors.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-MCP-CLIENT-BEST-PRACTICES-1`
+- lifecycle: `normal`
+- route: `docs-operator`
+- route phase: `mcp-client-best-practices-repair`
+- route-specific next step: update MCP initialize/client-contract/server guidance, resources, prompts and unit coverage for zero-selected selection calibration workflows.
+- route-specific proof: targeted MCP resources/prompts unit tests plus requested static proof gates.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-05 to implement the accepted MCP Client Best Practices Repair Plan.
+- planning required: yes, because this updates MCP operator guidance, server instructions, prompt contracts and proof expectations for external clients.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-provided MCP Client Best Practices Repair Plan from 2026-06-05.
+- blueprint context checked: `.aidp/blueprint.md` API/control-plane/operator boundaries; `.aidp/engineering.md` MCP/operator workflow observability; `.aidp/verification.md` docs-operator and MCP proof rules.
+- cleanup status: no external runtime state expected; proof artifacts limited to local test output unless compose/live gates are run.
+
+## Scope
+
+Add domain-neutral MCP client guidance for diagnosing `0 selected signals`, `semantic_rejected/no_system_match`, absent LLM calls and live Discovery without runtime credentials. External clients must classify the failing layer first and run bounded one-interest/one-candidate calibration with MCP read-back and bounded replay proof.
+
+In scope:
+
+- add `signalops://guide/scenarios/selection-calibration`;
+- strengthen MCP initialize/client-contract/server instructions for zero-selected selection calibration anti-patterns;
+- update selection diagnostics/tuning/system-interest resources and operator prompts to prefer candidateSignals-first recovery;
+- document live Discovery credential/preflight behavior and LLM review diagnostics for MCP clients;
+- add unit coverage for MCP resources/prompts/instructions touched by this guidance.
+
+Out of scope:
+
+- changing the runtime selection algorithm;
+- adding production/external provider credentials;
+- applying outsourcing or any other domain-specific configuration to runtime defaults;
+- fixing the product mega-flow live A/B/C residual beyond guidance for proper diagnosis.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+- `docs/**` if operator-facing notes require alignment
+
+Protected boundaries:
+
+- Domain examples from `docs/mcp_test/session-report.md` remain evidence only, not mandatory product behavior.
+- Admin/MCP writes remain the only path for operator calibration and require read-back proof.
+- RSS/channel volume is acquisition evidence, not selected-signal proof.
+- Live Discovery without credentials is preflight/not-applicable, not a budget-tuning problem.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: `docs-operator` route, planning and proof obligations.
+- `.aidp/blueprint.md`: MCP/control-plane and operator/admin boundaries checked.
+- `.aidp/engineering.md`: MCP/operator workflow diagnostics and observable failure taxonomy checked.
+- `.aidp/verification.md`: docs-operator and MCP proof obligations checked.
+- `docs/mcp_test/session-report.md`: evidence for client guidance failure modes, not canonical runtime truth.
+- accepted tool-native plan in the operator message from 2026-06-05.
+
+## Implementation Expectations
+
+- Teach external MCP clients to diagnose the layer of failure before changing configuration.
+- Prefer one-interest/one-candidate bounded calibration using residual summaries, representative explains, read-back and bounded `docIds` replay.
+- Make clear that `llmReviewMode=always` does not bypass semantic rejection.
+- Avoid domain-specific rescue instructions or source-specific recommendations in runtime guidance.
+
+## Proof Gates
+
+Required gates:
+
+- targeted TS MCP resources/prompts test;
+- `pnpm unit_tests`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-05.
+- Passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts`
+  - `pnpm unit_tests`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm check:domain-neutrality`
+  - `git diff --check`
+- Notes:
+  - `pnpm typecheck` completed with existing Astro hints and no errors.
+  - Worktree remains dirty from this item plus prior in-progress domain-neutral repair changes and operator evidence docs; no cleanup/destructive action was taken.
+
+## Historical Archive: Previous Implemented Item Pending Archive
+
+- id: `SIGNALOPS-MCP-DOMAIN-NEUTRAL-REPAIR-1`
+- lifecycle: `normal`
+- route: `capability`
+- route phase: `mcp-discovery-domain-neutral-repair`
+- status: `implemented-with-residual-proof`
+- risk: `high`
+- approval: approved by operator request on 2026-06-05 to implement the accepted domain-neutral MCP/Discovery repair plan.
+- planning required: yes, because this changes MCP/control-plane schemas, Discovery vNext runtime behavior, source/channel writes, proof harness shape and executable domain-neutrality guards.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- accepted plan: operator-provided Domain-Neutral MCP/Discovery Repair Plan from 2026-06-05.
+
+## Scope
+
+Repair issues observed in `docs/mcp_test/session-report.md` as universal MCP/control-plane, Discovery vNext, ingestion and proof-harness defects. Domain-specific tuning for outsourcing or any other domain must live only in operator/admin/MCP configuration or explicit scenario-pack fixtures, not runtime code, default policies or mandatory proofs.
+
+In scope:
+
+- align MCP Discovery schemas with API payloads for brief previews and scenario-proof inputs;
+- improve MCP write UX for templates, interests and channel create/update/sync flows;
+- repair Discovery vNext budget propagation, live-runtime error taxonomy and HypothesisBatch validation behavior;
+- improve RSS/RDF parsing fallback without introducing source-specific adapters;
+- make executable proof harnesses domain-neutral and move domain tuning into scenario-pack configuration;
+- add a static guard against domain vocabulary in runtime/proof code outside documented allowlists;
+- update targeted tests and operator docs/contracts for the repaired behavior.
+
+Out of scope:
+
+- applying the outsourcing configuration from `docs/mcp_test/session-report.md` to live runtime state;
+- adding production or external provider credentials;
+- adding source-specific UNDP/SAM/TED/World Bank hardcoded adapters unless represented through generic declarative adapter configuration;
+- changing web end-user auth/session behavior;
+- destructive cleanup of existing operator-created channels, interests, templates, policies or report files.
+
+Allowed paths:
+
+- `.aidp/**`
+- `package.json`
+- `apps/admin/**`
+- `packages/config/**`
+- `packages/contracts/**`
+- `packages/control-plane/**`
+- `packages/sdk/**`
+- `services/api/**`
+- `services/fetchers/**`
+- `services/mcp/**`
+- `services/workers/**`
+- `infra/**`
+- `tests/**`
+- `docs/**`
+
+Protected boundaries:
+
+- PostgreSQL remains source of truth for operator-configured channels, interests, templates, policies, discovery artifacts and source inventory.
+- MCP/admin/control-plane writes must share schemas and read-back proof; no hidden direct-write bypass.
+- Discovery live provider execution remains safe-by-default and fail-closed without explicit budget and runtime credentials.
+- Domain vocabulary belongs in admin/MCP configuration or explicit scenario-pack fixtures, not runtime logic/default proof gates.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route, pre-write active item and canonicalization rules.
+- `.aidp/routes.md`: `capability` route, planning and high-risk approval obligations.
+- `.aidp/blueprint.md`: Discovery acquisition, source/channel management, operator/admin control plane and public/admin API boundaries checked.
+- `.aidp/engineering.md`: MCP/admin writes, external provider/runtime config, error taxonomy, magic string and proof-harness discipline checked.
+- `.aidp/verification.md`: Discovery, MCP/control-plane, fetcher/provider, worker and domain-neutral guard proof expectations checked.
+- `.aidp/contracts/mcp-control-plane.md`: MCP schema validation, Discovery vNext-only tools and write guardrails checked.
+- `.aidp/contracts/discovery-agent.md`: Discovery vNext artifact/run/source-inventory and live-provider invariants checked.
+- `.aidp/contracts/feed-ingress-adapters.md`: RSS adapter selection and runtime binding truth checked.
+- `.aidp/contracts/universal-selection-profiles.md`: profile-driven selection and no domain lock-in checked.
+- `.aidp/contracts/content-analysis-and-gating.md`: policy/template MCP/admin surfaces and external provider behavior checked.
+- accepted tool-native plan in the operator message from 2026-06-05.
+
+## Implementation Expectations
+
+- Treat `docs/mcp_test/session-report.md` as evidence only; confirm each defect by repo reality and targeted tests.
+- Keep outsourcing/procurement examples as operator reference or explicit scenario-pack fixture only.
+- Do not introduce source-specific runtime code where a generic schema, provider shape, declarative adapter or admin/MCP setting is the correct boundary.
+- Preserve existing user changes in `docs/mcp_test/**`.
+
+## Proof Gates
+
+Required gates:
+
+- targeted TS MCP/control-plane tests;
+- targeted Python Discovery vNext tests;
+- targeted TS RSS parser tests;
+- `pnpm test:mcp:http:discovery` if compose is available;
+- `pnpm test:mcp:http:writes` if compose is available;
+- `pnpm test:feed-ingress-adapters:smoke` if fetcher compose/runtime dependencies are available;
+- `pnpm test:discovery-enabled:smoke`;
+- `pnpm test:product:mega-flow:compose` after generic scenario matrix changes if compose is available;
+- `pnpm check:env-sync`;
+- `pnpm check:secret-leaks`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm unit_tests`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-05.
+- Passed:
+  - `pnpm unit_tests`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm check:env-sync`
+  - `pnpm check:secret-leaks`
+  - `pnpm check:domain-neutrality`
+  - `git diff --check`
+  - `pnpm test:discovery:vnext-mcp-scenario-verification:preflight`
+  - `pnpm test:mcp:http:discovery`
+  - `pnpm test:mcp:http:writes`
+  - `pnpm test:feed-ingress-adapters:smoke`
+  - `DISCOVERY_ENABLED=1 PYTHONPATH=. .venv/bin/python -m infra.scripts.workers.smoke discovery-enabled` with local loopback bind approval.
+- Residual:
+  - `pnpm test:product:mega-flow:compose --skip-stack-build` passed all child proof commands but final verdict remained `fail` because strict live A/B/C acceptance still requires selected live-discovery signal candidates without live provider credentials/evidence. Artifact: `/tmp/signalops-product-mega-flow-d35231ac.md`.
+  - The package script `pnpm test:discovery-enabled:smoke` still assumes a `python` shell alias; the same smoke module passes through `.venv/bin/python`.
+
+## Cleanup Notes
+
+- MCP/Discovery/channel proofs may create local channels, interests, templates, policies, discovery artifacts, source inventory rows and `/tmp/signalops-*` artifacts; cleanup or record residual state if compose/live proof is run.
+
+## Historical Archive: Previous Completed Item
+
 - id: `SIGNALOPS-WEB-GOOGLE-GATED-ACCESS-1`
 - lifecycle: `normal`
 - route: `capability`
@@ -13,99 +607,6 @@
 - planning source: `tool-native`
 - planning status: `accepted-for-this-item`
 - accepted plan: operator-provided Google-gated user web access plan from 2026-06-05.
-
-## Scope
-
-Unauthenticated end users may only access a redacted `/` web landing surface with total system-selected signal count and non-clickable sanitized cards. Full user web functionality requires an authorized Google Firebase identity, optionally restricted to one configured email domain. Optional API content-read protection can be enabled by env and is off by default.
-
-In scope:
-
-- replace web anonymous Firebase bootstrap with Google-only web sign-in through Firebase `accounts:signInWithIdp`;
-- enforce authorized web sessions as `firebase_google` with email present and optional exact-domain match from `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN`;
-- add `SIGNALOPS_WEB_GOOGLE_CLIENT_ID`, `SIGNALOPS_WEB_GOOGLE_ALLOWED_DOMAIN` and `SIGNALOPS_API_CONTENT_AUTH_REQUIRED` config/env/runtime wiring;
-- make signed-out `/` redacted and non-navigable while preserving total system-selected signal count;
-- gate user web pages and BFF routes behind authorized Google web sessions;
-- add optional API content-read auth for `/collections/system-selected`, `/content-items*` and user-specific `/users/{user_id}/matches|notifications|interests`, default off;
-- add disabled-by-default proof-only test session support if required by existing local product proofs;
-- update targeted tests and auth/session contract truth for the changed behavior.
-
-Out of scope:
-
-- changing admin sign-in, admin allowlist or local admin role bootstrap behavior;
-- adding new npm dependencies;
-- implementing broad FastAPI/admin/MCP authorization outside the listed end-user content read endpoints;
-- production deployment or external Google/Firebase console changes.
-
-Allowed paths:
-
-- `.aidp/**`
-- `.env.example`
-- `.env.dev`
-- `apps/web/**`
-- `packages/config/**`
-- `packages/contracts/**`
-- `packages/sdk/**`
-- `packages/bff-server/**`
-- `services/api/**`
-- `infra/**`
-- `tests/**`
-- `docs/**`
-
-Protected boundaries:
-
-- Firebase identifies web users; local PostgreSQL remains user/authorization truth after identity verification.
-- Admin auth/session boundary must remain separate from web auth/session boundary.
-- PostgreSQL remains business source of truth; API auth checks must not introduce a second state owner.
-- Signed-out web payloads must not leak source URLs, domains, source names, author names, ids, raw metadata or media URLs.
-
-## Context Manifest
-
-- `.aidp/AGENTS.md`: lifecycle/work route, pre-write active item and canonicalization rules.
-- `.aidp/routes.md`: `capability` route, planning and high-risk approval obligations.
-- `.aidp/blueprint.md`: User web work, Auth/session boundary, UI/BFF boundary, Public API vs admin/operator API, PostgreSQL source-of-truth checked.
-- `.aidp/engineering.md`: secure-by-design, runtime config, auth/session proof and dependency discipline checked.
-- `.aidp/verification.md`: capability proof, high-risk auth proof and runtime/route proof expectations checked.
-- `.aidp/contracts/auth-session-boundary.md`: web/admin auth separation, cookie/session and proof expectations checked.
-- accepted tool-native plan in the operator message from 2026-06-05.
-
-## Implementation Expectations
-
-- Keep implementation local to web auth/UI/BFF, config/env, targeted API auth and tests.
-- Do not add a new dependency for Google sign-in; use Google Identity Services browser script and Firebase REST server exchange.
-- Optional API content auth defaults off and must not break internal API consumers when unset.
-- Test-only session support, if added, must be disabled by default and unreachable from normal UI.
-
-## Proof Gates
-
-Required gates:
-
-- `pnpm check:env-sync`;
-- `pnpm check:secret-leaks`;
-- `pnpm lint`;
-- `pnpm typecheck`;
-- `pnpm unit_tests`;
-- `pnpm test:web:viewports` if viewport harness is updated for the new auth fixture;
-- `pnpm test:mvp:internal` if proof-only session fixture is added to the product proof harness;
-- `git diff --check`.
-
-## Current Proof Status
-
-- Proof passed on 2026-06-05:
-  - `pnpm check:env-sync`;
-  - `pnpm check:secret-leaks`;
-  - `pnpm lint`;
-  - `pnpm typecheck`;
-  - `pnpm unit_tests`;
-  - `pnpm test:web:viewports`;
-  - `pnpm test:mvp:internal`;
-  - `git diff --check`.
-- Notes:
-  - `pnpm test:web:viewports` passed with the proof-only Google web session enabled by the harness.
-  - `pnpm test:mvp:internal` passed after updating stale anonymous-bootstrap assertions to the new Google-gated public landing contract.
-
-## Cleanup Notes
-
-- Stateful auth/API proofs may create local `users` and `user_profiles` rows; record residual state or cleanup if compose proof is run.
 
 ## Historical Archive: Previous Completed Item
 

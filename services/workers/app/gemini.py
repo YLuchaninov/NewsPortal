@@ -24,17 +24,21 @@ class GeminiReviewResult:
     provider_usage_json: dict[str, Any]
 
 
-PRICE_CARD_VERSION = "gemini-2026-03"
+PRICE_CARD_VERSION = "google-gemini-pricing-2026-06"
 ENV_INPUT_COST_PER_MILLION_USD = "LLM_INPUT_COST_PER_MILLION_USD"
 ENV_OUTPUT_COST_PER_MILLION_USD = "LLM_OUTPUT_COST_PER_MILLION_USD"
 DEFAULT_PRICE_CARD = {
     "default": {
-        "input_cost_per_million_tokens_usd": 0.10,
-        "output_cost_per_million_tokens_usd": 0.40,
+        "input_cost_per_million_tokens_usd": 0.25,
+        "output_cost_per_million_tokens_usd": 1.50,
     },
-    "gemini-2.0-flash": {
-        "input_cost_per_million_tokens_usd": 0.10,
-        "output_cost_per_million_tokens_usd": 0.40,
+    "gemini-3.1-flash-lite": {
+        "input_cost_per_million_tokens_usd": 0.25,
+        "output_cost_per_million_tokens_usd": 1.50,
+    },
+    "gemini-3.5-flash": {
+        "input_cost_per_million_tokens_usd": 1.50,
+        "output_cost_per_million_tokens_usd": 9.00,
     },
 }
 
@@ -211,7 +215,9 @@ def review_with_gemini(
     temperature: float = 0.1,
 ) -> GeminiReviewResult:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    model = (model_override or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")).strip() or "gemini-2.0-flash"
+    model = (
+        model_override or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    ).strip() or "gemini-3.1-flash-lite"
     base_url = (
         os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
         .rstrip("/")

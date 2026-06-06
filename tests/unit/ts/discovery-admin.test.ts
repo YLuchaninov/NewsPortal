@@ -129,12 +129,12 @@ test("readRuntimeConfig keeps discovery runtime defaults and quota support", () 
     {
       SIGNALOPS_APP_BASE_URL: "http://127.0.0.1:4321/",
       SIGNALOPS_API_BASE_URL: "http://127.0.0.1:8000",
-      GEMINI_MODEL: "gemini-legacy",
+      GEMINI_MODEL: "legacy-model-placeholder",
     },
     {}
   );
   assert.equal(defaults.discoverySearchProvider, "ddgs");
-  assert.equal(defaults.discoveryLlmModel, "gemini-legacy");
+  assert.equal(defaults.discoveryLlmModel, "legacy-model-placeholder");
   assert.equal(defaults.discoveryMonthlyBudgetCents, 0);
   assert.equal(defaults.llmReviewEnabled, true);
   assert.equal(defaults.llmReviewMonthlyBudgetCents, 0);
@@ -145,7 +145,7 @@ test("readRuntimeConfig keeps discovery runtime defaults and quota support", () 
       SIGNALOPS_APP_BASE_URL: "http://127.0.0.1:4321/",
       SIGNALOPS_API_BASE_URL: "http://127.0.0.1:8000",
       DISCOVERY_SEARCH_PROVIDER: "stub",
-      DISCOVERY_GEMINI_MODEL: "gemini-discovery",
+      DISCOVERY_GEMINI_MODEL: "discovery-model-placeholder",
       DISCOVERY_MONTHLY_BUDGET_CENTS: "2500",
       LLM_REVIEW_ENABLED: "0",
       LLM_REVIEW_MONTHLY_BUDGET_CENTS: "900",
@@ -154,7 +154,7 @@ test("readRuntimeConfig keeps discovery runtime defaults and quota support", () 
     {}
   );
   assert.equal(overridden.discoverySearchProvider, "stub");
-  assert.equal(overridden.discoveryLlmModel, "gemini-discovery");
+  assert.equal(overridden.discoveryLlmModel, "discovery-model-placeholder");
   assert.equal(overridden.discoveryMonthlyBudgetCents, 2500);
   assert.equal(overridden.llmReviewEnabled, false);
   assert.equal(overridden.llmReviewMonthlyBudgetCents, 900);

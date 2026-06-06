@@ -364,6 +364,35 @@ test("channel bulk onboarding treats query-backed API adapter channels as distin
   assert.equal(plan.items[2]?.status, "duplicate");
 });
 
+test("channel bulk onboarding blocks non-existing channelId at row level", async () => {
+  const missingChannelId = "11111111-1111-4111-8111-111111111111";
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      if (sql.includes("channel_id::text = any($1::text[])")) {
+        assert.deepEqual(params, [[missingChannelId]]);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected pool query: ${sql}`);
+    }
+  };
+
+  const plan = await planChannelBulkOnboardingWithPool(fakePool as never, [
+    {
+      providerType: "rss",
+      channelId: missingChannelId,
+      name: "Mistaken create with id",
+      fetchUrl: "https://example.com/feed.xml"
+    }
+  ]);
+
+  assert.equal(plan.summary.invalidSchema, 1);
+  assert.equal(plan.summary.blocked, 1);
+  assert.equal(plan.items[0]?.status, "invalid_schema");
+  assert.equal(plan.items[0]?.matchType, "channelId");
+  assert.equal(plan.items[0]?.channelId, missingChannelId);
+  assert.match(plan.items[0]?.warnings.join("\n") ?? "", /omit channelId/i);
+  assert.match(plan.items[0]?.recommendedAction ?? "", /Omit channelId for creates/i);
+});
 
 test("channel bulk onboarding blocks webpage URLs masquerading as RSS", async () => {
   const fakePool = {
@@ -542,6 +571,43 @@ test("channel alternatives plan returns feed-probe candidates without creating c
   assert.equal(feedCandidate?.status, "candidate");
   assert.equal(feedCandidate?.validation.classification, "feed_like");
   assert.ok(plan.candidates.every((candidate) => candidate.sourceChannelId === null));
+});
+
+test("channel alternatives plan returns website fallback for technically broken RSS", async () => {
+  const channelId = "11111111-1111-4111-8111-111111111111";
+  const fakePool = {
+    async query(sql: string, params?: unknown[]) {
+      assert.match(sql, /from source_channels sc/i);
+      assert.deepEqual(params?.[0], [channelId]);
+      return {
+        rows: [
+          {
+            channelId,
+            name: "Broken RSS",
+            providerType: "rss",
+            fetchUrl: "https://example.com/news/feed.xml",
+            lastResultKind: "malformed_feed",
+            lastErrorMessage: "XML parse failed",
+            consecutiveFailures: 3
+          }
+        ]
+      };
+    }
+  };
+
+  const plan = await planChannelAlternativesWithPool(fakePool as never, {
+    channelIds: [channelId],
+    includeFeedProbe: false,
+    maxCandidates: 10
+  });
+
+  const fallback = plan.candidates.find((candidate) => candidate.strategy === "website_fallback");
+  assert.equal(fallback?.providerType, "website");
+  assert.equal(fallback?.status, "needs_probe");
+  assert.equal(fallback?.fetchUrl, "https://example.com/");
+  assert.equal(fallback?.sourceChannelId, channelId);
+  assert.match(JSON.stringify(plan.nextActions), /channels\.bulk_onboard\.plan/);
+  assert.match(JSON.stringify(plan.nextActions), /channels\.bulk_onboard\.verify/);
 });
 
 test("channel bulk onboarding applies fetchUrl matches as updates after override", async () => {

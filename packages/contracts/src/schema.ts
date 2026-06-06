@@ -14,6 +14,8 @@ export interface JsonSchema {
   additionalProperties?: boolean | JsonSchema;
   items?: JsonSchema;
   enum?: readonly unknown[];
+  minItems?: number;
+  maxItems?: number;
   minLength?: number;
   maxLength?: number;
   minimum?: number;
@@ -347,10 +349,28 @@ function validateAgainstSchema(
     }
   }
 
-  if (Array.isArray(value) && schema.items) {
-    value.forEach((item, index) =>
-      validateAgainstSchema(item, schema.items as JsonSchema, [...path, String(index)], issues)
-    );
+  if (Array.isArray(value)) {
+    if (schema.minItems != null && value.length < schema.minItems) {
+      pushIssue(
+        issues,
+        path,
+        "array_too_short",
+        `${formatPath(path)} must contain at least ${schema.minItems} items.`
+      );
+    }
+    if (schema.maxItems != null && value.length > schema.maxItems) {
+      pushIssue(
+        issues,
+        path,
+        "array_too_long",
+        `${formatPath(path)} must contain at most ${schema.maxItems} items.`
+      );
+    }
+    if (schema.items) {
+      value.forEach((item, index) =>
+        validateAgainstSchema(item, schema.items as JsonSchema, [...path, String(index)], issues)
+      );
+    }
   }
 
   if (!isRecord(value)) {

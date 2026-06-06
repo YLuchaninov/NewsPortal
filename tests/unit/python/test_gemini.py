@@ -49,8 +49,9 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(usage["promptTokenCount"], "123")
 
     def test_estimate_cost_usd_uses_versioned_price_card(self) -> None:
-        self.assertEqual(_estimate_cost_usd("gemini-2.0-flash", 1000, 500), 0.0003)
-        self.assertIsNone(_estimate_cost_usd("gemini-2.0-flash", None, None))
+        self.assertEqual(_estimate_cost_usd("gemini-3.1-flash-lite", 1000, 500), 0.001)
+        self.assertEqual(_estimate_cost_usd("gemini-3.5-flash", 1000, 500), 0.006)
+        self.assertIsNone(_estimate_cost_usd("gemini-3.1-flash-lite", None, None))
 
     def test_estimate_cost_usd_prefers_env_overrides(self) -> None:
         with patch.dict(
@@ -61,7 +62,7 @@ class GeminiTests(unittest.TestCase):
             },
             clear=False,
         ):
-            self.assertEqual(_estimate_cost_usd("gemini-2.0-flash", 1000, 500), 0.00275)
+            self.assertEqual(_estimate_cost_usd("gemini-3.1-flash-lite", 1000, 500), 0.00275)
 
     def test_resolve_price_card_keeps_default_when_env_invalid(self) -> None:
         with patch.dict(
@@ -72,13 +73,13 @@ class GeminiTests(unittest.TestCase):
             },
             clear=False,
         ):
-            price_card, metadata = _resolve_price_card("gemini-2.0-flash")
+            price_card, metadata = _resolve_price_card("gemini-3.1-flash-lite")
 
         self.assertEqual(
             price_card,
             {
-                "input_cost_per_million_tokens_usd": 0.10,
-                "output_cost_per_million_tokens_usd": 0.40,
+                "input_cost_per_million_tokens_usd": 0.25,
+                "output_cost_per_million_tokens_usd": 1.50,
             },
         )
         self.assertEqual(metadata["priceCardSource"], "default_with_invalid_env")
@@ -127,7 +128,7 @@ class GeminiTests(unittest.TestCase):
                 "os.environ",
                 {
                     "GEMINI_API_KEY": "local-proof-key",
-                    "GEMINI_MODEL": "gemini-2.0-flash",
+                    "GEMINI_MODEL": "gemini-3.1-flash-lite",
                     "GEMINI_BASE_URL": "http://gemini.local.test",
                     "LLM_INPUT_COST_PER_MILLION_USD": "0.10",
                     "LLM_OUTPUT_COST_PER_MILLION_USD": "0.40",
@@ -147,7 +148,7 @@ class GeminiTests(unittest.TestCase):
             300,
         )
         self.assertEqual(len(request_urls), 1)
-        self.assertIn("/models/gemini-2.0-flash:generateContent", request_urls[0])
+        self.assertIn("/models/gemini-3.1-flash-lite:generateContent", request_urls[0])
 
     def test_review_with_gemini_accepts_provider_json_array_response(self) -> None:
         response_payload: dict[str, object] = {

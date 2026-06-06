@@ -13,12 +13,15 @@ import {
   setLlmTemplateActiveState,
   syncInterestTemplateCriterion,
   syncInterestTemplateSelectionProfile,
+  validateShortTokensRequired,
 } from "./admin-templates";
 import { insertOutboxEvent } from "./outbox";
 import { writeAuditLog } from "./audit";
 
 export type TemplateKind = "interest" | "llm";
 type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
+
+export { validateShortTokensRequired };
 
 interface SavedTemplateResult {
   kind: TemplateKind;

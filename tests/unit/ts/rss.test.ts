@@ -299,6 +299,41 @@ test("parseFeed supports RDF feeds through the Feedsmith-backed parser path", ()
   assert.deepEqual(parsed.entries[0]?.categories, ["rdf-topic"]);
 });
 
+test("parseFeed supports RSS 1.0 RDF feeds with namespaced item metadata", () => {
+  const rdf = `<?xml version="1.0" encoding="UTF-8"?>
+    <rdf:RDF
+      xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+      xmlns="http://purl.org/rss/1.0/"
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+      xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    >
+      <channel rdf:about="https://notices.example.test/rss.xml">
+        <title>Public notices RDF</title>
+        <link>https://notices.example.test/</link>
+        <description>Public notice feed</description>
+      </channel>
+      <item rdf:about="https://notices.example.test/item/42?utm_campaign=feed">
+        <title>Notice item</title>
+        <link>https://notices.example.test/item/42?utm_campaign=feed</link>
+        <description>Short RDF description</description>
+        <content:encoded><![CDATA[<p>Full RDF item body.</p>]]></content:encoded>
+        <dc:date>2026-06-05T14:01:00Z</dc:date>
+      </item>
+    </rdf:RDF>`;
+
+  const parsed = parseFeed({
+    body: rdf,
+    contentType: "text/xml",
+    feedUrl: "https://notices.example.test/rss.xml",
+  });
+
+  assert.equal(parsed.format, "rss1");
+  assert.equal(parsed.title, "Public notices RDF");
+  assert.equal(parsed.entries[0]?.url, "https://notices.example.test/item/42");
+  assert.equal(parsed.entries[0]?.contentHtml, "<p>Full RDF item body.</p>");
+  assert.equal(parsed.entries[0]?.publishedAt, "2026-06-05T14:01:00.000Z");
+});
+
 test("parseFeed rejects invalid non-feed payloads", () => {
   assert.throws(
     () => parseFeed({ body: "<html>not rss</html>", contentType: "text/html" }),

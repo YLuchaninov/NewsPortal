@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import type { DigestCadence, UserDigestSettingsView } from "@signalops/contracts";
-import { PaginationNav } from "@signalops/ui";
+import { PaginationNav, reportClientError, readClientErrorMessage } from "@signalops/ui";
 
 import { LIVE_UPDATES_EVENT, type LiveUpdatesEventDetail } from "../lib/live-updates";
 import {
@@ -215,9 +215,12 @@ export function LiveSettingsSection({
       await refreshSettings();
       requestLiveRefresh();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to connect.";
+      const errorMessage = readClientErrorMessage(error, "Failed to connect.");
       setWebPushStatus(errorMessage);
-      toast.error(errorMessage);
+      reportClientError(error, {
+        context: "Connect web push channel",
+        fallbackMessage: "Failed to connect.",
+      });
     } finally {
       setConnectingWebPush(false);
     }
@@ -263,9 +266,10 @@ export function LiveSettingsSection({
               try {
                 await submitPreferences("Preferences saved");
               } catch (error) {
-                toast.error(
-                  error instanceof Error ? error.message : "Unable to save preferences."
-                );
+                reportClientError(error, {
+                  context: "Save appearance preferences",
+                  fallbackMessage: "Unable to save preferences.",
+                });
               } finally {
                 setSavingAppearance(false);
               }
@@ -311,9 +315,10 @@ export function LiveSettingsSection({
               try {
                 await submitPreferences("Preferences saved");
               } catch (error) {
-                toast.error(
-                  error instanceof Error ? error.message : "Unable to save preferences."
-                );
+                reportClientError(error, {
+                  context: "Save notification preferences",
+                  fallbackMessage: "Unable to save preferences.",
+                });
               } finally {
                 setSavingPreferences(false);
               }
@@ -365,11 +370,10 @@ export function LiveSettingsSection({
               try {
                 await submitDigestSettings();
               } catch (error) {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "Unable to save digest settings."
-                );
+                reportClientError(error, {
+                  context: "Save digest settings",
+                  fallbackMessage: "Unable to save digest settings.",
+                });
               } finally {
                 setSavingDigestSettings(false);
               }
@@ -520,11 +524,10 @@ export function LiveSettingsSection({
                   await connectChannel("telegram", telegramChatId);
                   setTelegramChatId("");
                 } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to connect Telegram right now."
-                  );
+                  reportClientError(error, {
+                    context: "Connect Telegram channel",
+                    fallbackMessage: "Unable to connect Telegram right now.",
+                  });
                 } finally {
                   setConnectingTelegram(false);
                 }
@@ -560,11 +563,10 @@ export function LiveSettingsSection({
                 try {
                   await connectChannel("email_digest", digestEmail);
                 } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to connect email digest right now."
-                  );
+                  reportClientError(error, {
+                    context: "Connect email digest channel",
+                    fallbackMessage: "Unable to connect email digest right now.",
+                  });
                 } finally {
                   setConnectingEmailDigest(false);
                 }

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "name": "Generic public signal verification pack",
+  "scenarios": [
+    {
+      "key": "public_update_monitoring",
+      "name": "Public update monitoring",
+      "description": "Find recurring public sources that publish concrete dated updates relevant to an operator-defined interest.",
+      "positiveTexts": [
+        "official update with dated item detail",
+        "public notice with source owner and stable URL",
+        "recurring listing with changed status or deadline"
+      ],
+      "negativeTexts": [
+        "generic advice without dated evidence",
+        "navigation page without item detail",
+        "seller authored service page"
+      ],
+      "candidatePositiveSignals": [
+        "source_owner: official owner, public authority, controlling organization",
+        "item_evidence: title, date, status, deadline, stable item URL",
+        "recurrence: feed, listing, changelog, archive, public index"
+      ],
+      "candidateNegativeSignals": [
+        "wrapper_only: search result, tag page, category page",
+        "context_only: explainer, tutorial, generic background",
+        "blocked_access: login, captcha, unsupported access pattern"
+      ],
+      "geographies": [
+        "global"
+      ],
+      "languages": [
+        "en"
+      ],
+      "maxBatches": 2,
+      "operatorConstraints": {
+        "publicOnly": true,
+        "noLoginBypass": true,
+        "noCaptchaBypass": true
+      }
+    }
+  ]
+}

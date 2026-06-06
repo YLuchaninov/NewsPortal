@@ -72,6 +72,27 @@ export interface ChannelAlternativesPlan {
 }
 
 const WELL_KNOWN_FEED_PATHS = ["/feed.xml", "/rss.xml", "/atom.xml", "/feed", "/rss"];
+const RSS_FAILURE_WEBSITE_FALLBACK_TOKENS = [
+  "auth_or_blocked_403",
+  "403",
+  "forbidden",
+  "unauthorized",
+  "not_acceptable_406",
+  "406",
+  "not acceptable",
+  "malformed_feed",
+  "malformed feed",
+  "invalid feed",
+  "xml parse",
+  "parseerror",
+  "html_instead_of_feed",
+  "html instead of feed",
+  "text/html",
+  "gone_404",
+  "404",
+  "not found",
+  "gone",
+];
 
 function normalizeString(value: unknown): string {
   return String(value ?? "").trim();
@@ -101,6 +122,55 @@ function resolveWellKnownFeedUrl(rawUrl: string, path: string): string | null {
   } catch {
     return null;
   }
+}
+
+function deriveWebsiteFallbackUrl(rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return null;
+    }
+    const path = url.pathname.replace(/\/+$/u, "") || "/";
+    const feedLikePath =
+      /(^|\/)(feed|feeds|rss|atom)(\/|\.|$)/iu.test(path) ||
+      /\.(rss|atom|xml)$/iu.test(path);
+    url.search = "";
+    url.hash = "";
+    if (feedLikePath) {
+      url.pathname = "/";
+      return url.toString();
+    }
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length <= 1) {
+      url.pathname = "/";
+      return url.toString();
+    }
+    url.pathname = `/${segments.slice(0, -1).join("/")}/`;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function supportsWebsiteFallbackForRss(
+  input: ChannelAlternativeInput,
+  failureKinds: readonly string[],
+): boolean {
+  if (input.providerType !== "rss") {
+    return false;
+  }
+  const haystack = [
+    input.lastResultKind,
+    input.lastErrorMessage,
+    ...failureKinds,
+  ]
+    .map((value) => normalizeString(value).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+  if (!haystack) {
+    return false;
+  }
+  return RSS_FAILURE_WEBSITE_FALLBACK_TOKENS.some((token) => haystack.includes(token));
 }
 
 function isSameUrl(left: string | null, right: string | null): boolean {
@@ -317,6 +387,28 @@ function addShapeCandidates(
   }
 }
 
+function addWebsiteFallbackCandidate(
+  input: ChannelAlternativeInput,
+  failureKinds: readonly string[],
+  candidates: ChannelAlternativeCandidate[],
+): void {
+  if (!supportsWebsiteFallbackForRss(input, failureKinds)) {
+    return;
+  }
+  const fetchUrl = deriveWebsiteFallbackUrl(input.fetchUrl);
+  if (!fetchUrl) {
+    return;
+  }
+  pushCandidate(candidates, {
+    ...buildCandidateBase(input, "website", fetchUrl),
+    status: "needs_probe",
+    strategy: "website_fallback",
+    confidence: 0.55,
+    reason:
+      "RSS fetch failed technically; same-origin website ingestion is a probe-required fallback candidate. Review with channels.bulk_onboard.plan before applying.",
+  });
+}
+
 function addWellKnownFeedCandidates(
   input: ChannelAlternativeInput,
   candidates: ChannelAlternativeCandidate[],
@@ -449,6 +541,7 @@ export async function planChannelAlternativesWithPool(
     addDeepFeedAlternativeCandidates(input, probe.candidatesByInputUrl.get(input.fetchUrl), candidates);
     addFeedProbeCandidate(input, probe.byUrl.get(input.fetchUrl), candidates);
     addShapeCandidates(input, classification, candidates);
+    addWebsiteFallbackCandidate(input, failureKinds, candidates);
     addWellKnownFeedCandidates(input, candidates);
   }
 
@@ -468,7 +561,18 @@ export async function planChannelAlternativesWithPool(
     nextActions: [
       {
         toolName: "channels.bulk_onboard.plan",
-        note: "Review candidate rows through bulk onboarding before applying any alternative source.",
+        note: "Review candidate rows through bulk onboarding before applying any alternative source. website_fallback candidates should be planned with providerType=website and status=needs_probe evidence reviewed first.",
+        argumentsTemplate: {
+          sources: "<chosen candidates; for website_fallback use providerType=website>",
+        },
+      },
+      {
+        toolName: "channels.bulk_onboard.apply",
+        note: "Apply only a current planFingerprint after operator review; do not auto-create website fallbacks.",
+      },
+      {
+        toolName: "channels.bulk_onboard.verify",
+        note: "Verify channel acquisition/fetch/read-back after applying a fallback.",
       },
       {
         toolName: "channels.alternatives.start",

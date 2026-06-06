@@ -9,7 +9,7 @@ import {
   type AutomationPaletteGroup,
 } from "../lib/automation-workspace";
 import { ADMIN_AUTOMATION_CARD_CLASS } from "../lib/admin-ui-classes";
-import { postJson, readText } from "./admin-client-helpers";
+import { postJson, readText, reportAdminActionError } from "./admin-client-helpers";
 
 interface AutomationTemplateGalleryProps {
   automationBffPath: string;
@@ -26,7 +26,6 @@ export function AutomationTemplateGallery({
 }: AutomationTemplateGalleryProps) {
   const [query, setQuery] = useState("");
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -43,7 +42,6 @@ export function AutomationTemplateGallery({
 
   async function handleCreateFromTemplate(templateId: string): Promise<void> {
     setPendingTemplateId(templateId);
-    setErrorMessage(null);
     try {
       const response = await postJson(
         automationBffPath,
@@ -60,7 +58,10 @@ export function AutomationTemplateGallery({
       }
       window.location.href = `${automationRootPath}/${encodeURIComponent(sequenceId)}`;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create template.");
+      reportAdminActionError(error, {
+        context: "Create automation template",
+        fallbackMessage: "Unable to create template.",
+      });
     } finally {
       setPendingTemplateId(null);
     }
@@ -68,7 +69,6 @@ export function AutomationTemplateGallery({
 
   async function handleCreateBlank(): Promise<void> {
     setPendingTemplateId("blank");
-    setErrorMessage(null);
     try {
       const response = await postJson(automationBffPath, {
         intent: "create_sequence",
@@ -80,7 +80,10 @@ export function AutomationTemplateGallery({
       }
       window.location.href = `${automationRootPath}/${encodeURIComponent(sequenceId)}`;
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create workflow.");
+      reportAdminActionError(error, {
+        context: "Create blank automation workflow",
+        fallbackMessage: "Unable to create workflow.",
+      });
     } finally {
       setPendingTemplateId(null);
     }
@@ -121,11 +124,6 @@ export function AutomationTemplateGallery({
                 />
               </div>
             </div>
-            {errorMessage && (
-              <p className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                {errorMessage}
-              </p>
-            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
