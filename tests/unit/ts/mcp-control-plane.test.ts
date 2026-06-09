@@ -255,6 +255,144 @@ function createFakeMcpPool() {
   };
 }
 
+function createFakeSystemInterestWritePool() {
+  const state: Record<string, unknown> = {
+    interestTemplateId: "",
+    allowedContentKinds: ["editorial", "listing"],
+    policyJson: {
+      strictness: "balanced",
+      unresolvedDecision: "hold",
+      llmReviewMode: "always",
+    },
+    definitionJson: {
+      candidateSignals: {
+        positiveGroups: [{ name: "buyer_need", cues: ["needs external implementation"] }],
+        negativeGroups: [{ name: "vendor_marketing", cues: ["case study"] }],
+      },
+    },
+    auditRows: [],
+    clientQueries: [],
+    poolQueries: [],
+    released: false,
+  };
+  const client = {
+    async query(sql: string, params: unknown[] = []) {
+      (state.clientQueries as Array<unknown>).push({ sql, params });
+      if (/^begin$/i.test(sql) || /^commit$/i.test(sql) || /^rollback$/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/insert into interest_templates/i.test(sql)) {
+        state.interestTemplateId = String(params[0]);
+        state.allowedContentKinds = JSON.parse(String(params[10]));
+        return { rows: [] };
+      }
+      if (/from interest_templates\s+where interest_template_id/i.test(sql)) {
+        return {
+          rows: [
+            {
+              interest_template_id: String(state.interestTemplateId),
+              name: "Strict interest",
+              description: "Representative evidence",
+              positive_texts: ["buyer asks for implementation support"],
+              negative_texts: [],
+              must_have_terms: [],
+              must_not_have_terms: [],
+              places: [],
+              languages_allowed: ["en"],
+              time_window_hours: null,
+              allowed_content_kinds: state.allowedContentKinds,
+              short_tokens_required: [],
+              short_tokens_forbidden: [],
+              priority: 1,
+              is_active: true,
+            },
+          ],
+        };
+      }
+      if (/from criteria\s+where source_interest_template_id/i.test(sql)) {
+        const hasCriterion = Boolean(state.criterionId);
+        return {
+          rows: hasCriterion
+            ? [
+                {
+                  criterion_id: state.criterionId,
+                  description: "Strict interest",
+                  version: 1,
+                  positive_texts: ["buyer asks for implementation support"],
+                  negative_texts: [],
+                  must_have_terms: [],
+                  must_not_have_terms: [],
+                  places: [],
+                  languages_allowed: ["en"],
+                  time_window_hours: null,
+                  short_tokens_required: [],
+                  short_tokens_forbidden: [],
+                  priority: 1,
+                  enabled: true,
+                  compiled: false,
+                  compile_status: "queued",
+                },
+              ]
+            : [],
+        };
+      }
+      if (/insert into criteria/i.test(sql)) {
+        state.criterionId = "22222222-2222-4222-8222-222222222222";
+        return { rows: [{ criterion_id: state.criterionId, version: 1 }] };
+      }
+      if (/from selection_profiles\s+where source_interest_template_id/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/insert into selection_profiles/i.test(sql)) {
+        state.selectionProfileId = "33333333-3333-4333-8333-333333333333";
+        state.definitionJson = JSON.parse(String(params[6]));
+        state.policyJson = JSON.parse(String(params[7]));
+        return { rows: [{ selection_profile_id: state.selectionProfileId, version: 1 }] };
+      }
+      if (/insert into outbox_events/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/insert into audit_log/i.test(sql)) {
+        (state.auditRows as Array<unknown>).push(params);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in fake system interest write client: ${sql}`);
+    },
+    release() {
+      state.released = true;
+    },
+  };
+  return {
+    state,
+    async connect() {
+      return client;
+    },
+    async query(sql: string, params: unknown[] = []) {
+      (state.poolQueries as Array<unknown>).push({ sql, params });
+      if (/from interest_templates it/i.test(sql)) {
+        return {
+          rows: [
+            {
+              interestTemplateId: String(state.interestTemplateId),
+              allowedContentKinds: state.allowedContentKinds,
+              criterionId: state.criterionId,
+              criterionCompiled: false,
+              criterionCompileStatus: "queued",
+              compiledRowStatus: null,
+              selectionProfileId: state.selectionProfileId,
+              selectionProfileStatus: "active",
+              selectionProfileVersion: 1,
+              policyJson: state.policyJson,
+              definitionJson: state.definitionJson,
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected SQL in fake system interest write pool: ${sql}`);
+    },
+  };
+}
+
 function createFakeReindexPool() {
   const state = {
     clientQueries: [] as Array<{ sql: string; params: unknown[] }>,
@@ -1407,6 +1545,8 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("signalops://guide/scenarios/selection-calibration"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery-live-gap-hunting"));
   assert.ok(resourceUris.includes("signalops://guide/reference/selection-evidence-semantics"));
+  assert.ok(resourceUris.includes("signalops://guide/playbooks/operator-flow-modes"));
+  assert.ok(resourceUris.includes("signalops://guide/playbooks/change-intents"));
   assert.ok(resourceUris.includes("signalops://signal-candidates/residuals-summary"));
   const resource = resolveMcpResource("signalops://admin/summary");
   assert.equal(resource.name, "admin.summary");
@@ -1442,6 +1582,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     orientationRendered.messages[0]?.content.text ?? "",
     /signalops:\/\/guide\/server-overview/i
   );
+  assert.match(orientationRendered.messages[0]?.content.text ?? "", /flowMode/);
   const discoverySessionPrompt = resolveMcpPrompt("discovery.session.plan");
   const discoverySessionRendered = discoverySessionPrompt.render({
     objective: "promote a high-signal discovery endpoint",
@@ -1469,6 +1610,16 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     "signalops://guide/reference/selection-evidence-semantics"
   );
   assert.equal(selectionEvidenceGuide.name, "guide.reference.selection-evidence-semantics");
+  const strictNextStepsGuide = resolveMcpResource(
+    "signalops://guide/playbooks/strict-next-steps"
+  );
+  assert.equal(strictNextStepsGuide.name, "guide.playbooks.strict-next-steps");
+  const operatorFlowModesGuide = resolveMcpResource(
+    "signalops://guide/playbooks/operator-flow-modes"
+  );
+  assert.equal(operatorFlowModesGuide.name, "guide.playbooks.operator-flow-modes");
+  const changeIntentsGuide = resolveMcpResource("signalops://guide/playbooks/change-intents");
+  assert.equal(changeIntentsGuide.name, "guide.playbooks.change-intents");
   const liveGapPrompt = resolveMcpPrompt("discovery.live_gap_hunting.plan");
   const liveGapRendered = liveGapPrompt.render({
     objective: "prove real discovery gaps",
@@ -1510,6 +1661,12 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
 test("MCP selection calibration guidance explains zero-selected diagnostics", async () => {
   const guide = resolveMcpResource("signalops://guide/scenarios/selection-calibration");
   const guideText = JSON.stringify(await guide.read({} as any));
+  const strictGuide = resolveMcpResource("signalops://guide/playbooks/strict-next-steps");
+  const strictGuideText = JSON.stringify(await strictGuide.read({} as any));
+  const flowModesGuide = resolveMcpResource("signalops://guide/playbooks/operator-flow-modes");
+  const flowModesGuideText = JSON.stringify(await flowModesGuide.read({} as any));
+  const changeIntentsGuide = resolveMcpResource("signalops://guide/playbooks/change-intents");
+  const changeIntentsGuideText = JSON.stringify(await changeIntentsGuide.read({} as any));
   const evidenceGuide = resolveMcpResource("signalops://guide/reference/selection-evidence-semantics");
   const evidenceGuideText = JSON.stringify(await evidenceGuide.read({} as any));
   const tuningGuide = resolveMcpResource("signalops://guide/tuning/selection");
@@ -1541,6 +1698,34 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(guideText, /distinctCandidateCount/);
   assert.match(guideText, /Globally removing wrapper/);
   assert.match(guideText, /gray[- ]zone collapse/i);
+  assert.match(guideText, /strict-next-steps/);
+  assert.match(strictGuideText, /must_do_next/);
+  assert.match(strictGuideText, /read-back -> classify -> bounded write -> bounded replay -> verify/);
+  assert.match(strictGuideText, /candidate_positive_signals/);
+  assert.match(strictGuideText, /discovery\.brief\.preview.*not a bypass/i);
+  assert.match(strictGuideText, /passed_with_quality_gap.*partial proof/i);
+  assert.match(strictGuideText, /mandatory for autonomous\/default MCP client recommendations/i);
+  assert.match(strictGuideText, /not a ban on expert operator action/i);
+  assert.match(strictGuideText, /planned_change_flow/i);
+  assert.match(flowModesGuideText, /diagnostic_flow/);
+  assert.match(flowModesGuideText, /planned_change_flow/);
+  assert.match(flowModesGuideText, /expert_override_flow/);
+  assert.match(flowModesGuideText, /source_onboarding_flow/);
+  assert.match(flowModesGuideText, /scenario_pack_rollout_flow/);
+  assert.match(flowModesGuideText, /cleanup_flow/);
+  assert.match(flowModesGuideText, /operatorOverrideReason/);
+  assert.match(flowModesGuideText, /read-back/);
+  assert.match(flowModesGuideText, /operator\.report\.verify/);
+  assert.match(flowModesGuideText, /changeIntent/);
+  assert.match(flowModesGuideText, /cleanupIntent/);
+  assert.match(flowModesGuideText, /tuningLayer/);
+  assert.match(changeIntentsGuideText, /system_update/);
+  assert.match(changeIntentsGuideText, /selection_tuning/);
+  assert.match(changeIntentsGuideText, /llm_tuning/);
+  assert.match(changeIntentsGuideText, /source_tuning/);
+  assert.match(changeIntentsGuideText, /cleanupIntent/);
+  assert.match(changeIntentsGuideText, /Mutation response is not verified effect/);
+  assert.match(changeIntentsGuideText, /Source acquisition proof is not selection proof/);
   assert.match(tuningGuideText, /semantic_rejected\/no_system_match/);
   assert.match(tuningGuideText, /candidateSignals/);
   assert.match(tuningGuideText, /docIds/);
@@ -1549,6 +1734,12 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(MCP_SERVER_INSTRUCTIONS, /semantic_rejected\/no_system_match/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /no_pending_gray_zone/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /runtime_credentials_missing/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/strict-next-steps/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/operator-flow-modes/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/change-intents/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /flowMode/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /changeIntent/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /candidate_positive_signals/);
 
   const selectionPrompt = resolveMcpPrompt("selection.tuning.plan").render({
     objective: "increase_recall",
@@ -1560,6 +1751,11 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(selectionText, /filter rows are not distinct candidates/);
   assert.match(selectionText, /docIds/);
   assert.match(selectionText, /operator\.report\.verify/);
+  assert.match(selectionText, /candidate_positive_signals/);
+  assert.match(selectionText, /planned_change/);
+  assert.match(selectionText, /expert_override/);
+  assert.match(selectionText, /changeIntent=selection_tuning/);
+  assert.match(selectionText, /tuningLayer/);
   assert.doesNotMatch(selectionText, /positive-term expansion.*main|broaden positive signals/i);
 
   const llmPrompt = resolveMcpPrompt("llm_budget.review").render({
@@ -1568,6 +1764,8 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   const llmText = llmPrompt.messages[0]?.content.text ?? "";
   assert.match(llmText, /no_pending_gray_zone/);
   assert.match(llmText, /semantic rejection before LLM/);
+  assert.match(llmText, /changeIntent=llm_tuning/);
+  assert.match(llmText, /tuningLayer=llm_provider/);
 
   const discoveryPrompt = resolveMcpPrompt("discovery.session.plan").render({
     objective: "run live Discovery",
@@ -1575,6 +1773,25 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   const discoveryText = discoveryPrompt.messages[0]?.content.text ?? "";
   assert.match(discoveryText, /runtime_credentials_missing/);
   assert.match(discoveryText, /preflight\/not_applicable/);
+  assert.match(discoveryText, /passed_with_quality_gap.*partial proof/i);
+  assert.match(discoveryText, /domain_contamination/);
+  assert.match(discoveryText, /operator-flow-modes/);
+  assert.match(discoveryText, /change-intents/);
+
+  const systemInterestSession = resolveMcpPrompt("system_interests.session.plan").render({
+    topic: "rare operational signal",
+  });
+  assert.match(systemInterestSession.messages[0]?.content.text ?? "", /planned_change/);
+  assert.match(systemInterestSession.messages[0]?.content.text ?? "", /expert_override/);
+  assert.match(systemInterestSession.messages[0]?.content.text ?? "", /changeIntent=config_update/);
+
+  const channelSession = resolveMcpPrompt("channels.session.plan").render({
+    source: "new source family",
+  });
+  const channelSessionText = channelSession.messages[0]?.content.text ?? "";
+  assert.match(channelSessionText, /source_onboarding/);
+  assert.match(channelSessionText, /changeIntent=source_tuning/);
+  assert.match(channelSessionText, /channels\.bulk_onboard\.plan/);
 
   const systemInterestPrompt = resolveMcpPrompt("system_interest.create").render({
     topic: "hidden operational signal family",
@@ -1943,6 +2160,77 @@ test("MCP selection precision audit buckets selected rows without a public gate 
   assert.match(JSON.stringify(report), /distinctCandidateCount/);
   assert.match(JSON.stringify(report), /processor diagnostics, not selected-signal proof/);
   assert.match(JSON.stringify(report), /Use filterReasonBreakdown\.distinctCandidateCount/);
+  assert.match(JSON.stringify(report), /must_do_next/);
+  assert.match(JSON.stringify(report), /blocked_until/);
+  assert.match(JSON.stringify(report), /readBackVerification/);
+  assert.equal(report.flowMode, "diagnostic");
+  assert.equal(report.proofStatus, "partial");
+  assert.match(JSON.stringify(report), /missingProof/);
+  assert.match(JSON.stringify(report), /processor counters alone are not sufficient/);
+
+  const blockedOverrideReport = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.report.verify",
+    {
+      reportKind: "selection",
+      entityIds: {},
+      operationMode: "expert_override",
+      affectedScope: ["interest:known-operator-config"],
+      includeSamples: true,
+    }
+  )) as Record<string, unknown>;
+
+  assert.equal(blockedOverrideReport.flowMode, "expert_override");
+  assert.equal(blockedOverrideReport.proofStatus, "blocked");
+  assert.match(JSON.stringify(blockedOverrideReport), /operatorOverrideReason is required/);
+
+  const allowedOverrideReport = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.report.verify",
+    {
+      reportKind: "selection",
+      entityIds: {},
+      operationMode: "expert_override",
+      operatorOverrideReason: "operator intentionally applies one bounded config change",
+      affectedScope: ["interest:known-operator-config"],
+      includeSamples: true,
+    }
+  )) as Record<string, unknown>;
+
+  assert.equal(allowedOverrideReport.flowMode, "expert_override");
+  assert.equal(allowedOverrideReport.operatorOverrideNotes instanceof Array, true);
+  assert.match(JSON.stringify(allowedOverrideReport), /Override can skip parts of diagnosis/);
+
+  const plannedReport = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.report.verify",
+    {
+      reportKind: "selection",
+      entityIds: {},
+      operationMode: "planned_change",
+      changeIntent: "selection_tuning",
+      tuningLayer: "technical_filter",
+      includeSamples: true,
+    }
+  )) as Record<string, unknown>;
+
+  assert.equal(plannedReport.flowMode, "planned_change");
+  assert.equal(plannedReport.changeIntent, "selection_tuning");
+  assert.equal(plannedReport.tuningLayer, "technical_filter");
+  assert.match(JSON.stringify(plannedReport), /intentProofRequired/);
+  assert.match(JSON.stringify(plannedReport), /mutation response alone is not verified effect|processor counters alone are not sufficient/i);
 });
 
 test("MCP selection dashboard explains raw signal_candidate totals versus selected signals", async () => {
@@ -2051,11 +2339,264 @@ test("MCP operator tuning recommend avoids positive-term expansion for semantic 
   )) as Record<string, unknown>;
 
   const serialized = JSON.stringify(recommendation);
+  assert.equal(recommendation.flowMode, "diagnostic");
+  assert.equal(recommendation.changeIntent, "selection_tuning");
+  assert.equal(recommendation.tuningLayer, "semantic_match");
+  assert.match(serialized, /intentProofRequired/);
   assert.match(serialized, /candidateSignals/);
+  assert.match(serialized, /must_do_next/);
+  assert.match(serialized, /allowed_after/);
+  assert.match(serialized, /do_not_do_yet/);
+  assert.match(serialized, /blocked_until/);
+  assert.match(serialized, /candidate_positive_signals/);
+  assert.match(serialized, /candidate_negative_signals/);
   assert.match(serialized, /near-miss negative/);
   assert.match(serialized, /maintenance\.reindex\.request/);
   assert.match(serialized, /operator\.report\.verify/);
   assert.doesNotMatch(serialized, /Broaden positive signals or lower strictness/);
+});
+
+test("MCP operator tuning recommend supports planned change flow without emergency diagnosis", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const recommendation = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_precision",
+      operationMode: "planned_change",
+      changeIntent: "selection_tuning",
+      tuningLayer: "technical_filter",
+      updateRisk: "medium",
+      affectedScope: ["interest:rare-operational-signal"],
+    }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(recommendation);
+  assert.equal(recommendation.flowMode, "planned_change");
+  assert.equal(recommendation.changeIntent, "selection_tuning");
+  assert.equal(recommendation.tuningLayer, "technical_filter");
+  assert.equal(recommendation.updateRisk, "medium");
+  assert.match(serialized, /one scoped staged write/i);
+  assert.match(serialized, /operator\.selection\.dashboard/);
+  assert.match(serialized, /bounded maintenance\.reindex\.request/);
+  assert.match(serialized, /technical_filter tuning must prove candidate impact/);
+  assert.match(serialized, /sample replay or source probe/i);
+  assert.match(serialized, /mutation response as verified effect/i);
+});
+
+test("MCP operator tuning recommend supports expert override proof guardrails", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const blocked = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+      operationMode: "expert_override",
+      changeIntent: "config_update",
+      affectedScope: ["interest:known-operator-config"],
+    }
+  )) as Record<string, unknown>;
+
+  assert.equal(blocked.flowMode, "expert_override");
+  assert.equal(blocked.operator_override_allowed, false);
+  assert.equal(blocked.proofStatus, "blocked");
+  assert.match(JSON.stringify(blocked.blocked_until), /operatorOverrideReason/);
+
+  const allowed = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+      operationMode: "expert_override",
+      changeIntent: "config_update",
+      operatorOverrideReason: "operator has current external evidence and wants one bounded config change",
+      affectedScope: ["interest:known-operator-config"],
+    }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(allowed);
+  assert.equal(allowed.operator_override_allowed, true);
+  assert.match(serialized, /Read back affected entities immediately/);
+  assert.match(serialized, /cannot skip MCP read-back or report verification/);
+  assert.match(serialized, /proofRequired/);
+  assert.match(serialized, /intentProofRequired/);
+  assert.match(serialized, /unbounded mass edits/);
+});
+
+test("MCP operator tuning recommend supports LLM and cleanup intents", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const llm = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "llm_budget",
+      objective: "reduce_cost",
+      operationMode: "planned_change",
+      changeIntent: "llm_tuning",
+      tuningLayer: "llm_provider",
+    }
+  )) as Record<string, unknown>;
+
+  const llmSerialized = JSON.stringify(llm);
+  assert.equal(llm.changeIntent, "llm_tuning");
+  assert.equal(llm.tuningLayer, "llm_provider");
+  assert.match(llmSerialized, /provider endpoint\/model errors/);
+  assert.match(llmSerialized, /Zero LLM spend is not proof that LLM is broken/);
+
+  const cleanup = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "cleanup",
+      operationMode: "cleanup",
+      cleanupIntent: "test_artifacts",
+      updateRisk: "low",
+    }
+  )) as Record<string, unknown>;
+
+  const cleanupSerialized = JSON.stringify(cleanup);
+  assert.equal(cleanup.flowMode, "cleanup");
+  assert.equal(cleanup.cleanupIntent, "test_artifacts");
+  assert.match(cleanupSerialized, /archive or deactivate before deleting/);
+  assert.match(cleanupSerialized, /confirm=true/);
+  assert.match(cleanupSerialized, /cleanup report verification/);
+});
+
+test("MCP operator intent fields reject unsupported enum values", async () => {
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: sdk as never,
+          pool,
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "operator.tuning.recommend",
+        {
+          domain: "selection",
+          changeIntent: "domain_specific_shortcut",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: sdk as never,
+          pool,
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "operator.report.verify",
+        {
+          reportKind: "selection",
+          entityIds: {},
+          tuningLayer: "magic_layer",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
 });
 
 test("MCP operator tuning recommend prioritizes technical-filter repair before semantic tuning", async () => {
@@ -2102,8 +2643,12 @@ test("MCP operator tuning recommend prioritizes technical-filter repair before s
   assert.match(serialized, /temporary bounded experiment/);
   assert.match(serialized, /selection-hard-filter-calibration/);
   assert.match(serialized, /operator\.selection\.dashboard/);
+  assert.match(serialized, /must_do_next/);
+  assert.match(serialized, /candidate_positive_signals/);
+  assert.match(serialized, /read-back/);
   assert.doesNotMatch(serialized, /disable wrapper_directory_noise as first step/i);
   assert.doesNotMatch(serialized, /positive-term expansion/);
+  assert.doesNotMatch(serialized, /"candidateSignals":/);
 });
 
 test("MCP LLM budget report classifies provider 404 as endpoint error", async () => {
@@ -2754,6 +3299,103 @@ test("MCP adjacent write tools reject malformed UUID ids before backend or DB wo
   assert.equal(pool.calls.length, 0, "invalid adjacent write ids should fail before DB work");
 });
 
+test("MCP system interest writes return persisted profile read-back verification", async () => {
+  const pool = createFakeSystemInterestWritePool();
+  const sdk = createSignalOpsSdk({ baseUrl: "http://api.example.test" });
+
+  const result = (await executeMcpTool(
+    {
+      sdk,
+      pool: pool as never,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "system_interests.create",
+    {
+      payload: {
+        name: "Strict interest",
+        positive_texts: ["buyer asks for implementation support"],
+        allowed_content_kinds: ["editorial", "listing"],
+        candidate_positive_signals: ["buyer_need: needs external implementation"],
+        candidate_negative_signals: ["vendor_marketing: case study"],
+        selection_profile_llm_review_mode: "always",
+      },
+    }
+  )) as Record<string, unknown>;
+
+  const verification = result.readBackVerification as Record<string, unknown>;
+  assert.equal(verification.status, "verified");
+  assert.equal(verification.selectionProfileLlmReviewMode, "always");
+  assert.equal(verification.candidatePositiveSignalGroupCount, 1);
+  assert.equal(verification.candidateNegativeSignalGroupCount, 1);
+  assert.deepEqual(verification.allowedContentKinds, ["editorial", "listing"]);
+  assert.deepEqual(verification.warnings, []);
+  assert.match(JSON.stringify(result), /system_interests\.compile_status\.list/);
+  assert.equal(pool.state.released, true);
+});
+
+test("MCP system interest writes reject camelCase and nested profile aliases", async () => {
+  const sdk = createSignalOpsSdk({ baseUrl: "http://api.example.test" });
+  const pool = createFakeMcpPool();
+  const cases = [
+    {
+      field: "candidateSignals",
+      payload: {
+        name: "Bad interest",
+        positive_texts: ["representative signal"],
+        candidateSignals: { positiveGroups: [{ cues: ["buyer ask"] }] },
+      },
+      canonical: "candidate_positive_signals",
+    },
+    {
+      field: "selectionProfile",
+      payload: {
+        name: "Bad interest",
+        positive_texts: ["representative signal"],
+        selectionProfile: { llmReviewMode: "always" },
+      },
+      canonical: "selection_profile_llm_review_mode",
+    },
+    {
+      field: "allowedContentKinds",
+      payload: {
+        name: "Bad interest",
+        positive_texts: ["representative signal"],
+        allowedContentKinds: ["editorial"],
+      },
+      canonical: "allowed_content_kinds",
+    },
+    {
+      field: "llmReviewMode",
+      payload: {
+        name: "Bad interest",
+        positive_texts: ["representative signal"],
+        llmReviewMode: "always",
+      },
+      canonical: "selection_profile_llm_review_mode",
+    },
+  ];
+
+  for (const item of cases) {
+    await assert.rejects(
+      () =>
+        executeMcpTool(
+          {
+            sdk,
+            pool,
+            token: WRITE_TEMPLATES_TOKEN,
+          },
+          "system_interests.create",
+          { payload: item.payload }
+        ),
+      (error) =>
+        error instanceof JsonRpcError &&
+        error.code === -32602 &&
+        (error.data as Record<string, unknown>).path === `payload.${item.field}` &&
+        JSON.stringify(error.data).includes(item.canonical)
+    );
+  }
+});
+
 test("MCP tool execution enforces scope and destructive confirmation before handler work", async () => {
   const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
@@ -3055,6 +3697,9 @@ test("MCP source-bottleneck report verify uses the shared channel read model", a
     {
       reportKind: "source_bottleneck",
       entityIds: {},
+      operationMode: "source_onboarding",
+      changeIntent: "source_tuning",
+      tuningLayer: "acquisition",
       includeSamples: true,
     }
   );
@@ -3063,6 +3708,73 @@ test("MCP source-bottleneck report verify uses the shared channel read model", a
   assert.equal(queryCount, 2);
   assert.match(serialized, /provider_shape_mismatch|html_instead_of_feed/);
   assert.match(serialized, /technicalBottlenecks/);
+  assert.match(serialized, /changeIntent.*source_tuning|source_tuning.*changeIntent/);
+  assert.match(serialized, /Source acquisition proof is not selection proof/);
+  assert.match(serialized, /intentProofRequired/);
+});
+
+test("MCP cleanup report verify exposes cleanup intent proof guardrails", async () => {
+  const dummySdk = createSignalOpsSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("cleanup report should use the DB-backed pool");
+    }) as typeof fetch,
+  });
+  const pool = {
+    async query(sql: string) {
+      if (/from source_channels/i.test(sql)) {
+        return {
+          rows: [
+            {
+              activeChannels: 2,
+              activeSystemInterests: 3,
+              activeLlmTemplates: 1,
+              activeDiscoveryRuns: 0,
+              probationDiscoverySources: 0,
+              openAdapterBacklogItems: 0,
+              activeSequences: 1,
+              activeMcpTokens: 1,
+            },
+          ],
+        };
+      }
+      return {
+        rows: [
+          {
+            kind: "sequence",
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "Default Reindex",
+            createdBy: "migration:default",
+          },
+        ],
+      };
+    },
+  };
+
+  const report = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.report.verify",
+    {
+      reportKind: "cleanup",
+      entityIds: {},
+      operationMode: "cleanup",
+      cleanupIntent: "test_artifacts",
+      updateRisk: "low",
+      includeSamples: true,
+    }
+  )) as Record<string, unknown>;
+
+  const serialized = JSON.stringify(report);
+  assert.equal(report.flowMode, "cleanup");
+  assert.equal(report.cleanupIntent, "test_artifacts");
+  assert.match(serialized, /archive or deactivate before deleting/);
+  assert.match(serialized, /confirm=true/);
+  assert.match(serialized, /protectedObjects/);
+  assert.match(serialized, /intentProofRequired/);
 });
 
 test("MCP channels.alternatives.start respects bounded candidates", async () => {

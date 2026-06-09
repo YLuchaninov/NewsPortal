@@ -38,6 +38,223 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
     mimeType: "application/json",
     read: async () => getOperatingModelGuide(),
   },
+  {
+    uri: "signalops://guide/playbooks/strict-next-steps",
+    name: "guide.playbooks.strict-next-steps",
+    title: "Strict Next Steps",
+    description:
+      "Prescriptive MCP playbook for selection, absent LLM review, Discovery quality gaps, source repair, and post-write verification.",
+    mimeType: "application/json",
+    read: async () => ({
+      objective:
+        "Force external MCP clients into a read-back -> classify -> bounded write -> bounded replay -> verify loop before reporting success or proposing broad tuning.",
+      globalRules: [
+        "Strict sequencing is mandatory for autonomous/default MCP client recommendations in diagnostic states.",
+        "Diagnostic flow may include changeIntent, cleanupIntent or tuningLayer, but those advisory fields do not change the diagnostic proof sequence.",
+        "Strict sequencing is a default safety rail for clients, not a ban on expert operator action.",
+        "Experienced operator override is allowed only through signalops://guide/playbooks/operator-flow-modes expert_override_flow and cannot skip final read-back/report verification.",
+        "Planned operator changes should use planned_change_flow rather than emergency diagnostic flow.",
+        "Do not skip MCP read-back after writes.",
+        "Do not mass edit interests/templates/sources before representative evidence exists.",
+        "discovery.brief.preview is not a bypass for domain_contamination or persisted DiscoveryBrief validation.",
+        "Do not report stale session counts as current truth; read current DB/MCP state.",
+        "Do not report intended system-interest profile/candidateSignals settings until readBackVerification or system_interests.read plus compile status proves persisted state.",
+        "Destructive actions still require existing token scopes, write.destructive where applicable, confirm=true, and read-back verification.",
+      ],
+      selectionZeroSelected: [
+        "Read operator.selection.dashboard and signal_candidates.residuals.summary/list.",
+        "Compare row counters with filterReasonBreakdown.distinctCandidateCount.",
+        "Inspect 1-3 representative rejected candidates with signal_candidates.explain.",
+        "Read exactly one affected system_interests.read result and system_interests.compile_status.list.",
+        "If profile/candidateSignals are missing or not as intended, fix write/read-back first.",
+        "Apply at most one bounded config write using canonical fields: candidate_positive_signals, candidate_negative_signals, selection_profile_llm_review_mode, allowed_content_kinds.",
+        "Replay 25-50 explicit docIds with maintenance.reindex.request.",
+        "Wait for maintenance.reindex_jobs.list, then verify operator.report.verify reportKind=selection includeSamples=true.",
+        "Only then decide whether to repeat or expand scope.",
+      ],
+      llmReviewAbsent: [
+        "Read selection residuals, llm_budget.summary, operator.system.health, operator.issue.explain, and representative explains.",
+        "Classify the absence as no_reviewable_path, review_disabled, budget_exhausted, worker_not_running, provider_credentials_missing, or provider_endpoint_error.",
+        "If candidates never reached gray/hold/reviewable path, classify no_reviewable_path and do not change LLM budget/templates yet.",
+        "If provider errors exist, report provider_endpoint_error separately from selection tuning.",
+        "Verify any config change through bounded replay before reporting recovery.",
+      ],
+      discoverySourceRepair: [
+        "Treat passed_with_quality_gap as partial proof only.",
+        "Report run candidate count, distinct persisted discovery candidates, probe coverage, warnings, routing decision counts, and handoff counts.",
+        "For broken RSS/API/website shape, run channels.bottlenecks.summary/list and channels.alternatives.plan.",
+        "Do not auto-trust listing/website sources without SourceUnderstanding and downstream selection proof.",
+        "Register/apply sources only through MCP/admin, then sync/read-back/verify.",
+      ],
+      strictRecommendationLevels: {
+        must_do_next: "The single safe next action group before writes or claims.",
+        allowed_after: "Actions allowed only after the named proof exists.",
+        do_not_do_yet: "Actions the client must not propose at the current layer.",
+        blocked_until: "Missing read-back/proof that blocks stronger conclusions.",
+      },
+      canonicalWriteFields: {
+        candidate_positive_signals: "Positive item-level cue groups for candidateSignals recovery.",
+        candidate_negative_signals: "Near-miss negative cue groups for candidateSignals recovery.",
+        selection_profile_llm_review_mode:
+          "Flat review-mode field; llmReviewMode or selectionProfile.llmReviewMode are not write fields.",
+        allowed_content_kinds:
+          "Flat content-kind field; allowedContentKinds is not a write field.",
+      },
+      antiPatterns: [
+        "candidateSignals or selectionProfile camelCase write payloads.",
+        "strictness=broad as first response to 0 selected.",
+        "positive-term expansion as primary hidden-signal recovery.",
+        "LLM template rewrites before no_reviewable_path is excluded.",
+        "More RSS/source volume as selected-signal proof.",
+      ],
+    }),
+  },
+  {
+    uri: "signalops://guide/playbooks/operator-flow-modes",
+    name: "guide.playbooks.operator-flow-modes",
+    title: "Operator Flow Modes",
+    description:
+      "Advisory MCP playbook that separates diagnostic strict sequencing from planned changes, expert overrides, source onboarding, scenario-pack rollout and cleanup.",
+    mimeType: "application/json",
+    read: async () => ({
+      objective:
+        "Choose the right MCP operator flow before recommending mutations so strict diagnostics protect clients without blocking deliberate operator work.",
+      enforcement:
+        "Advisory + Proof: write tools do not require operationMode, but recommendations and reports must expose flowMode, proof requirements, blocked proof and read-back expectations.",
+      intentModel: [
+        "flowMode answers what kind of operator session this is.",
+        "changeIntent, cleanupIntent and tuningLayer answer what kind of change, tuning or cleanup is being attempted.",
+        "Read signalops://guide/playbooks/change-intents before system updates, config updates, tuning or cleanup recommendations.",
+      ],
+      flowModes: {
+        diagnostic_flow: [
+          "Use for 0 selected, 0 LLM reviews, source failures, Discovery quality_gap and unclear operational failures.",
+          "Sequence: read-back -> classify -> at most one bounded write -> bounded replay/probe -> verify.",
+          "Autonomous/default MCP client recommendations must use this flow for diagnostic states.",
+        ],
+        planned_change_flow: [
+          "Use when a working system is being intentionally improved or extended.",
+          "Sequence: intent -> current read-back -> one scoped staged write -> read-back -> sample replay/probe -> verify -> optional expand.",
+          "Do not describe this as emergency zero-selected diagnosis unless current read-back proves that failure state.",
+        ],
+        expert_override_flow: [
+          "Use only when an experienced operator explicitly deviates from the canonical sequence.",
+          "Requires operatorOverrideReason, affected scope, expected effect, read-back target, verification target, and rollback or previous-state hint.",
+          "Override can skip parts of diagnosis, but it cannot skip final MCP read-back or operator.report.verify.",
+        ],
+        source_onboarding_flow: [
+          "Use for new or repaired RSS/API/website/source adapter work.",
+          "Sequence: plan -> probe -> apply -> sync/read-back -> persisted candidates/resources -> downstream selection proof.",
+          "Acquisition proof is not selected-signal proof.",
+        ],
+        scenario_pack_rollout_flow: [
+          "Use for domain-specific operator configuration packs.",
+          "Sequence: load pack -> preview diff -> apply approved MCP/admin config -> read-back -> bounded replay -> verify.",
+          "Domain vocabulary remains scenario/config evidence only, never runtime defaults or required product behavior.",
+        ],
+        cleanup_flow: [
+          "Use for experiments, test artifacts, retained evidence and token/entity cleanup.",
+          "Sequence: inventory -> reversible archive/deactivate -> confirmed destructive actions only if needed -> read-back -> report verify.",
+          "Destructive actions still require existing scopes and confirm=true.",
+        ],
+      },
+      recommendationContract: {
+        input: [
+          "operator.tuning.recommend may accept operationMode, operatorOverrideReason and affectedScope as advisory context.",
+          "operator.tuning.recommend may also accept changeIntent, cleanupIntent, tuningLayer and updateRisk as advisory context.",
+          "Existing write tools do not require operationMode in this stage.",
+        ],
+        output: [
+          "flowMode",
+          "flowSequence",
+          "changeIntent",
+          "cleanupIntent",
+          "tuningLayer",
+          "intentSequence",
+          "intentProofRequired",
+          "operator_override_allowed",
+          "operator_override_requires",
+          "proofRequired",
+          "must_do_next",
+          "allowed_after",
+          "do_not_do_yet",
+          "blocked_until",
+        ],
+      },
+      reportContract: [
+        "operator.report.verify reports flowMode, proofStatus, missingProof and operatorOverrideNotes where applicable.",
+        "operator.report.verify echoes advisory changeIntent, cleanupIntent, tuningLayer and updateRisk when supplied or inferred.",
+        "Mutation responses are not verified effect.",
+        "Expert override reports are partial or blocked until read-back plus samples/replay/probe proof exist.",
+      ],
+    }),
+  },
+  {
+    uri: "signalops://guide/playbooks/change-intents",
+    name: "guide.playbooks.change-intents",
+    title: "Change Intents",
+    description:
+      "Advisory MCP playbook for system updates, config updates, tuning, source changes and cleanup intents under existing operator flow modes.",
+    mimeType: "application/json",
+    read: async () => ({
+      objective:
+        "Help MCP clients describe the kind of change being attempted without adding new top-level flow modes or domain-specific runtime behavior.",
+      model: [
+        "flowMode answers what kind of operator session this is.",
+        "changeIntent, cleanupIntent and tuningLayer answer what kind of change, tuning or cleanup is being attempted.",
+        "Intent fields are advisory only and existing write tools do not require them.",
+      ],
+      changeIntentValues: [
+        "config_update",
+        "system_update",
+        "selection_tuning",
+        "llm_tuning",
+        "source_tuning",
+        "policy_update",
+        "cadence_update",
+        "model_update",
+        "schema_or_contract_update",
+      ],
+      cleanupIntentValues: [
+        "test_artifacts",
+        "stale_sources",
+        "duplicate_config",
+        "revoked_tokens",
+        "audit_evidence",
+        "failed_runs",
+        "temporary_scenario_pack",
+      ],
+      tuningLayerValues: [
+        "acquisition",
+        "technical_filter",
+        "semantic_match",
+        "candidate_signal",
+        "gray_zone_review",
+        "llm_provider",
+        "final_selection",
+        "reporting",
+      ],
+      requestMap: {
+        systemUpdate: "planned_change + changeIntent=system_update",
+        configOrInterestOrPolicyUpdate:
+          "planned_change + changeIntent=config_update or policy_update",
+        selectedRecallPrecisionTuning:
+          "planned_change + changeIntent=selection_tuning plus a tuningLayer such as technical_filter, semantic_match, candidate_signal, gray_zone_review or final_selection",
+        llmBrokenCostOrModelUpdate:
+          "diagnostic or planned_change + changeIntent=llm_tuning plus tuningLayer=llm_provider",
+        cleanupTestsNoiseOrOldSources:
+          "cleanup + cleanupIntent=test_artifacts, stale_sources, duplicate_config, revoked_tokens, audit_evidence, failed_runs or temporary_scenario_pack",
+        addOrRepairSource:
+          "source_onboarding + changeIntent=source_tuning plus tuningLayer=acquisition",
+      },
+      proofRules: [
+        "Mutation response is not verified effect.",
+        "Source acquisition proof is not selection proof.",
+        "Cleanup proof is lifecycle-state proof, not source-quality or selected-signal proof.",
+        "Expert override may skip parts of diagnosis but cannot skip final MCP read-back or operator.report.verify.",
+      ],
+    }),
+  },
   ...OPERATING_DOMAIN_VALUES.flatMap((domain) => [
     {
       uri: `signalops://guide/diagnostics/${domain}`,
@@ -162,6 +379,10 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "Intent routing: старые статьи / прогнать заново / перепроверить по интересам / selected шумит / after Example C, templates, or criteria changes maps to maintenance.reindex.request payload.jobKind=backfill.",
         "Content-analysis backfill is not a selection replay; it does not recompute signal_candidate.match_criteria, interest_filter_results, or final_selection_results.",
         "For ongoing system work, follow observe -> diagnose -> recommend -> guarded change -> verify effect -> monitor.",
+        "Before recommending mutations, choose and report flowMode from signalops://guide/playbooks/operator-flow-modes. Use diagnostic for current failures, planned_change for deliberate improvements, expert_override only with operatorOverrideReason, source_onboarding for source additions/repair, scenario_pack_rollout for config packs, and cleanup for artifact cleanup.",
+        "For system updates, config updates, tuning and cleanup, also report advisory changeIntent, cleanupIntent, tuningLayer and updateRisk from signalops://guide/playbooks/change-intents.",
+        "Strict diagnostic sequencing is a default MCP client safety rail, not a ban on expert operator action; expert override cannot skip final MCP read-back or operator.report.verify.",
+        "Mutation responses are not verified effect. Source acquisition proof is not selection proof.",
         "For 0 selected signals, follow signalops://guide/scenarios/selection-calibration: classify the failing layer, inspect representative explains, calibrate one interest/candidate, read back, replay bounded docIds, and verify.",
         "For hidden or operational signals, do not recommend positive-term expansion as the primary recovery path. Use candidateSignals, policy evidence, near-miss negatives, representative explains, bounded docIds replay, and operator.report.verify.",
         "Selection evidence semantics matter: must_have_terms is an any-of hard lexical text constraint; short_tokens_required is an extracted short-token requirement; positive_texts are semantic prototypes, not keyword recovery; criteriaMatches/interestMatches counters are not selected-signal proof.",
@@ -711,6 +932,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
       objective:
         "Use this scenario when an external MCP client sees 0 selected signals, semantic_rejected/no_system_match, absent LLM spend, or confusing live Discovery failures and needs to classify the failing layer before changing configuration.",
       startWith: [
+        "Read signalops://guide/playbooks/strict-next-steps and follow its read-back -> classify -> bounded write -> bounded replay -> verify sequence.",
         "Read admin.summary.get or signalops://admin/summary first.",
         "Read signalops://guide/reference/selection-evidence-semantics before interpreting hard gates, backfill counters, LLM spend, or gray-zone changes.",
         "Read operator.selection.dashboard and compare filterReasonBreakdown.filterRows to distinctCandidateCount before estimating candidate impact.",
@@ -806,6 +1028,7 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "Apply at most one bounded write. Do not mass edit 30 interests, mass-set strictness=broad, or rewrite LLM templates before a representative candidate proves the needed change.",
         "For wrapper_directory_noise, time_window, must_not, content_kind and other hard filters, never recommend global disable from row counts alone; sample first and replay explicit docIds.",
         "Read the changed entity back through MCP. If the read-back does not show the intended policy/template/interest fields, stop and fix the write path.",
+        "Use only canonical system-interest write fields: candidate_positive_signals, candidate_negative_signals, selection_profile_llm_review_mode, and allowed_content_kinds.",
         "Replay only explicit docIds from the inspected residual bucket. Use maintenance.reindex.request with bounded payload.options.docIds chunks and a reason tied to the calibration.",
         "After replay, use maintenance.reindex_jobs.list, operator.effect.verify, and operator.report.verify reportKind=selection or selection_tuning before the next change.",
       ],
@@ -823,6 +1046,8 @@ export const MCP_RESOURCES: readonly McpResourceDefinition[] = [
         "Treating broad strictness as a fix for missing item-level evidence.",
         "Adding more RSS/channel rows as selection proof.",
         "Masking API/portal/search sources as RSS/website instead of adapter_required or api_mapping_required.",
+        "Using discovery.brief.preview as a workaround for domain_contamination or persisted DiscoveryBrief validation.",
+        "Reporting intended system-interest profile/candidateSignals writes before readBackVerification proves persisted state.",
         "Skipping MCP read-back and bounded replay proof after a write.",
       ],
       invariants: [

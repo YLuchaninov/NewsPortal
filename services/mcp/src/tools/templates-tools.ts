@@ -191,17 +191,24 @@ function summarizeCompileStatusRows(
   };
 }
 
-function withTemplateReadBack(
+async function withTemplateReadBack(
+  pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
   result: Record<string, unknown>,
   readTool: string,
-  idField: string
-): Record<string, unknown> {
+  idField: string,
+  requestedPayload?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const entityId = String(result.entityId ?? "").trim();
   if (!entityId) {
     return result;
   }
+  const readBackVerification =
+    result.kind === "interest"
+      ? await buildSystemInterestReadBackVerification(pool, entityId, requestedPayload ?? {})
+      : undefined;
   return {
     ...result,
+    ...(readBackVerification ? { readBackVerification } : {}),
     nextReadBack: [
       {
         tool: readTool,
@@ -215,6 +222,160 @@ function withTemplateReadBack(
             },
           ]
         : []),
+    ],
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+}
+
+function normalizeRequestedList(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : String(value ?? "").split(/\r?\n|,/u);
+  return values.map((entry) => String(entry ?? "").trim()).filter(Boolean);
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((value, index) => value === sortedRight[index])
+  );
+}
+
+function countRequestedCandidateSignalGroups(value: unknown): number {
+  const values = Array.isArray(value)
+    ? value
+    : String(value ?? "")
+        .split(/\r?\n/u)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+  return values.filter((entry) => String(entry ?? "").trim()).length;
+}
+
+function readCandidateSignalGroupCount(definitionJson: unknown, key: string): number {
+  const definition = asRecord(definitionJson);
+  const candidateSignals = asRecord(definition.candidateSignals);
+  const groups = candidateSignals[key];
+  return Array.isArray(groups) ? groups.length : 0;
+}
+
+async function buildSystemInterestReadBackVerification(
+  pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
+  interestTemplateId: string,
+  requestedPayload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const result = await pool.query(
+    `
+      select
+        it.interest_template_id::text as "interestTemplateId",
+        it.allowed_content_kinds as "allowedContentKinds",
+        c.criterion_id::text as "criterionId",
+        c.compiled as "criterionCompiled",
+        c.compile_status as "criterionCompileStatus",
+        cc.compile_status as "compiledRowStatus",
+        sp.selection_profile_id::text as "selectionProfileId",
+        sp.status as "selectionProfileStatus",
+        sp.version as "selectionProfileVersion",
+        sp.policy_json as "policyJson",
+        sp.definition_json as "definitionJson"
+      from interest_templates it
+      left join criteria c on c.source_interest_template_id = it.interest_template_id
+      left join criteria_compiled cc on cc.criterion_id = c.criterion_id
+      left join selection_profiles sp on sp.source_interest_template_id = it.interest_template_id
+      where it.interest_template_id = $1
+      limit 1
+    `,
+    [interestTemplateId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return {
+      status: "missing",
+      warnings: ["system_interests.write returned an id but MCP read-back could not find the interest."],
+    };
+  }
+
+  const policy = asRecord(row.policyJson);
+  const allowedContentKinds = asStringList(row.allowedContentKinds);
+  const actual = {
+    status: "verified",
+    interestTemplateId: row.interestTemplateId,
+    allowedContentKinds,
+    criterionId: row.criterionId,
+    criterionCompiled: row.criterionCompiled,
+    criterionCompileStatus: row.criterionCompileStatus,
+    compiledRowStatus: row.compiledRowStatus,
+    selectionProfileId: row.selectionProfileId,
+    selectionProfileStatus: row.selectionProfileStatus,
+    selectionProfileVersion: row.selectionProfileVersion,
+    selectionProfileStrictness: policy.strictness,
+    selectionProfileUnresolvedDecision: policy.unresolvedDecision,
+    selectionProfileLlmReviewMode: policy.llmReviewMode,
+    candidatePositiveSignalGroupCount: readCandidateSignalGroupCount(
+      row.definitionJson,
+      "positiveGroups"
+    ),
+    candidateNegativeSignalGroupCount: readCandidateSignalGroupCount(
+      row.definitionJson,
+      "negativeGroups"
+    ),
+  };
+  const warnings: string[] = [];
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "selection_profile_llm_review_mode") &&
+    String(requestedPayload.selection_profile_llm_review_mode) !==
+      String(actual.selectionProfileLlmReviewMode ?? "")
+  ) {
+    warnings.push(
+      "Requested selection_profile_llm_review_mode does not match persisted selectionProfileLlmReviewMode."
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "allowed_content_kinds") &&
+    !sameStringSet(normalizeRequestedList(requestedPayload.allowed_content_kinds), allowedContentKinds)
+  ) {
+    warnings.push("Requested allowed_content_kinds do not match persisted allowedContentKinds.");
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "candidate_positive_signals") &&
+    countRequestedCandidateSignalGroups(requestedPayload.candidate_positive_signals) !==
+      actual.candidatePositiveSignalGroupCount
+  ) {
+    warnings.push(
+      "Requested candidate_positive_signals count does not match persisted candidate positive signal groups."
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "candidate_negative_signals") &&
+    countRequestedCandidateSignalGroups(requestedPayload.candidate_negative_signals) !==
+      actual.candidateNegativeSignalGroupCount
+  ) {
+    warnings.push(
+      "Requested candidate_negative_signals count does not match persisted candidate negative signal groups."
+    );
+  }
+  return {
+    ...actual,
+    warnings,
+    nextReadBack: [
+      {
+        tool: "system_interests.read",
+        arguments: { interestTemplateId },
+      },
+      {
+        tool: "system_interests.compile_status.list",
+        arguments: { includeInactive: true, includeSamples: true },
+      },
     ],
   };
 }
@@ -285,8 +446,58 @@ function readSystemInterestPayload(args: Record<string, unknown>): Record<string
       "payload.interestTemplateId"
     );
   }
+  validateUnsupportedSystemInterestFields(payload);
   validateSystemInterestShortTokensRequired(payload);
   return payload;
+}
+
+const UNSUPPORTED_SYSTEM_INTEREST_FIELD_HINTS: Readonly<Record<string, {
+  canonical: string;
+  expectedShape: string;
+}>> = {
+  candidateSignals: {
+    canonical: "candidate_positive_signals and candidate_negative_signals",
+    expectedShape:
+      "Use candidate_positive_signals / candidate_negative_signals as string arrays or newline-separated group lines.",
+  },
+  selectionProfile: {
+    canonical:
+      "selection_profile_strictness, selection_profile_unresolved_decision, selection_profile_llm_review_mode",
+    expectedShape:
+      "Use flat selection_profile_* fields, not a nested selectionProfile object.",
+  },
+  allowedContentKinds: {
+    canonical: "allowed_content_kinds",
+    expectedShape: "Use allowed_content_kinds as a string array or comma/newline-separated string.",
+  },
+  llmReviewMode: {
+    canonical: "selection_profile_llm_review_mode",
+    expectedShape:
+      "Use selection_profile_llm_review_mode with disabled, optional_high_value_only, or always.",
+  },
+};
+
+function validateUnsupportedSystemInterestFields(payload: Record<string, unknown>): void {
+  for (const [fieldName, hint] of Object.entries(UNSUPPORTED_SYSTEM_INTEREST_FIELD_HINTS)) {
+    if (!Object.prototype.hasOwnProperty.call(payload, fieldName)) {
+      continue;
+    }
+    throw new JsonRpcError(
+      -32602,
+      `payload.${fieldName} is not a supported system_interests write field. Use ${hint.canonical}.`,
+      {
+        statusCode: 400,
+        data: {
+          path: `payload.${fieldName}`,
+          code: "unsupported_field_alias",
+          canonicalField: hint.canonical,
+          expectedShape: hint.expectedShape,
+          hint:
+            "Read system_interests.read and system_interests.compile_status.list after every write; do not report intended profile/candidateSignals settings until read-back confirms them.",
+        },
+      }
+    );
+  }
 }
 
 function validateSystemInterestShortTokensRequired(payload: Record<string, unknown>): void {
@@ -545,9 +756,11 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
       return withTemplateReadBack(
+        pool,
         result as unknown as Record<string, unknown>,
         "system_interests.read",
-        "interestTemplateId"
+        "interestTemplateId",
+        payload
       );
     }
   ),
@@ -563,9 +776,11 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
       return withTemplateReadBack(
+        pool,
         result as unknown as Record<string, unknown>,
         "system_interests.read",
-        "interestTemplateId"
+        "interestTemplateId",
+        payload
       );
     }
   ),
@@ -636,6 +851,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
       return withTemplateReadBack(
+        pool,
         result as unknown as Record<string, unknown>,
         "llm_templates.read",
         "promptTemplateId"
@@ -654,6 +870,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
       return withTemplateReadBack(
+        pool,
         result as unknown as Record<string, unknown>,
         "llm_templates.read",
         "promptTemplateId"

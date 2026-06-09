@@ -466,6 +466,10 @@ export const MCP_TEMPLATE_PAYLOAD_SCHEMAS = {
       short_tokens_forbidden: stringOrStringListSchema,
       candidate_positive_signals: stringOrStringListSchema,
       candidate_negative_signals: stringOrStringListSchema,
+      candidateSignals: jsonObjectSchema,
+      selectionProfile: jsonObjectSchema,
+      allowedContentKinds: stringOrStringListSchema,
+      llmReviewMode: stringSchema,
       selection_profile_strictness: { type: "string", enum: ["strict", "balanced", "broad"] },
       selection_profile_unresolved_decision: { type: "string", enum: ["hold", "reject"] },
       selection_profile_llm_review_mode: {
@@ -496,6 +500,10 @@ export const MCP_TEMPLATE_PAYLOAD_SCHEMAS = {
       short_tokens_forbidden: stringOrStringListSchema,
       candidate_positive_signals: stringOrStringListSchema,
       candidate_negative_signals: stringOrStringListSchema,
+      candidateSignals: jsonObjectSchema,
+      selectionProfile: jsonObjectSchema,
+      allowedContentKinds: stringOrStringListSchema,
+      llmReviewMode: stringSchema,
       selection_profile_strictness: { type: "string", enum: ["strict", "balanced", "broad"] },
       selection_profile_unresolved_decision: { type: "string", enum: ["hold", "reject"] },
       selection_profile_llm_review_mode: {

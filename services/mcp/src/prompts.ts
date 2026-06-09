@@ -70,6 +70,10 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `You are starting a SignalOps MCP operator session for objective "${objective}" in ${domain}. ` +
                 `First orient yourself with the guide resources signalops://guide/server-overview and signalops://guide/operator-playbooks, then read the current operator state through signalops://admin/summary and the relevant domain list/read tools. ` +
+                `Choose and report a flowMode from signalops://guide/playbooks/operator-flow-modes before recommending mutations: diagnostic, planned_change, expert_override, source_onboarding, scenario_pack_rollout, or cleanup. ` +
+                `For updates, tuning, or cleanup, also choose advisory changeIntent, cleanupIntent, tuningLayer, and updateRisk from signalops://guide/playbooks/change-intents; mutation responses are not verified effect. ` +
+                `For 0 selected, 0 LLM reviews, Discovery quality_gap, source onboarding, or config writes, follow signalops://guide/playbooks/strict-next-steps before proposing mutations or final claims. ` +
+                `Strict is a default safety rail for clients, not a ban on expert operator action; expert override requires an operatorOverrideReason and still cannot skip final read-back/report verification. ` +
                 `For 0 selected signals or semantic_rejected/no_system_match, read signalops://guide/scenarios/selection-calibration and signalops://guide/reference/selection-evidence-semantics before broadening interests, templates, sources, or LLM settings. For invalid RSS/source failures, use channels.bottlenecks.* and channels.alternatives.plan before creating alternatives. ` +
                 `When interpreting selection dashboards or reports, remember filter rows are not distinct candidates; use filterReasonBreakdown and channels.bottlenecks.summary/list read-back before reporting current source counts or active failures. ` +
                 `Prefer bounded read-before-write workflow, use drafting prompts before complex writes, require explicit confirmation for destructive actions, and always verify resulting state after mutations.`,
@@ -122,7 +126,9 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Plan a SignalOps MCP Discovery vNext session for objective "${objective}". ` +
+                `Read signalops://guide/playbooks/operator-flow-modes, signalops://guide/playbooks/change-intents and signalops://guide/playbooks/strict-next-steps first when the session involves quality_gap, source repair, source onboarding, planned changes, expert override, or final reporting. ` +
                 `Read signalops://guide/scenarios/discovery, signalops://discovery/runs, signalops://discovery/artifacts, signalops://discovery/candidates, signalops://discovery/source-inventory, signalops://discovery/policies, and signalops://discovery/eval-runs first. ` +
+                `Treat passed_with_quality_gap as partial proof only; report candidate count, distinct persisted candidates, probe coverage, warnings, routing decisions, and handoff counts. discovery.brief.preview is diagnostic only and is not a bypass for persisted DiscoveryBrief validation or domain_contamination. ` +
                 `If the operator references a manual/example bundle that worked before, run a funnel-calibration pass first: compare current system interests, LLM templates, channels, bottlenecks, residuals, vNext artifacts, source inventory, and policy state against the bundle's signal families, source capability classes, negative cues, and review policy, then produce a portable funnel spec before starting broad source expansion. ` +
                 `Unless the operator explicitly asks for manual approval, make the plan guarded-automation-first: create a vNext run, compile a DiscoveryBrief, run bounded mega-loop/candidate/probe steps, and rely on SourceUnderstanding, RoutingDecision, active policy, and replay proof where evidence is sufficient. ` +
                 `Before live execution, check runtime credentials/provider readiness; runtime_credentials_missing means preflight/not_applicable for live-provider proof and should not be treated as a maxRunCostCents or budget-tuning problem. ` +
@@ -156,6 +162,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               text:
                 `Calibrate a SignalOps product funnel for objective "${objective}" using reference evidence "${referenceEvidence}" and current gap "${currentGap}". ` +
                 `Read signalops://guide/scenarios/funnel-calibration and call operator.funnel.audit plus operator.funnel.autoplan first when available, then inspect system_interests.list/read, system_interests.compile_status.list, templates.duplicates.audit, llm_templates.list/read, channels.bottlenecks.summary/list, signal_candidates.residuals.summary, content_items.list, discovery.runs.list, discovery.artifacts.list, discovery.source_inventory.list, discovery.policies.list, and operator.report.verify before proposing writes. ` +
+                `Choose flowMode explicitly: planned_change for deliberate improvements, scenario_pack_rollout for domain configuration packs, source_onboarding for source-family changes, and diagnostic only when current read-back proves a failure state. ` +
+                `Choose changeIntent and tuningLayer explicitly: selection_tuning for selected/recall/precision, source_tuning for acquisition/source-family changes, llm_tuning with tuningLayer=llm_provider for provider/model/budget work, and cleanupIntent when the request is cleanup. ` +
                 `Extract reusable patterns from the reference into a portable funnel spec: objective, actor/buyer model, signal families, source capability mix, positive cues, near-miss negative cues, allowed content kinds, strictness/review policy, LLM review scope, provider/adapter requirements, observation budget, and expected read-back proof. ` +
                 `Separate recommendations by layer: source acquisition breadth, source-family balance, source technical health/repair, candidate or gray-zone recovery, final selected-content precision, and reporting/proof. Retain working noisy, low-yield, and negative-control useful channels unless the operator explicitly disables them; recommend labeling, measurement, cadence changes, or repair instead of auto-disabling semantically plausible working sources. ` +
                 `Do not infer current active source count or active failures from reference evidence; read channels.bottlenecks.summary/list and separate current state from historical/transient failures. ` +
@@ -242,7 +250,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Plan a SignalOps MCP system-interest session for topic "${topic}". ` +
-                `Read signalops://guide/scenarios/system-interests and signalops://system-interests first to avoid overlap. ` +
+                `Read signalops://guide/playbooks/operator-flow-modes, signalops://guide/playbooks/change-intents, signalops://guide/scenarios/system-interests and signalops://system-interests first to avoid overlap. Use planned_change with changeIntent=config_update or policy_update for normal improvements, diagnostic only for current failure evidence, and expert_override only with operatorOverrideReason plus final read-back/report verification. ` +
                 `Use system_interest.create to draft bounded signals before writes, prefer archive before delete when history matters, and always verify the resulting lifecycle state after mutation.`,
             },
           },
@@ -291,7 +299,7 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Plan a SignalOps MCP channel session for source "${source}". ` +
-                `Read signalops://guide/scenarios/channels and signalops://channels first to detect overlap or duplication. ` +
+                `Read signalops://guide/playbooks/operator-flow-modes, signalops://guide/playbooks/change-intents, signalops://guide/scenarios/channels and signalops://channels first to detect overlap or duplication. Use source_onboarding with changeIntent=source_tuning for source additions or repair, planned_change with changeIntent=cadence_update for cadence/provider tuning, and cleanup with cleanupIntent for intentional deactivation/archive. ` +
                 `If the channel originated from discovery, preserve the candidate evidence before manual edits. ` +
                 `For malformed, auth-blocked, not acceptable, HTML-instead-of-feed, or gone RSS failures, run channels.bottlenecks.summary/list and channels.alternatives.plan; review website_fallback candidates as needs_probe only, then use channels.bulk_onboard.plan/apply/verify for any chosen website fallback. ` +
                 `Use delete only with explicit confirmation and verify catalog state after create/update/delete actions.`,
@@ -397,9 +405,12 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Prepare a read-first selection tuning plan for objective "${objective}" and residual pattern "${residualBucket}". ` +
-                `Read signalops://guide/scenarios/selection-calibration, signalops://guide/reference/selection-evidence-semantics, signalops://guide/tuning/selection, signal_candidates.residuals.summary, representative signal_candidates.explain rows, and operator.tuning.recommend. ` +
+                `Read signalops://guide/playbooks/operator-flow-modes, signalops://guide/playbooks/change-intents, signalops://guide/playbooks/strict-next-steps, signalops://guide/scenarios/selection-calibration, signalops://guide/reference/selection-evidence-semantics, signalops://guide/tuning/selection, signal_candidates.residuals.summary, representative signal_candidates.explain rows, and operator.tuning.recommend. ` +
+                `Choose flowMode: diagnostic for current 0 selected/residual failures, planned_change for deliberate improvements on a working system, and expert_override only with operatorOverrideReason; planned_change still requires bounded proof but does not need to pretend this is emergency zero-selected diagnosis. ` +
+                `Use changeIntent=selection_tuning and a tuningLayer such as technical_filter, semantic_match, candidate_signal, gray_zone_review, or final_selection. ` +
                 `If the residual is technical_filter_rejected, short_tokens_required, content_kind, time_window, must_have, wrapper, or must_not collapse, diagnose filterReasonBreakdown/filterReasonCounts/top affected criteria before semantic tuning; filter rows are not distinct candidates, short_tokens_required accepts token-like values only, and content-kind mismatch is operator config/source projection evidence. ` +
                 `If the residual is semantic_rejected/no_system_match, do not start with strictness=broad, LLM template rewrites, positive-term expansion, or more RSS; inspect the affected interest/compile status and candidateSignals, then calibrate one interest against one representative candidate using policy evidence and near-miss negatives. ` +
+                `Any system_interests.update proposal must use canonical MCP fields candidate_positive_signals, candidate_negative_signals, selection_profile_llm_review_mode, and allowed_content_kinds; never candidateSignals, selectionProfile, llmReviewMode, or allowedContentKinds. ` +
                 `Do not treat criteriaMatches/interestMatches/filterReasonCounts as selected proof, do not remove wrapper filters or switch broad from row counts alone, and do not infer success from gray-zone collapse without rejected/selected/near-miss samples. ` +
                 `Return suggested guarded MCP writes only as proposals, require MCP read-back, replay bounded docIds chunks, and verify with operator.report.verify plus operator.effect.verify after any applied change.`,
             },
@@ -475,7 +486,8 @@ export const MCP_PROMPTS: readonly McpPromptDefinition[] = [
               type: "text",
               text:
                 `Review ${question}. ` +
-                `Read signalops://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and signal_candidate explains for representative gray-zone holds. ` +
+                `Read signalops://guide/playbooks/change-intents, signalops://guide/diagnostics/llm_budget, llm_budget.summary, operator.system.health scoped to llm_budget and selection, and signal_candidate explains for representative gray-zone holds. ` +
+                `Use changeIntent=llm_tuning and tuningLayer=llm_provider for provider/model/budget readiness work; keep selection path diagnosis separate. ` +
                 `Explain no_pending_gray_zone, hard-filter collapse, and semantic rejection before LLM before calling the provider broken; distinguish llm_review_disabled, budget_exhausted, worker_not_running, provider_credentials_missing, provider_endpoint_error/provider_404, and no reviewable candidate path. ` +
                 `Recommend cost tuning only through operator.tuning.recommend; do not edit templates or interests from one example alone.`,
             },

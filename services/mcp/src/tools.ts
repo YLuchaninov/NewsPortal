@@ -44,6 +44,11 @@ import {
 import {
   OPERATING_DOMAIN_VALUES,
   OPERATING_REPORT_KINDS,
+  OPERATOR_CHANGE_INTENT_VALUES,
+  OPERATOR_CLEANUP_INTENT_VALUES,
+  OPERATOR_FLOW_MODE_VALUES,
+  OPERATOR_TUNING_LAYER_VALUES,
+  OPERATOR_UPDATE_RISK_VALUES,
   buildFunnelAudit,
   buildFunnelAutoplan,
   buildFunnelIterationRecommendation,
@@ -89,6 +94,28 @@ const operatorReportVerifySchema = {
       additionalProperties: false,
     },
     includeSamples: { type: "boolean" },
+    operationMode: {
+      type: "string",
+      enum: [...OPERATOR_FLOW_MODE_VALUES],
+    },
+    operatorOverrideReason: { type: "string" },
+    affectedScope: { type: "array", items: { type: "string" } },
+    changeIntent: {
+      type: "string",
+      enum: [...OPERATOR_CHANGE_INTENT_VALUES],
+    },
+    cleanupIntent: {
+      type: "string",
+      enum: [...OPERATOR_CLEANUP_INTENT_VALUES],
+    },
+    tuningLayer: {
+      type: "string",
+      enum: [...OPERATOR_TUNING_LAYER_VALUES],
+    },
+    updateRisk: {
+      type: "string",
+      enum: [...OPERATOR_UPDATE_RISK_VALUES],
+    },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -151,6 +178,28 @@ const operatorTuningRecommendSchema = {
       additionalProperties: true,
     },
     residualBucket: { type: "string" },
+    operationMode: {
+      type: "string",
+      enum: [...OPERATOR_FLOW_MODE_VALUES],
+    },
+    operatorOverrideReason: { type: "string" },
+    affectedScope: { type: "array", items: { type: "string" } },
+    changeIntent: {
+      type: "string",
+      enum: [...OPERATOR_CHANGE_INTENT_VALUES],
+    },
+    cleanupIntent: {
+      type: "string",
+      enum: [...OPERATOR_CLEANUP_INTENT_VALUES],
+    },
+    tuningLayer: {
+      type: "string",
+      enum: [...OPERATOR_TUNING_LAYER_VALUES],
+    },
+    updateRisk: {
+      type: "string",
+      enum: [...OPERATOR_UPDATE_RISK_VALUES],
+    },
     sinceHours: { type: "number" },
     includeSamples: { type: "boolean" },
   },
@@ -341,9 +390,18 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
       const entityIds = readEntityIds(args);
       const includeSamples = args.includeSamples === true;
       const warnings: string[] = [];
+      const flowContext = {
+        operationMode: args.operationMode,
+        operatorOverrideReason: args.operatorOverrideReason,
+        affectedScope: args.affectedScope,
+        changeIntent: args.changeIntent,
+        cleanupIntent: args.cleanupIntent,
+        tuningLayer: args.tuningLayer,
+        updateRisk: args.updateRisk,
+      };
 
       if ((OPERATING_REPORT_KINDS as readonly string[]).includes(reportKind) || reportKind === "selection") {
-        return buildOperationalReportVerification(context, reportKind, entityIds, includeSamples);
+        return buildOperationalReportVerification(context, reportKind, entityIds, includeSamples, flowContext);
       }
 
       if (reportKind === "channel_onboarding") {
@@ -584,6 +642,52 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         return {
           reportKind,
           verifiedAt: new Date().toISOString(),
+          flowMode: args.operationMode ?? "cleanup",
+          changeIntent: args.changeIntent ?? null,
+          cleanupIntent: args.cleanupIntent ?? null,
+          tuningLayer: args.tuningLayer ?? null,
+          updateRisk: args.updateRisk ?? null,
+          proofStatus:
+            args.operationMode === "expert_override" && !readOptionalString(args.operatorOverrideReason)
+              ? "blocked"
+              : "partial",
+          missingProof:
+            args.operationMode === "expert_override" && !readOptionalString(args.operatorOverrideReason)
+              ? ["operatorOverrideReason is required before treating expert override cleanup as allowed."]
+              : ["Cleanup proof requires inventory, lifecycle read-back and cleanup report verification."],
+          operatorOverrideNotes:
+            args.operationMode === "expert_override"
+              ? [
+                  readOptionalString(args.operatorOverrideReason)
+                    ? `Expert override requested: ${readOptionalString(args.operatorOverrideReason)}.`
+                    : "Expert override is blocked until operatorOverrideReason is supplied.",
+                  "Override cannot skip final MCP read-back or cleanup report verification.",
+                ]
+              : ["Use expert_override only when an experienced operator explicitly chooses to deviate from cleanup flow."],
+          intentSequence: [
+            "read inventory for the affected entities",
+            "classify retained evidence, reversible archive/deactivate actions, and destructive actions",
+            "archive or deactivate before deleting whenever lineage matters",
+            "use destructive tools only with existing scopes and confirm=true",
+            "read back final lifecycle state and run operator.report.verify reportKind=cleanup",
+          ],
+          intentGuardrails: [
+            "Do not delete retained audit evidence, protected system objects, or unknown artifacts from a cleanup label alone.",
+            "Cleanup proof is lifecycle-state proof, not selection or source-quality proof.",
+          ],
+          intentProofRequired: [
+            "admin.summary.get or relevant list/read inventory",
+            "read-back after archive/deactivate/delete/revoke",
+            "operator.report.verify reportKind=cleanup",
+          ],
+          intentBlockedUntil: [
+            "Blocked until inventory, chosen reversible/destructive action list, read-back and cleanup report verification exist.",
+          ],
+          intentWarnings: [
+            args.cleanupIntent
+              ? `cleanupIntent=${String(args.cleanupIntent)} is advisory and does not bypass destructive confirmation.`
+              : "cleanupIntent is optional, but clients should name it before broad cleanup recommendations.",
+          ],
           staleReportNotes: warnings,
           counts: counts.rows[0] ?? {},
           protectedObjects: protectedObjects.rows,

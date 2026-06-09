@@ -2,48 +2,245 @@
 
 ## Active Item
 
-- id: `SIGNALOPS-MCP-SELECTION-DIAGNOSTICS-HARDENING-1`
+- id: `SIGNALOPS-MCP-CHANGE-INTENTS-1`
 - lifecycle: `normal`
-- route: `bugfix/capability`
-- route phase: `mcp-selection-counter-semantics-hardening`
-- route-specific next step: implement MCP/control-plane diagnostics and guidance so clients distinguish filter result rows from distinct candidates, avoid stale report/channel conclusions, and use bounded proof before tuning.
-- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
+- route: `capability` with `docs-operator/bugfix` scope for MCP/control-plane advisory UX hardening.
+- route phase: `operator-flow-change-intents`
+- route-specific next step: implement advisory change/cleanup/tuning intent fields on MCP recommendations and report verification, update flow guidance/prompts, and add unit proof.
+- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, schema validation coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
 - status: `done`
 - risk: `medium`
-- approval: approved by operator request on 2026-06-06 to implement the accepted MCP Selection Diagnostics Hardening Plan.
-- planning required: yes, because this changes MCP/control-plane diagnostics, report verification, operator recommendations and client-facing guidance.
+- approval: approved by operator request on 2026-06-07 to implement the MCP Change Intents For Operator Flow Modes plan.
+- planning required: yes, because this changes MCP/control-plane guidance, public advisory schemas, operating-intelligence outputs and client-facing prompts.
 - planning source: `tool-native`
 - planning status: `accepted-for-this-item`
-- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection pipeline boundaries; `.aidp/engineering.md` observable diagnostics, configuration and no hidden domain logic rules; `.aidp/verification.md` MCP/control-plane proof expectations.
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection/discovery boundaries; `.aidp/engineering.md` observable diagnostics, MCP trust boundary and no hidden domain logic rules; `.aidp/verification.md` and `.aidp/contracts/mcp-control-plane.md` MCP proof expectations.
 - cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
 
 ## Scope
 
-Harden MCP selection diagnostics so external clients do not confuse filter result rows with distinct candidates, do not treat hard-filter counters as selected proof, and do not recommend global generic-filter removal or broadening before representative evidence.
+Add advisory intent/subtype fields under existing MCP flow modes so clients can distinguish system updates, config updates, tuning and cleanup without adding new top-level flow modes or domain-specific runtime logic.
 
 In scope:
 
-- MCP/control-plane selection dashboard and report verification read models;
-- operator tuning recommendations for technical-filter residuals;
-- MCP resources, prompts and server instructions;
-- unit tests for MCP resources/prompts/dashboard/report/recommendations.
+- optional advisory fields on `operator.tuning.recommend` and `operator.report.verify`: `changeIntent`, `cleanupIntent`, `tuningLayer`, `updateRisk`;
+- intent-aware recommendation/report output fields: `intentSequence`, `intentGuardrails`, `intentProofRequired`, `intentBlockedUntil`, `intentWarnings`;
+- `signalops://guide/playbooks/change-intents` or equivalent flow-mode guidance;
+- server initialize instructions and prompts for `flowMode` plus relevant intent;
+- unit tests for resources, prompts, schemas, recommendations and reports.
+
+Out of scope:
+
+- new top-level flow modes;
+- selection/runtime algorithm changes;
+- Discovery/fetcher/LLM/source runtime algorithm changes;
+- domain-specific RFP, outsourcing or procurement runtime defaults;
+- automatic source/channel/config writes;
+- requiring intent fields on existing write tools.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `packages/contracts/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Intent fields are advisory and optional.
+- Existing write tools remain compatible and do not require intent.
+- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: capability and MCP/control-plane proof obligations.
+- `.aidp/blueprint.md`: MCP/control-plane, operator/admin and selection/discovery boundaries.
+- `.aidp/engineering.md`: observable diagnostics and no hidden domain logic.
+- `.aidp/verification.md`: MCP/control-plane proof and static guard expectations.
+- `.aidp/contracts/mcp-control-plane.md`: schema validation, report/context and MCP proof rules.
+
+## Implementation Expectations
+
+- Keep existing six `operationMode` values unchanged.
+- Add domain-neutral intent taxonomy for change/update/tuning/cleanup scenarios.
+- Make recommendations and report verification echo intent fields and return intent-specific proof requirements.
+- Keep source acquisition proof separate from selection proof and mutation responses separate from verified effect.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane unit test;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-07.
+- MCP resources/prompts/server instructions:
+  - added `signalops://guide/playbooks/change-intents`;
+  - extended `signalops://guide/playbooks/operator-flow-modes` with intent taxonomy and intent-aware recommendation/report contracts;
+  - clarified `strict-next-steps` that diagnostic flow can carry advisory intent/tuningLayer while remaining diagnostic;
+  - updated initialize instructions and session prompts to require/report `flowMode` plus relevant `changeIntent`, `cleanupIntent`, `tuningLayer` and `updateRisk` before mutation recommendations.
+- MCP recommendations/reports:
+  - `operator.tuning.recommend` and `operator.report.verify` accept advisory `changeIntent`, `cleanupIntent`, `tuningLayer` and `updateRisk`;
+  - recommendations and supported report verification outputs now expose `intentSequence`, `intentGuardrails`, `intentProofRequired`, `intentBlockedUntil` and `intentWarnings`;
+  - cleanup report verification exposes cleanup intent proof guardrails without changing destructive tool requirements.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (51/51);
+  - `pnpm unit_tests:ts` (445/445);
+  - `pnpm lint`;
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-MCP-OPERATOR-FLOW-MODES-1`
+- lifecycle: `normal`
+- route: `capability` with `bugfix/docs-operator` scope for MCP/control-plane UX hardening.
+- route phase: `operator-flow-modes-and-proof-playbooks`
+- route-specific next step: implement MCP operator flow modes, advisory proof contracts, prompt/resource guidance, operating-intelligence report/recommendation fields, and unit proof.
+- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-07 to implement the MCP Operator Flow Modes And Proof Playbooks plan.
+- planning required: yes, because this changes MCP/control-plane guidance, public advisory schemas, operating-intelligence outputs and client-facing prompts.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection/discovery boundaries; `.aidp/engineering.md` observable diagnostics, MCP trust boundary and no hidden domain logic rules; `.aidp/verification.md` and `.aidp/contracts/mcp-control-plane.md` MCP proof expectations.
+- cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
+
+## Scope
+
+Add explicit MCP operator flow modes so strict diagnostic sequencing remains the default for autonomous MCP clients while planned operator changes and expert overrides remain possible with read-back/proof.
+
+In scope:
+
+- `signalops://guide/playbooks/operator-flow-modes` MCP resource;
+- strict-next-steps clarification for diagnostic, planned-change and expert-override modes;
+- server initialize instructions and prompts for flowMode selection;
+- `operator.tuning.recommend` advisory input fields and flow/proof outputs;
+- `operator.report.verify` flow/proof outputs for relevant report kinds;
+- unit tests for resources, prompts, recommendations and report verification.
+
+Out of scope:
+
+- selection/runtime algorithm changes;
+- Discovery/fetcher/LLM/source runtime algorithm changes;
+- domain-specific RFP, outsourcing or procurement runtime defaults;
+- automatic source/channel/config writes;
+- mode-dependent requirements on existing write tools.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `packages/contracts/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Advisory + Proof means clients are guided and reports block strong claims without proof, but normal write schemas are not made mode-dependent in this stage.
+- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: capability and MCP/control-plane proof obligations.
+- `.aidp/blueprint.md`: MCP/control-plane, operator/admin and selection/discovery boundaries.
+- `.aidp/engineering.md`: observable diagnostics and no hidden domain logic.
+- `.aidp/verification.md`: MCP/control-plane proof and static guard expectations.
+- `.aidp/contracts/mcp-control-plane.md`: schema validation, report/context and MCP proof rules.
+
+## Implementation Expectations
+
+- Add six domain-neutral flow modes: diagnostic, planned_change, expert_override, source_onboarding, scenario_pack_rollout and cleanup.
+- Keep strict diagnostic guidance mandatory for default/autonomous MCP recommendations in diagnostic states.
+- Allow expert operator override only with explicit reason, affected scope, read-back target, verification target and rollback/previous-state hint.
+- Make report verification distinguish sufficient/partial/blocked proof without mutating runtime state.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane unit test;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-07.
+- MCP resources/prompts/server instructions:
+  - added `signalops://guide/playbooks/operator-flow-modes` with diagnostic, planned_change, expert_override, source_onboarding, scenario_pack_rollout and cleanup flows;
+  - clarified `signalops://guide/playbooks/strict-next-steps` as mandatory for autonomous/default diagnostic recommendations but not a ban on expert operator action;
+  - updated initialize instructions and operator/session prompts to require/report `flowMode` before mutation recommendations.
+- MCP recommendations/reports:
+  - `operator.tuning.recommend` accepts advisory `operationMode`, `operatorOverrideReason` and `affectedScope`;
+  - `operator.tuning.recommend` returns `flowMode`, `flowSequence`, `operator_override_allowed`, `operator_override_requires`, `proofRequired`, `proofStatus`, `missingProof` and override notes while preserving `must_do_next`, `allowed_after`, `do_not_do_yet` and `blocked_until`;
+  - `operator.report.verify` surfaces flow/proof fields for selection, LLM budget, source bottleneck and hold-quality reports.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (48/48);
+  - `pnpm unit_tests:ts` (442/442);
+  - `pnpm lint`;
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-MCP-STRICT-NEXT-STEPS-1`
+- lifecycle: `normal`
+- route: `bugfix/capability`
+- route phase: `strict-next-step-playbook-and-readback-hardening`
+- route-specific next step: implement strict MCP next-step playbook, recommendation levels, system-interest write/read-back verification, canonical write-field guidance, and Discovery/selection audit guardrails.
+- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-07 to implement the MCP Strict Next-Step Playbook For Selection/Discovery Audits.
+- planning required: yes, because this changes MCP/control-plane guidance, recommendation contracts, write validation/read-back UX, report verification and client-facing prompts.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin, Discovery and selection pipeline boundaries; `.aidp/engineering.md` observable diagnostics, MCP trust boundary and no hidden domain logic rules; `.aidp/verification.md` and `.aidp/contracts/mcp-control-plane.md` MCP proof expectations.
+- cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
+
+## Scope
+
+Harden MCP guidance and control-plane read/write UX so external clients follow a strict read-back -> classify -> bounded write -> bounded replay -> verify sequence for selection, LLM review and Discovery/source audits.
+
+In scope:
+
+- MCP strict next-step playbook resource;
+- operator tuning recommendation strict levels (`must_do_next`, `allowed_after`, `do_not_do_yet`, `blocked_until`);
+- system-interest create/update validation and read-back verification;
+- MCP resources, prompts, report verification and server instructions;
+- unit tests for MCP resources/prompts/recommendations/write UX.
 
 Out of scope:
 
 - selection algorithm/runtime behavior changes;
 - domain-specific RFP, outsourcing or procurement runtime defaults;
-- automatic source/channel writes or source deactivation;
+- automatic source/channel writes, trust decisions or source deactivation;
 - changing external provider credentials or live provider state.
 
 Allowed paths:
 
 - `.aidp/**`
 - `services/mcp/**`
+- `packages/contracts/**`
+- `packages/control-plane/**`
 - `tests/unit/ts/**`
 
 Protected boundaries:
 
-- `anchored-summary.md` and `session-report-5.md` are evidence only, not canonical product truth.
+- `outsourcing_client_signals_audit.md` is evidence only, not canonical product truth.
 - Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
 
 ## Context Manifest
@@ -53,13 +250,13 @@ Protected boundaries:
 - `.aidp/blueprint.md`: MCP/control-plane, operator/admin and selection pipeline boundaries.
 - `.aidp/engineering.md`: observable diagnostics and no hidden domain logic.
 - `.aidp/verification.md`: MCP/control-plane proof and static guard expectations.
-- `docs/mcp_test/anchored-summary.md` and `docs/mcp_test/session-report-5.md`: evidence of external-client misinterpretation, not runtime canon.
+- `docs/mcp_test/outsourcing_client_signals_audit.md`: evidence of external-client misinterpretation, not runtime canon.
 
 ## Implementation Expectations
 
-- Preserve existing `filterReasonCounts` as row-count diagnostics while adding distinct-candidate breakdown.
-- Add counter semantics and staleness/read-back guidance to selection dashboard and selection report verification.
-- Make tuning recommendations sample-first and bounded-replay-first for wrapper, time-window, must-not and other technical-filter residuals.
+- Add one prescriptive MCP playbook for strict next steps across selection, LLM review absence and Discovery/source repair.
+- Ensure system-interest writes reject confusing camelCase/nested fields and return persisted profile/candidate-signal read-back.
+- Make tuning recommendations and report verification expose strict next-step levels and block premature mass tuning.
 - Keep guidance domain-neutral and avoid RFP/outsourcing runtime logic.
 
 ## Proof Gates
@@ -75,17 +272,42 @@ Required gates:
 
 ## Current Proof Status
 
-- Implemented and locally proofed on 2026-06-06.
-- MCP/control-plane behavior:
-  - `operator.selection.dashboard` preserves `filterReasonCounts` as backward-compatible row counts and adds `filterReasonBreakdown` with `filterRows`, `distinctCandidateCount`, `affectedCriteriaCount` and top channels.
-  - Dashboard counts now expose processed/pending candidate counts, criteria count, expected result rows and materialized result rows.
-  - Dashboard/report diagnostics include `counterSemantics` and `filterRowsNotCandidateRows` so clients do not mistake result rows for unique candidates.
-  - `operator.report.verify reportKind=selection` returns the same breakdown, staleness fields, pending rows and proof warnings.
-  - `operator.tuning.recommend` for technical-filter residuals now requires distinct-candidate breakdown, 10-30 representative rejected samples, bounded repair and docId replay; it explicitly avoids global `wrapper_directory_noise` removal or `strictness=broad` as a first response.
-- MCP guidance:
-  - server instructions, selection evidence semantics, selection calibration and selection tuning prompts now explain row counters vs distinct candidates.
-  - guidance separates current source-health read-back from historical report/evidence and points clients to `channels.bottlenecks.summary/list`.
-  - domain-specific evidence stays out of runtime guidance and defaults.
+- Implemented and locally proofed on 2026-06-07.
+- MCP resources/prompts/server instructions:
+  - added `signalops://guide/playbooks/strict-next-steps` with prescriptive selection, LLM-review-absent and Discovery/source-repair sequences;
+  - linked strict next-step guidance from server instructions, operator session prompt, selection tuning prompt and Discovery session prompt;
+  - guidance states `discovery.brief.preview` is diagnostic only and not a bypass for `domain_contamination` or persisted DiscoveryBrief validation.
+- MCP recommendations/reports:
+  - `operator.tuning.recommend` now returns `must_do_next`, `allowed_after`, `do_not_do_yet` and `blocked_until`;
+  - selection and LLM-budget report verification expose strict next-step fields and proof warnings;
+  - suggested system-interest write examples use canonical fields `candidate_positive_signals`, `candidate_negative_signals`, `selection_profile_llm_review_mode` and `allowed_content_kinds`.
+- System-interest write UX:
+  - `system_interests.create/update` reject confusing camelCase/nested aliases such as `candidateSignals`, `selectionProfile`, `allowedContentKinds` and `llmReviewMode` with MCP `-32602` plus canonical-field hints;
+  - successful system-interest writes return `readBackVerification` with persisted profile, candidate signal group counts, allowed content kinds, criterion/profile ids, compile status and warnings when requested fields differ from persisted state.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (46/46);
+  - `pnpm unit_tests:ts` (440/440);
+  - `pnpm lint`;
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Previous Completed Item
+
+- id: `SIGNALOPS-MCP-SELECTION-DIAGNOSTICS-HARDENING-1`
+- lifecycle: `normal`
+- route: `bugfix/capability`
+- route phase: `mcp-selection-counter-semantics-hardening`
+- route-specific next step: implemented MCP/control-plane diagnostics and guidance so clients distinguish filter result rows from distinct candidates, avoid stale report/channel conclusions, and use bounded proof before tuning.
+- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-06 to implement the accepted MCP Selection Diagnostics Hardening Plan.
+- planning required: yes, because this changes MCP/control-plane diagnostics, report verification, operator recommendations and client-facing guidance.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection pipeline boundaries; `.aidp/engineering.md` observable diagnostics, configuration and no hidden domain logic rules; `.aidp/verification.md` MCP/control-plane proof expectations.
+- cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
 - Proof passed:
   - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (44/44);
   - `pnpm unit_tests:ts` (438/438);

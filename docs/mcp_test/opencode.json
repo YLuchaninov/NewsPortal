@@ -6,7 +6,7 @@
       "url": "http://127.0.0.1:8080/mcp",
       "enabled": true,
       "headers": {
-        "Authorization": "Bearer npmcp_100cbb5e758e4792b7db5e933348c705.qVLia4FT-3GKNZfpAAWSjPCEzbMHg_Ak"
+        "Authorization": "Bearer npmcp_32fd5d0baa524b35bab368860594b0e1.kiAKDtnototga91YjvfHC_8vXaTHwTz1"
       },
       "timeout": 120000
     }
