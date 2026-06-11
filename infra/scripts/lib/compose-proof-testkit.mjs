@@ -32,6 +32,7 @@ export {
 } from "./mcp-http-testkit.mjs";
 
 import {
+  nginxBaseUrl,
   runComposeCapture,
   waitFor as waitForBase,
 } from "./mcp-http-testkit.mjs";
@@ -54,6 +55,13 @@ export function readCookieValue(cookie) {
     name: cookie.slice(0, separatorIndex),
     value: cookie.slice(separatorIndex + 1),
   };
+}
+
+export function publicApiUrl(pathname) {
+  const normalizedPathname = String(pathname ?? "").startsWith("/")
+    ? String(pathname)
+    : `/${String(pathname ?? "")}`;
+  return `${nginxBaseUrl}/api${normalizedPathname}`;
 }
 
 export function sqlLiteral(value) {

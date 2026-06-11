@@ -306,6 +306,29 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
   const selectionProfileSummary = normalizeMaybeText(
     job.selection_profile_summary
   );
+  const selectionReplayRecord = asRecord(job.selection_replay ?? job.selectionReplay);
+  const selectionReplay =
+    Object.keys(selectionReplayRecord).length > 0
+      ? {
+          selectionReplayTargetCount: asInt(
+            selectionReplayRecord.selectionReplayTargetCount,
+            0
+          ),
+          selectionReplayedCount: asInt(selectionReplayRecord.selectionReplayedCount, 0),
+          enrichmentTargetCount: asInt(selectionReplayRecord.enrichmentTargetCount, 0),
+          enrichmentProcessedCount: asInt(
+            selectionReplayRecord.enrichmentProcessedCount,
+            0
+          ),
+          skippedSelectionDueToEnrichmentState: asInt(
+            selectionReplayRecord.skippedSelectionDueToEnrichmentState,
+            0
+          ),
+          selectionReplayComplete:
+            selectionReplayRecord.selectionReplayComplete === true,
+          summary: normalizeMaybeText(selectionReplayRecord.summary),
+        }
+      : null;
   const createdAt =
     normalizeMaybeText(job.created_at) ?? normalizeMaybeText(job.requested_at);
   const selectionProfileSnapshotRecord = asRecord(job.selection_profile_snapshot);
@@ -338,6 +361,7 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
     progressLabel: progress.progressLabel,
     selectionProfileSnapshot,
     selectionProfileSummary,
+    selectionReplay,
     revision: buildAdminLiveRevision([
       job.reindex_job_id,
       job.status,
@@ -346,6 +370,7 @@ function mapReindexJob(job: JsonRecord): AdminReindexJobSnapshot {
       progress.totalSignalCandidates,
       selectionProfileSnapshot,
       selectionProfileSummary,
+      selectionReplay,
       job.updated_at,
       job.created_at,
       job.requested_at,

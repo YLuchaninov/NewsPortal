@@ -31,6 +31,10 @@ from services.workers.app.task_engine.pipeline_maintenance_plugins import (
     InterestCompilePlugin,
     ReindexPlugin,
 )
+from services.workers.app.task_engine.pipeline_legacy import (
+    DIRECT_PROCESSOR_HANDLERS,
+    load_legacy_handler,
+)
 from services.workers.app.task_engine.plugins import (
     TaskPlugin,
     validate_plugin_output_contract,
@@ -147,6 +151,12 @@ class CorePipelinePluginRegistryTests(unittest.TestCase):
 
 
 class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
+    def test_processor_handler_lookup_uses_only_explicit_direct_registry(self) -> None:
+        self.assertIn("process_embed", DIRECT_PROCESSOR_HANDLERS)
+
+        with self.assertRaisesRegex(LookupError, "was not found in the direct processor registry"):
+            load_legacy_handler("process_missing_from_registry")
+
     async def test_embed_plugin_executes_legacy_handler_with_thin_payload(self) -> None:
         captured: dict[str, Any] = {}
 

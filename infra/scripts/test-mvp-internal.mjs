@@ -7,6 +7,7 @@ import {
   extractCookie,
   fetchJson,
   postForm,
+  publicApiUrl,
   queryPostgres,
   queryPostgresInt,
   readAllowlistEntries,
@@ -1621,7 +1622,7 @@ async function main() {
     });
     log("Verifying the system-selected collection keeps source urls while the web UI routes through internal content detail pages.");
     const publicCollection = await fetchJson(
-      "http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100"
+      publicApiUrl("/collections/system-selected?page=1&pageSize=100")
     );
     const publicCollectionItem = Array.isArray(publicCollection?.items)
       ? publicCollection.items.find((item) => String(item?.content_item_id ?? "") === editorialContentItemId)
@@ -2002,7 +2003,7 @@ async function main() {
     );
     await waitFor(
       "blocked signal_candidate visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/maintenance/signal-candidates/${docId}`),
+      async () => fetchJson(publicApiUrl(`/maintenance/signal-candidates/${docId}`)),
       (payload) => payload?.visibility_state === "blocked"
     );
 
@@ -2019,7 +2020,7 @@ async function main() {
     );
     await waitFor(
       "unblocked signal_candidate visibility",
-      async () => fetchJson(`http://127.0.0.1:8000/maintenance/signal-candidates/${docId}`),
+      async () => fetchJson(publicApiUrl(`/maintenance/signal-candidates/${docId}`)),
       (payload) => payload?.visibility_state === "visible"
     );
 

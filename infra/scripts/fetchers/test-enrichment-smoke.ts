@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
 import { loadFetchersConfig } from "../../../services/fetchers/src/config";
 import { createPgPool } from "../../../services/fetchers/src/db";
 import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
+import { containerReachableFixtureUrl } from "./enrichment-smoke-fixture";
 
 interface WaitOptions {
   timeoutMs: number;
@@ -31,11 +35,76 @@ const PROCESSING_STATE_ORDER: Record<string, number> = {
   matched: 5,
   notified: 6,
 };
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function mergeCsvValues(...values: Array<string | undefined>): string {
+  return [
+    ...new Set(
+      values
+        .flatMap((value) => String(value ?? "").split(","))
+        .map((value) => value.trim())
+        .filter(Boolean)
+    ),
+  ].join(",");
+}
+
+async function ensureComposeFetchersFixtureAllowlist(): Promise<void> {
+  if (
+    String(process.env.POSTGRES_HOST ?? "").trim() !== "127.0.0.1" ||
+    process.env.SIGNALOPS_ENRICHMENT_SMOKE_SKIP_COMPOSE_ALLOWLIST === "1"
+  ) {
+    return;
+  }
+
+  const allowlist = mergeCsvValues(
+    process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST,
+    "host.docker.internal"
+  );
+  const composeArgs = [
+    "compose",
+    "--env-file",
+    ".env.dev",
+    "-f",
+    "infra/docker/compose.yml",
+    "-f",
+    "infra/docker/compose.dev.yml",
+  ];
+  const recreate = spawnSync(
+    "docker",
+    [...composeArgs, "up", "-d", "--no-deps", "--force-recreate", "fetchers"],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST: allowlist,
+      },
+      stdio: "inherit",
+    }
+  );
+  if (recreate.status !== 0) {
+    throw new Error("Failed to recreate fetchers with enrichment smoke fixture allowlist.");
+  }
+
+  await waitForCondition(
+    async () => {
+      const health = spawnSync(
+        "docker",
+        [...composeArgs, "exec", "-T", "fetchers", "wget", "-qO-", "http://127.0.0.1:4100/health"],
+        { cwd: REPO_ROOT, encoding: "utf8" }
+      );
+      return health.status === 0 && health.stdout.includes("\"status\":\"ok\"");
+    },
+    {
+      timeoutMs: 30000,
+      pollIntervalMs: 1000,
+    }
+  );
 }
 
 async function waitForCondition(
@@ -91,14 +160,15 @@ async function startFixtureServer(runId: string): Promise<{
   const server = createServer((request: IncomingMessage, response: ServerResponse): void => {
     const host = request.headers.host ?? "127.0.0.1";
     const baseUrl = `http://${host}`;
+    const containerBaseUrl = containerReachableFixtureUrl(baseUrl);
     const shortTitle = `Enrichment short signal_candidate ${runId}`;
     const longTitle = `Enrichment long signal_candidate ${runId}`;
     const failedTitle = `Enrichment failing signal_candidate ${runId}`;
-    const shortSignalCandidateUrl = `${baseUrl}/signal-candidates/short.html`;
-    const longSignalCandidateUrl = `${baseUrl}/signal-candidates/long.html`;
-    const failedSignalCandidateUrl = `${baseUrl}/signal-candidates/failure.html`;
-    const shortImageUrl = `${baseUrl}/media/short.jpg`;
-    const failureImageUrl = `${baseUrl}/media/failure.jpg`;
+    const shortSignalCandidateUrl = `${containerBaseUrl}/signal-candidates/short.html`;
+    const longSignalCandidateUrl = `${containerBaseUrl}/signal-candidates/long.html`;
+    const failedSignalCandidateUrl = `${containerBaseUrl}/signal-candidates/failure.html`;
+    const shortImageUrl = `${containerBaseUrl}/media/short.jpg`;
+    const failureImageUrl = `${containerBaseUrl}/media/failure.jpg`;
 
     if (request.url === "/feed.xml") {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -181,7 +251,7 @@ async function startFixtureServer(runId: string): Promise<{
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.listen(0, "127.0.0.1", () => resolve());
+    server.listen(0, "0.0.0.0", () => resolve());
     server.on("error", reject);
   });
 
@@ -361,6 +431,7 @@ async function assertEnrichmentRows(pool: Pool, channelId: string, runId: string
 }
 
 async function main(): Promise<void> {
+  await ensureComposeFetchersFixtureAllowlist();
   const config = loadFetchersConfig();
   const pool = createPgPool(config);
   const service = new RssFetcherService(pool, config);

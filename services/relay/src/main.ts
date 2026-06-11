@@ -17,7 +17,6 @@ const redis = createRedisConnection(config);
 const relay = new OutboxRelay(pool, redis, config.outboxBatchSize, {
   queueMap: buildOutboxEventQueueMap(),
   sequenceRouting: {
-    enabled: config.enableSequenceRouting,
     repository: new PostgresSequenceRoutingRepository()
   }
 });
@@ -37,7 +36,6 @@ app.get("/health", async () => {
     database: "ok",
     redis: "ok",
     isPolling: String(relayState.isPolling),
-    sequenceRoutingEnabled: String(config.enableSequenceRouting),
     publishedCount: String(relayState.publishedCount),
     failedCount: String(relayState.failedCount),
     lastPollCompletedAt: relayState.lastPollCompletedAt ?? "never"

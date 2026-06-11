@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from inspect import Parameter, signature
 from pathlib import Path
 from unittest.mock import patch
 
@@ -357,6 +358,55 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertIn("/maintenance/discovery/rollback/apply", paths)
         self.assertNotIn("/maintenance/discovery/vnext/artifacts", paths)
         self.assertNotIn("/maintenance/discovery/targets", paths)
+
+    def test_brief_preview_facade_preserves_route_body_signature(self) -> None:
+        app = FastAPI()
+        register_discovery_routes(app, {})
+        route = next(route for route in app.routes if route.path == "/maintenance/discovery/brief/preview")
+
+        for endpoint in (discovery_vnext_api.preview_brief, route.endpoint):
+            params = list(signature(endpoint).parameters.values())
+            self.assertEqual([param.name for param in params], ["payload"])
+            self.assertEqual(
+                getattr(params[0].annotation, "__name__", params[0].annotation),
+                "DiscoveryVNextBriefPreviewPayload",
+            )
+            self.assertNotEqual(params[0].kind, Parameter.VAR_POSITIONAL)
+            self.assertNotEqual(params[0].kind, Parameter.VAR_KEYWORD)
+
+    def test_discovery_vnext_api_facade_exposes_core_contract_symbols(self) -> None:
+        expected_symbols = [
+            "DiscoveryVNextBriefPreviewPayload",
+            "DiscoveryVNextCandidateCreatePayload",
+            "DiscoveryVNextProbeExecutePayload",
+            "DiscoveryVNextRoutingApplyPayload",
+            "DiscoveryVNextProbationHandoffPayload",
+            "preview_brief",
+            "list_vnext_records",
+            "get_vnext_record",
+            "source_identity_key",
+            "apply_probation_handoff_from_payload",
+            "execute_full_probe_understand_route",
+        ]
+
+        for symbol in expected_symbols:
+            self.assertTrue(hasattr(discovery_vnext_api, symbol), symbol)
+
+        payload = discovery_vnext_api.DiscoveryVNextBriefPreviewPayload.model_validate(
+            {
+                "interestId": "interest-1",
+                "positiveTexts": "official update",
+                "candidatePositiveSignals": ["item evidence"],
+            }
+        )
+        dumped = payload.model_dump(by_alias=True)
+        self.assertEqual(dumped["interestId"], "interest-1")
+        self.assertEqual(payload.positive_texts, ["official update"])
+        self.assertEqual(payload.candidate_positive_signals, ["item evidence"])
+        with self.assertRaises(Exception):
+            discovery_vnext_api.DiscoveryVNextBriefPreviewPayload.model_validate(
+                {"name": "Portable source monitoring", "unexpected": True}
+            )
 
     def test_probe_plan_defaults_to_fetchers_boundary_and_no_browser(self) -> None:
         plan = build_probe_plan(
@@ -1242,6 +1292,48 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "skipped")
         query_one_mock.assert_not_called()
+
+    def test_api_source_inventory_confirm_scope_returns_readable_confirmation(self) -> None:
+        payload = discovery_vnext_api.DiscoveryVNextSourceInventoryActionPayload(
+            sourceInventoryId="inventory-1",
+            action="confirm_scope",
+            reason="operator verified source scope",
+            createdBy="unit-test",
+        )
+
+        def fake_query_one(sql, params):  # type: ignore[no-untyped-def]
+            normalized = " ".join(str(sql).split()).lower()
+            if normalized.startswith("update source_inventory"):
+                self.assertEqual(params[0], "confirmed")
+                return {
+                    "source_inventory_id": "inventory-1",
+                    "scope_confirmation_json": {
+                        "scopeStatus": "confirmed",
+                        "reason": "operator verified source scope",
+                        "createdBy": "unit-test",
+                    },
+                    "current_state": "inventory",
+                }
+            raise AssertionError(f"Unexpected SQL: {sql}")
+
+        with (
+            patch.object(discovery_vnext_api, "query_one", side_effect=fake_query_one),
+            patch.object(
+                discovery_vnext_api,
+                "create_source_observation",
+                return_value={
+                    "source_inventory_id": "inventory-1",
+                    "observation_kind": "scope_resolution",
+                },
+            ),
+        ):
+            result = discovery_vnext_api.apply_source_inventory_action(payload)
+
+        self.assertFalse(result["destructiveConfirmationRequired"])
+        self.assertEqual(
+            result["sourceInventory"]["scope_confirmation_json"]["scopeStatus"],
+            "confirmed",
+        )
 
     def test_mega_loop_preview_generates_valid_diverse_hypothesis_batches(self) -> None:
         brief = compile_discovery_brief(

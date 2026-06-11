@@ -1,6 +1,6 @@
 # Nonstandard Technical Decisions
 
-Last researched against repository reality: 2026-06-04.
+Last researched against repository reality: 2026-06-10.
 
 This document explains the SignalOps decisions that are more opinionated than a default CRUD/news app. It is a research and orientation document, not a runtime contract. For agent/runtime truth use `.aidp/*`; for implementation truth use code, migrations and tests.
 
@@ -184,7 +184,27 @@ The framing is intentionally both technical and business-oriented:
 
 **Comparable approaches:** workflow/connector systems often separate acquisition/normalization from downstream routing or targeting. The closest external analogy here is the ETL pattern of staging normalized source truth before destination-specific use, as seen in Singer taps/targets and Airbyte source/destination separation.
 
-## 13. Broad Discovery Does Not Force Selected Count
+## 13. Signal Visibility Lanes Instead Of One Global Keyword Gate
+
+**Local decision:** system-interest tuning now distinguishes three signal visibility types: `explicit_marker`, `hidden_intent` and `mixed`. The system also models evidence lanes such as explicit-marker lanes, hidden-intent lanes, source-context lanes and negative-control lanes. These are advisory/control-plane concepts in the current stage; domain-specific meaning still lives in operator/admin/MCP configuration, not in runtime hardcode.
+
+**Technical uniqueness:** the selection control plane treats lexical gates as pre-semantic hard filters, even when `must_have_terms` uses any-of semantics. Hidden-intent signals default to empty `must_have_terms` and `short_tokens_required`; explicit-marker lanes may use hard gates only when bounded samples prove the marker is mandatory; mixed signals must be split into lane-like interests/config entries so hidden lanes do not inherit explicit-marker gates.
+
+**Business meaning:** this lets the same system handle obvious signals, hidden operational intent and mixed evidence without overfitting the core to one market. Operators can pursue rare/indirect signals without killing recall through keyword piles, while still using strict markers where those markers are genuinely mandatory.
+
+**Implemented around:** `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`, `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools/templates-tools.ts`, `services/api/app/content_selection_read_model.py`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`.
+
+**Key mechanics:**
+
+- `signalVisibility` can be `explicit_marker`, `hidden_intent`, `mixed` or `unknown`.
+- `must_have_terms` is any-of at runtime, but still a hard pre-semantic gate.
+- `short_tokens_required` is an extracted-token requirement, not a phrase or broad OR keyword gate.
+- `candidateSignals` cue groups separate conceptual `group.name` from literal observable `group.cues`.
+- Admin/API/MCP read-back can warn about unsafe hard gates, label-like cues, single-cue groups, zero cue hits, stale replay and missing proof.
+
+**Tradeoff:** operators must classify the signal and prove changes with bounded replay. The payoff is a system that can support explicit, hidden and mixed signals without adding customer-specific branches to the engine.
+
+## 14. Broad Discovery Does Not Force Selected Count
 
 **Local decision:** a Discovery run can be mechanically successful while selected count remains zero. Quality gates distinguish source discovery, conversion, and selected item proof.
 
@@ -196,7 +216,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Tradeoff:** demos can look less flashy when broad discovery finds no selected items; long-term trust is higher.
 
-## 14. Universal MegaLoop And Domain-Neutral Interests
+## 15. Universal MegaLoop And Domain-Neutral Interests
 
 **Local decision:** Discovery uses universal source-acquisition lenses and domain-specific meaning lives in `DiscoveryBrief`, system interest config, query seeds, negative signals, feedback and eval fixtures, not in core enums or branches.
 
@@ -208,19 +228,19 @@ The framing is intentionally both technical and business-oriented:
 
 **Tradeoff:** domain pack design becomes important. Good results require calibrated interests, feedback and adapter coverage rather than hidden hardcode.
 
-## 15. Bounded Live Search, Replay And Backfill Discipline
+## 16. Bounded Live Search, Replay And Backfill Discipline
 
-**Local decision:** live Discovery/search/LLM execution is gated by env, credentials, policies and explicit budget. Historical replay/backfill goes through `maintenance.reindex.request`, records job state and skips retro notifications by default.
+**Local decision:** live Discovery/search/LLM execution is gated by env, credentials, policies and explicit budget. Historical replay/backfill goes through `maintenance.reindex.request`, records job state, separates selection replay targets from enrichment rerun targets and skips retro notifications by default.
 
-**Technical uniqueness:** live provider cost and nondeterminism are visible runtime state, not background behavior. Backfill is an operator-visible maintenance job, not a hidden side effect of config changes.
+**Technical uniqueness:** live provider cost and nondeterminism are visible runtime state, not background behavior. Backfill is an operator-visible maintenance job, not a hidden side effect of config changes. Replay read models expose selection target/replayed counts, enrichment target/processed counts and whether selection was skipped due to enrichment state.
 
 **Business meaning:** the product can be operated in cost-sensitive environments and can safely recalibrate old content after changing interests or templates. This matters when customers expect repeatable reports and no surprise notifications.
 
-**Implemented around:** `discovery_query_attempts`, `discovery_llm_gateway_events`, `reindex_jobs`, `services/mcp/src/tools/sequences-tools.ts`, `services/mcp/src/operating-intelligence.ts`, `services/workers/app/reindex_backfill_runtime.py`.
+**Implemented around:** `discovery_query_attempts`, `discovery_llm_gateway_events`, `reindex_jobs`, `services/api/app/reindex_read_model.py`, `apps/admin/src/components/LiveReindexJobsSection.tsx`, `services/mcp/src/tools/sequences-tools.ts`, `services/mcp/src/operating-intelligence.ts`, `services/workers/app/reindex_backfill_runtime.py`.
 
 **Tradeoff:** operators must explicitly run and verify replay; the system avoids accidental spend and notification mistakes.
 
-## 16. Live Proof Harnesses As Product Evidence
+## 17. Live Proof Harnesses As Product Evidence
 
 **Local decision:** live verification scripts exercise MCP-only operator flows and write JSON/Markdown artifacts under `/tmp` with run ids, gaps, counts and recommendations.
 
@@ -232,7 +252,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Tradeoff:** live proof depends on local runtime, credentials and provider behavior; deterministic proofs still remain necessary for CI-style confidence.
 
-## 17. Operator Feedback As Configuration, Not Core Rewrite
+## 18. Operator Feedback As Configuration, Not Core Rewrite
 
 **Local decision:** noisy results are reduced through MCP/admin configuration, typed feedback, bounded replay and adapter work before changing core logic. Domain-specific behavior is not added to the core resolver/routing/selection pipeline.
 
@@ -260,8 +280,10 @@ discover possible source surfaces
 -> understand source capability
 -> route to inventory, context, backlog, watch or channel
 -> convert sources into item-level observations
+-> classify evidence as explicit, hidden or mixed
+-> tune lane-specific evidence without hidden hardcoding
 -> select only high-quality public signals
 -> replay and verify through MCP/operator surfaces
 ```
 
-The technical differentiation is the typed, auditable boundary between source discovery and selected content. The business differentiation is that the platform can build a reusable source-intelligence asset while keeping customer-facing signal quality strict.
+The technical differentiation is the typed, auditable boundary between source discovery, signal evidence and selected content. The business differentiation is that the platform can build a reusable source-intelligence asset while keeping customer-facing signal quality strict.

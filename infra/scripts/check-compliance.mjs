@@ -5,6 +5,7 @@ const checks = [
   ["check:test-layout", ["pnpm", "check:test-layout"]],
   ["check:runtime-artifacts", ["pnpm", "check:runtime-artifacts"]],
   ["check:dependency-compliance", ["pnpm", "check:dependency-compliance"]],
+  ["check:operator-truth-parity", ["pnpm", "check:operator-truth-parity"]],
   ["check:supply-chain-inventory", ["pnpm", "check:supply-chain-inventory"]],
   ["check:env-sync", ["pnpm", "check:env-sync"]],
   ["check:secret-leaks", ["pnpm", "check:secret-leaks"]],

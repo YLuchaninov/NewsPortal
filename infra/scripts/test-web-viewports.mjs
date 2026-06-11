@@ -59,6 +59,10 @@ function log(message) {
   console.log(`[web-viewports] ${message}`);
 }
 
+function apiUrl(pathname) {
+  return `http://127.0.0.1:8080/api${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 async function ensureComposeStack() {
@@ -706,7 +710,7 @@ async function main() {
       "system-selected collection row for viewport smoke",
       async () =>
         fetchJson(
-          `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(signalCandidateTitle)}`
+          apiUrl(`/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(signalCandidateTitle)}`)
         ),
       (payload) =>
         Array.isArray(payload?.items) &&

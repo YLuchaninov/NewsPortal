@@ -1,6 +1,6 @@
 # Documentation Inventory
 
-Last synchronized: 2026-05-30.
+Last synchronized: 2026-06-10.
 
 This inventory classifies repository documentation after the Discovery vNext, task-plugin, MCP and ingress-adapter documentation sync. Code, migrations, package scripts and `.aidp/*` owner files remain higher authority than human docs.
 
@@ -12,7 +12,7 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 | `docs/product/README.md` | product docs index | Human-facing navigation. |
 | `docs/product/architecture/architecture-overview.md` | architecture overview | Compact system map and current boundaries. |
 | `docs/product/architecture/product-blueprint.md` | product architecture truth | Explains durable product decisions without replacing `.aidp/blueprint.md`. |
-| `docs/product/architecture/nonstandard-technical-decisions.md` | research/decision note | External analogs and rationale for non-standard local decisions. |
+| `docs/product/architecture/nonstandard-technical-decisions.md` | research/decision note | External analogs and rationale for non-standard local decisions, including explicit/hidden/mixed signal lanes. |
 | `docs/discovery_vnext_blueprint.md` | active source specification | Current vNext-only Discovery model. |
 | `docs/ingress-adapter-catalog-plan.md` | implementation/design note | Retained plan with current-status note; active runtime truth is catalog + binding. |
 
@@ -20,11 +20,12 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 
 | Path | Classification | Notes |
 | --- | --- | --- |
-| `docs/product/operator/HOW_TO_USE.md` | active operator guide | Daily admin workflow, channels, adapters, rules, sequences, discovery and MCP. |
+| `docs/product/operator/HOW_TO_USE.md` | active operator guide | Daily admin workflow, channels, adapters, rules, hidden-signal hard-gate safety, sequences, discovery and MCP. |
+| `docs/product/operator/hidden-signal-selection.md` | active operator reference | Three signal visibility types, hard-gate safety, candidateSignals contract and replay proof expectations. |
 | `docs/product/operator/manual-mvp-runbook.md` | active runbook | Manual local stack and operator verification pass. |
 | `docs/product/operator/local-product-testing.md` | active proof guide | Product-local and area-specific test commands. |
 | `docs/product/operator/setup/firebase_setup.md` | active setup guide | Firebase/admin sign-in setup. |
-| `docs/product/operator/mcp/README.md` | active MCP index | Current MCP assumptions and tool/resource/prompt model. |
+| `docs/product/operator/mcp/README.md` | active MCP index | Current MCP assumptions, tool/resource/prompt model, strict read-back/proof and hidden-signal guidance. |
 | `docs/product/operator/mcp/client-setups.md` | active MCP setup examples | Client config examples. |
 | `docs/product/operator/mcp/http-smoke.md` | active MCP HTTP examples | Direct JSON-RPC smoke examples. |
 | `docs/product/operator/mcp/testing.md` | active MCP proof guide | Local and remote MCP proof lanes. |
@@ -33,7 +34,7 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 
 | Path | Classification | Notes |
 | --- | --- | --- |
-| `docs/product/operator/examples/EXAMPLES.md` | active example bundle | Primary human-facing RSS/template/system-interest examples. |
+| `docs/product/operator/examples/EXAMPLES.md` | active example bundle | Primary human-facing RSS/template/system-interest examples, including explicit/hidden/mixed signal handling. |
 | `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md` | active website testing handbook | Current website/resource/projection verification guide. |
 | `docs/product/data-scripts/README.md` | active asset index | Defines JSON asset role and limits. |
 | `docs/product/data-scripts/*.json` | reference JSON assets | Manual import/reference assets, not runtime truth. |

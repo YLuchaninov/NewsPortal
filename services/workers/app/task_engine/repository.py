@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from .exceptions import SequenceRunMissingError
 from .models import SequenceDefinition, SequenceRunRecord
 
 
@@ -528,30 +529,35 @@ class PostgresSequenceRepository:
     ) -> str:
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    insert into sequence_task_runs (
-                      run_id,
-                      task_index,
-                      task_key,
-                      module,
-                      status,
-                      options_json,
-                      input_json,
-                      started_at
+                try:
+                    cursor.execute(
+                        """
+                        insert into sequence_task_runs (
+                          run_id,
+                          task_index,
+                          task_key,
+                          module,
+                          status,
+                          options_json,
+                          input_json,
+                          started_at
+                        )
+                        values (%s, %s, %s, %s, 'running', %s::jsonb, %s::jsonb, now())
+                        returning task_run_id::text as task_run_id
+                        """,
+                        (
+                            run_id,
+                            task_index,
+                            task_key,
+                            module,
+                            self._json(options_json),
+                            self._json(input_json),
+                        ),
                     )
-                    values (%s, %s, %s, %s, 'running', %s::jsonb, %s::jsonb, now())
-                    returning task_run_id::text as task_run_id
-                    """,
-                    (
-                        run_id,
-                        task_index,
-                        task_key,
-                        module,
-                        self._json(options_json),
-                        self._json(input_json),
-                    ),
-                )
+                except Exception as error:
+                    if self._is_sequence_task_run_parent_missing_error(error):
+                        raise SequenceRunMissingError(run_id) from error
+                    raise
                 row = cursor.fetchone()
 
         if not row:
@@ -571,46 +577,51 @@ class PostgresSequenceRepository:
     ) -> str:
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    insert into sequence_task_runs (
-                      run_id,
-                      task_index,
-                      task_key,
-                      module,
-                      status,
-                      options_json,
-                      input_json,
-                      output_json,
-                      started_at,
-                      finished_at,
-                      duration_ms
+                try:
+                    cursor.execute(
+                        """
+                        insert into sequence_task_runs (
+                          run_id,
+                          task_index,
+                          task_key,
+                          module,
+                          status,
+                          options_json,
+                          input_json,
+                          output_json,
+                          started_at,
+                          finished_at,
+                          duration_ms
+                        )
+                        values (
+                          %s,
+                          %s,
+                          %s,
+                          %s,
+                          'skipped',
+                          %s::jsonb,
+                          %s::jsonb,
+                          %s::jsonb,
+                          now(),
+                          now(),
+                          0
+                        )
+                        returning task_run_id::text as task_run_id
+                        """,
+                        (
+                            run_id,
+                            task_index,
+                            task_key,
+                            module,
+                            self._json(options_json),
+                            self._json(input_json),
+                            self._json(output_json),
+                        ),
                     )
-                    values (
-                      %s,
-                      %s,
-                      %s,
-                      %s,
-                      'skipped',
-                      %s::jsonb,
-                      %s::jsonb,
-                      %s::jsonb,
-                      now(),
-                      now(),
-                      0
-                    )
-                    returning task_run_id::text as task_run_id
-                    """,
-                    (
-                        run_id,
-                        task_index,
-                        task_key,
-                        module,
-                        self._json(options_json),
-                        self._json(input_json),
-                        self._json(output_json),
-                    ),
-                )
+                except Exception as error:
+                    if self._is_sequence_task_run_parent_missing_error(error):
+                        raise SequenceRunMissingError(run_id) from error
+                    raise
                 row = cursor.fetchone()
 
         if not row:
@@ -693,3 +704,18 @@ class PostgresSequenceRepository:
         from psycopg.types.json import Json
 
         return Json(value)
+
+    def _is_sequence_task_run_parent_missing_error(self, error: Exception) -> bool:
+        sqlstate = getattr(error, "sqlstate", None)
+        error_name = error.__class__.__name__
+        diag = getattr(error, "diag", None)
+        constraint_name = getattr(diag, "constraint_name", None)
+        message = str(error)
+
+        if (
+            constraint_name == "sequence_task_runs_run_id_fkey"
+            or "sequence_task_runs_run_id_fkey" in message
+        ):
+            return True
+
+        return error_name == "ForeignKeyViolation" and sqlstate == "23503"

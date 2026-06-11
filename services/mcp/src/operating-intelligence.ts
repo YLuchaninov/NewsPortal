@@ -9,757 +9,42 @@ import {
 
 import { readOptionalInteger, readOptionalString } from "./protocol";
 import type { McpToolContext } from "./tools/shared";
+import { buildOperatorFlowRoute } from "./operating-intelligence/flow-routing";
+import {
+  OPERATING_DOMAIN_REGISTRY,
+  OPERATING_DOMAIN_VALUES,
+  OPERATIONAL_RESOURCE_URIS,
+  type OperatingDomain,
+} from "./operating-intelligence/model";
+import {
+  buildEvidenceLaneGuidance,
+  buildOperatorFlowGuidance,
+  buildOperatorIntentGuidance,
+  buildStrictRecommendationLevels,
+  inferHardGatePolicy,
+  inferOperatorFlowMode,
+  inferSignalVisibility,
+  isRecord,
+  normalizeEvidenceLaneType,
+  normalizeText,
+  readAffectedScope,
+  readStringArray,
+  uniqueStrings,
+} from "./operating-intelligence/shared";
 
-export const OPERATING_DOMAIN_VALUES = [
-  "channels",
-  "website_pipeline",
-  "selection",
-  "content_analysis",
-  "llm_budget",
-  "discovery",
-  "sequences",
-  "cleanup",
-] as const;
-
-export type OperatingDomain = (typeof OPERATING_DOMAIN_VALUES)[number];
-
-export const OPERATOR_FLOW_MODE_VALUES = [
-  "diagnostic",
-  "planned_change",
-  "expert_override",
-  "source_onboarding",
-  "scenario_pack_rollout",
-  "cleanup",
-] as const;
-
-export type OperatorFlowMode = (typeof OPERATOR_FLOW_MODE_VALUES)[number];
-
-export const OPERATOR_CHANGE_INTENT_VALUES = [
-  "config_update",
-  "system_update",
-  "selection_tuning",
-  "llm_tuning",
-  "source_tuning",
-  "policy_update",
-  "cadence_update",
-  "model_update",
-  "schema_or_contract_update",
-] as const;
-
-export type OperatorChangeIntent = (typeof OPERATOR_CHANGE_INTENT_VALUES)[number];
-
-export const OPERATOR_CLEANUP_INTENT_VALUES = [
-  "test_artifacts",
-  "stale_sources",
-  "duplicate_config",
-  "revoked_tokens",
-  "audit_evidence",
-  "failed_runs",
-  "temporary_scenario_pack",
-] as const;
-
-export type OperatorCleanupIntent = (typeof OPERATOR_CLEANUP_INTENT_VALUES)[number];
-
-export const OPERATOR_TUNING_LAYER_VALUES = [
-  "acquisition",
-  "technical_filter",
-  "semantic_match",
-  "candidate_signal",
-  "gray_zone_review",
-  "llm_provider",
-  "final_selection",
-  "reporting",
-] as const;
-
-export type OperatorTuningLayer = (typeof OPERATOR_TUNING_LAYER_VALUES)[number];
-
-export const OPERATOR_UPDATE_RISK_VALUES = ["low", "medium", "high"] as const;
-
-export type OperatorUpdateRisk = (typeof OPERATOR_UPDATE_RISK_VALUES)[number];
-
-export const OPERATING_REPORT_KINDS = [
-  "system_health",
-  "channel_health",
-  "source_bottleneck",
-  "funnel_calibration",
-  "selection_precision",
-  "selection_hold_quality",
-  "source_family_balance",
-  "indirect_search_execution",
-  "marketplace_extraction_quality",
-  "website_pipeline",
-  "selection_tuning",
-  "content_analysis",
-  "llm_budget",
-  "sequence_run",
-] as const;
-
-export const OPERATIONAL_RESOURCE_URIS = [
-  "signalops://ops/health",
-  "signalops://ops/issues",
-  "signalops://ops/tuning-backlog",
-  "signalops://ops/recent-changes",
-] as const;
+export * from "./operating-intelligence/model";
+export { buildOperatorFlowRoute } from "./operating-intelligence/flow-routing";
+export {
+  getDiagnosticsGuide,
+  getOperatingModelGuide,
+  getTuningGuide,
+} from "./operating-intelligence/guides";
 
 type IssueSeverity = "info" | "warning" | "critical";
 
-interface OperatingDomainGuide {
-  domain: OperatingDomain;
-  title: string;
-  lifecycle: readonly string[];
-  keyMetrics: readonly string[];
-  normalStates: readonly string[];
-  commonSymptoms: readonly string[];
-  commonCauses: readonly string[];
-  tuningLevers: readonly string[];
-  readBackChecks: readonly string[];
-}
-
-export const OPERATING_DOMAIN_REGISTRY: Readonly<Record<OperatingDomain, OperatingDomainGuide>> = {
-  channels: {
-    domain: "channels",
-    title: "Source Channels",
-    lifecycle: ["configured", "scheduled", "fetched", "persisted", "verified", "tuned"],
-    keyMetrics: ["active channel count", "fetch outcomes", "new signal_candidates/resources", "last success/error"],
-    normalStates: [
-      "Active RSS/API/email channels usually produce signal_candidates directly.",
-      "Website channels may produce resource-only rows before downstream projection/selection succeeds.",
-    ],
-    commonSymptoms: ["fetch failures", "duplicate-heavy fetches", "active channel with no recent runs"],
-    commonCauses: ["bad URL", "provider rate limit", "site blocks crawler", "poll interval too aggressive"],
-    tuningLevers: ["fetchUrl/homepageUrl", "pollIntervalSeconds", "provider-specific config", "active flag"],
-    readBackChecks: ["channels.read", "fetch_runs.list", "web_resources.list"],
-  },
-  website_pipeline: {
-    domain: "website_pipeline",
-    title: "Website Resource Pipeline",
-    lifecycle: ["fetch", "resource extraction", "enrichment", "common-pipeline projection", "final selection"],
-    keyMetrics: ["web resource count", "extraction state", "projection state", "projected signal_candidate decision"],
-    normalStates: [
-      "resource_only is valid for listings/documents that should stay in resources.",
-      "projected_to_common_pipeline plus final_decision=rejected means acquisition worked and downstream selection rejected it.",
-    ],
-    commonSymptoms: [
-      "resources exist but no selected signal_candidates",
-      "many explicitly_rejected_before_pipeline rows",
-      "projected signal_candidates all rejected",
-    ],
-    commonCauses: [
-      "resource kind is listing/document",
-      "content filter or selection profile rejects the signal candidate",
-      "website discovery settings are too broad",
-      "browser fallback is needed for heavy JS sites",
-    ],
-    tuningLevers: ["website discovery settings", "content filter policy", "system interests", "selection profile"],
-    readBackChecks: ["web_resources.list", "signal_candidates.explain", "content_filter_results.list"],
-  },
-  selection: {
-    domain: "selection",
-    title: "Final Selection",
-    lifecycle: ["signal_candidate observation", "interest/filter evaluation", "LLM review when configured", "final decision"],
-    keyMetrics: ["selected/rejected/gray_zone counts", "residual buckets", "verification state"],
-    normalStates: [
-      "final_decision=rejected can be correct automation behavior.",
-      "gray_zone/hold is expected when profile policy says uncertain items need operator review.",
-    ],
-    commonSymptoms: ["useful signal_candidate rejected", "LLM approved but item held", "too many gray_zone rows"],
-    commonCauses: [
-      "profile hold policy",
-      "weak verification",
-      "negative signal match",
-      "content filter policy in hold/enforce mode",
-    ],
-    tuningLevers: ["system interest definition", "LLM template", "content filter policy", "selection profile strictness"],
-    readBackChecks: ["signal_candidates.residuals.summary", "signal_candidates.explain", "content_items.explain"],
-  },
-  content_analysis: {
-    domain: "content_analysis",
-    title: "Content Analysis and Gating",
-    lifecycle: ["policy", "analysis result", "labels/entities", "filter result", "selection consumption"],
-    keyMetrics: ["analysis status", "filter decisions", "policy mode", "failure policy"],
-    normalStates: [
-      "observe and dry_run policies record evidence without blocking content.",
-      "hold/enforce policies can intentionally stop or hold content.",
-    ],
-    commonSymptoms: ["failed analysis", "unexpected hold/reject", "missing labels/entities"],
-    commonCauses: ["disabled policy", "unsupported provider/model", "policy mode changed", "rule too broad"],
-    tuningLevers: ["policy mode", "policy config", "failure policy", "content filter rules"],
-    readBackChecks: ["content_analysis.list", "content_filter_results.list", "content_filter_policies.read"],
-  },
-  llm_budget: {
-    domain: "llm_budget",
-    title: "LLM Budget",
-    lifecycle: ["budget configured", "review requested", "review logged", "cost summarized", "escalation tuned"],
-    keyMetrics: ["budget remaining", "review count", "estimated cost", "review outcomes"],
-    normalStates: [
-      "Cheap hold can be correct when escalation is disabled or signal is weak.",
-      "Low review count may be normal if deterministic filters decide most items.",
-    ],
-    commonSymptoms: ["reviews stopped", "too many expensive reviews", "gray_zone held after review"],
-    commonCauses: ["budget exhausted", "review mode always", "weak verification", "template too broad"],
-    tuningLevers: ["LLM review mode", "review thresholds", "template scope", "budget ceiling"],
-    readBackChecks: ["llm_budget.summary", "signal_candidates.explain", "operator.report.verify"],
-  },
-  discovery: {
-    domain: "discovery",
-    title: "Discovery",
-    lifecycle: ["run", "artifact", "candidate", "probe", "understanding", "routing", "inventory", "replay/rollback"],
-    keyMetrics: ["active runs", "artifact validation", "candidate rediscovery", "probe quality", "routing decisions", "inventory state", "policy version"],
-    normalStates: [
-      "Probation handoff uses existing source_channels and outbox sync after vNext routing accepts a source.",
-      "Provider failures are negative transport evidence only and must not punish a source's capability score.",
-      "Historical yield is reporting telemetry and never drives keep/drop routing decisions.",
-    ],
-    commonSymptoms: ["artifact rejected", "candidate dedupe unexpected", "probe blocked", "routing rejected", "inventory stale", "rollback pending"],
-    commonCauses: ["invalid artifact schema", "missing active policy", "source identity duplicates", "provider auth/rate limits", "risk policy denial"],
-    tuningLevers: ["routing policy", "probe policy", "mega-loop budget", "risk policy", "rollback policy", "replay eval thresholds"],
-    readBackChecks: ["discovery.runs.list", "discovery.artifacts.list", "discovery.candidates.list", "discovery.source_inventory.list", "discovery.policies.list"],
-  },
-  sequences: {
-    domain: "sequences",
-    title: "Sequences",
-    lifecycle: ["definition", "run", "task runs", "completed/failed/cancelled", "retry/archive"],
-    keyMetrics: ["run status", "failed task count", "retry lineage", "protected system sequence count"],
-    normalStates: [
-      "Migration-owned default/adaptive sequences are system objects.",
-      "Retries should reference failed run evidence, not replace diagnosis.",
-    ],
-    commonSymptoms: ["pending/stuck run", "failed run", "manual run denied for system reindex"],
-    commonCauses: ["missing event context", "task plugin failure", "queue worker unavailable", "invalid run payload"],
-    tuningLevers: ["task graph", "trigger event", "retry policy", "maintenance request tool"],
-    readBackChecks: ["sequences.read", "sequences.runs.read", "sequences.run_task_runs.list"],
-  },
-  cleanup: {
-    domain: "cleanup",
-    title: "Cleanup",
-    lifecycle: ["inventory", "classify protected/user/test artifacts", "archive", "delete/revoke", "verify"],
-    keyMetrics: ["active artifacts", "protected system objects", "active MCP tokens"],
-    normalStates: [
-      "Audit/protected objects should remain after cleanup.",
-      "MCP token lifecycle requires scoped MCP token tools or admin UI, not REST bypass.",
-    ],
-    commonSymptoms: ["agent tries direct REST/SQL", "system sequences archived", "tokens not revocable through current scope"],
-    commonCauses: ["missing tool scope", "no read-only inventory", "client guessed schema or ownership"],
-    tuningLevers: ["cleanup prompt", "destructive confirmation", "token scopes", "archive before delete policy"],
-    readBackChecks: ["admin.summary.get", "admin.mcp_tokens.list", "operator.report.verify"],
-  },
-} as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((entry) => readOptionalString(entry))
-    .filter((entry): entry is string => Boolean(entry));
-}
-
-function normalizeText(value: unknown): string {
-  return String(value ?? "")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function normalizeOperatorFlowMode(value: unknown): OperatorFlowMode | null {
-  const normalized = normalizeText(value).replace(/[-\s]+/gu, "_");
-  return (OPERATOR_FLOW_MODE_VALUES as readonly string[]).includes(normalized)
-    ? (normalized as OperatorFlowMode)
-    : null;
-}
-
-function normalizeOperatorChangeIntent(value: unknown): OperatorChangeIntent | null {
-  const normalized = normalizeText(value).replace(/[-\s]+/gu, "_");
-  return (OPERATOR_CHANGE_INTENT_VALUES as readonly string[]).includes(normalized)
-    ? (normalized as OperatorChangeIntent)
-    : null;
-}
-
-function normalizeOperatorCleanupIntent(value: unknown): OperatorCleanupIntent | null {
-  const normalized = normalizeText(value).replace(/[-\s]+/gu, "_");
-  return (OPERATOR_CLEANUP_INTENT_VALUES as readonly string[]).includes(normalized)
-    ? (normalized as OperatorCleanupIntent)
-    : null;
-}
-
-function normalizeOperatorTuningLayer(value: unknown): OperatorTuningLayer | null {
-  const normalized = normalizeText(value).replace(/[-\s]+/gu, "_");
-  return (OPERATOR_TUNING_LAYER_VALUES as readonly string[]).includes(normalized)
-    ? (normalized as OperatorTuningLayer)
-    : null;
-}
-
-function normalizeOperatorUpdateRisk(value: unknown): OperatorUpdateRisk | null {
-  const normalized = normalizeText(value).replace(/[-\s]+/gu, "_");
-  return (OPERATOR_UPDATE_RISK_VALUES as readonly string[]).includes(normalized)
-    ? (normalized as OperatorUpdateRisk)
-    : null;
-}
-
-function inferOperatorFlowMode(args: {
-  requested?: unknown;
-  domain?: OperatingDomain;
-  objective?: string | null;
-  residualBucket?: string | null;
-  reportKind?: string | null;
-}): OperatorFlowMode {
-  const requested = normalizeOperatorFlowMode(args.requested);
-  if (requested) {
-    return requested;
-  }
-  const residual = normalizeText(args.residualBucket);
-  const objective = normalizeText(args.objective);
-  const reportKind = normalizeText(args.reportKind);
-  if (args.domain === "cleanup" || reportKind === "cleanup") {
-    return "cleanup";
-  }
-  if (
-    args.domain === "channels" ||
-    args.domain === "website_pipeline" ||
-    objective === "debug_source" ||
-    reportKind === "channel_onboarding" ||
-    reportKind === "source_bottleneck" ||
-    reportKind === "channel_health" ||
-    reportKind === "website_pipeline"
-  ) {
-    return "source_onboarding";
-  }
-  if (
-    args.domain === "discovery" ||
-    objective === "stabilize_discovery" ||
-    reportKind === "discovery_run" ||
-    residual.includes("quality_gap")
-  ) {
-    return residual.includes("scenario_pack") ? "scenario_pack_rollout" : "diagnostic";
-  }
-  if (
-    residual.includes("0 selected") ||
-    residual.includes("zero selected") ||
-    residual.includes("0 llm") ||
-    residual.includes("zero llm") ||
-    residual.includes("semantic_rejected") ||
-    residual.includes("no_system_match") ||
-    residual.includes("technical_filter_rejected") ||
-    residual.includes("provider_endpoint_error") ||
-    residual.includes("source failure") ||
-    residual.includes("source_failure")
-  ) {
-    return "diagnostic";
-  }
-  return "planned_change";
-}
-
-function operatorFlowSequence(mode: OperatorFlowMode): string[] {
-  if (mode === "diagnostic") {
-    return [
-      "read current state",
-      "classify the failing layer",
-      "apply at most one bounded write after evidence",
-      "run bounded replay or probe",
-      "verify with read-back samples before final claims",
-    ];
-  }
-  if (mode === "planned_change") {
-    return [
-      "state operator intent",
-      "read current affected config/state",
-      "apply one scoped staged write",
-      "read back persisted state",
-      "run sample replay or source probe",
-      "verify effect before expanding scope",
-    ];
-  }
-  if (mode === "expert_override") {
-    return [
-      "record operatorOverrideReason and affectedScope",
-      "capture expected effect plus rollback or previous-state hint",
-      "apply the explicitly chosen bounded action",
-      "read back the affected entities",
-      "verify with report samples before reporting success",
-    ];
-  }
-  if (mode === "source_onboarding") {
-    return [
-      "plan source/provider shape",
-      "probe or review alternatives before writes",
-      "apply through MCP/admin onboarding",
-      "sync and read back channel/fetch/resource state",
-      "prove persisted candidates/resources",
-      "verify downstream selection separately",
-    ];
-  }
-  if (mode === "scenario_pack_rollout") {
-    return [
-      "load scenario pack as operator config evidence",
-      "preview diff against current MCP/admin state",
-      "apply only approved config changes",
-      "read back persisted interests/templates/channels/policies",
-      "run bounded replay",
-      "verify report with samples",
-    ];
-  }
-  return [
-    "inventory current entities",
-    "prefer reversible archive/deactivate actions",
-    "use destructive confirm=true only when explicitly required",
-    "read back final lifecycle state",
-    "verify cleanup report",
-  ];
-}
-
-function buildOperatorFlowGuidance(args: {
-  mode: OperatorFlowMode;
-  operatorOverrideReason?: string | null;
-  affectedScope?: readonly string[];
-}) {
-  const mode = args.mode;
-  const hasOverrideReason = Boolean(args.operatorOverrideReason?.trim());
-  const affectedScope = args.affectedScope ?? [];
-  const baseProof = [
-    "MCP read-back of every affected entity after writes",
-    "operator.report.verify with includeSamples=true for final claims when the report kind supports samples",
-  ];
-  const expertRequires = [
-    "operatorOverrideReason",
-    "affectedScope",
-    "expected effect",
-    "read-back target",
-    "verification target",
-    "rollback or previous-state hint",
-  ];
-  const missingProof =
-    mode === "expert_override" && !hasOverrideReason
-      ? ["operatorOverrideReason is required before treating expert override as allowed."]
-      : [];
-  return {
-    flowMode: mode,
-    flowSequence: operatorFlowSequence(mode),
-    operator_override_allowed: mode === "expert_override" && hasOverrideReason,
-    operator_override_requires: expertRequires,
-    proofRequired:
-      mode === "source_onboarding"
-        ? [
-            ...baseProof,
-            "fetch_runs/web_resources or source inventory read-back",
-            "downstream selection proof is separate from source acquisition proof",
-          ]
-        : mode === "planned_change"
-          ? [
-              ...baseProof,
-              "sample replay/probe before expanding beyond the staged change",
-              "mutation response alone is not verified effect",
-            ]
-          : mode === "expert_override"
-            ? [
-                ...baseProof,
-                "explicit operator override reason and affected scope",
-                "samples or replay/probe evidence before reporting success",
-              ]
-            : baseProof,
-    proofStatus:
-      mode === "expert_override" && !hasOverrideReason
-        ? "blocked"
-        : mode === "diagnostic"
-          ? "partial"
-          : "partial",
-    missingProof,
-    operatorOverrideNotes:
-      mode === "expert_override"
-        ? [
-            hasOverrideReason
-              ? `Expert override requested: ${args.operatorOverrideReason}.`
-              : "Expert override is blocked until operatorOverrideReason is supplied.",
-            affectedScope.length > 0
-              ? `Affected scope: ${affectedScope.join(", ")}.`
-              : "Affected scope must be named before broad changes are trusted.",
-            "Override can skip parts of diagnosis, but it cannot skip MCP read-back or report verification.",
-          ]
-        : [
-            "Use expert_override only when an experienced operator explicitly chooses to deviate from the canonical sequence.",
-          ],
-  };
-}
-
-function inferOperatorChangeIntent(args: {
-  requested?: unknown;
-  mode: OperatorFlowMode;
-  domain?: OperatingDomain;
-  objective?: string | null;
-  residualBucket?: string | null;
-  reportKind?: string | null;
-}): OperatorChangeIntent | null {
-  const requested = normalizeOperatorChangeIntent(args.requested);
-  if (requested) {
-    return requested;
-  }
-  const objective = normalizeText(args.objective);
-  const residual = normalizeText(args.residualBucket);
-  const reportKind = normalizeText(args.reportKind);
-  if (args.mode === "cleanup") {
-    return null;
-  }
-  if (args.mode === "source_onboarding" || args.domain === "channels" || args.domain === "website_pipeline") {
-    return objective === "debug_source" || reportKind.includes("source") ? "source_tuning" : "config_update";
-  }
-  if (args.domain === "selection" || reportKind.includes("selection")) {
-    return "selection_tuning";
-  }
-  if (args.domain === "llm_budget" || residual.includes("llm") || objective === "reduce_cost") {
-    return "llm_tuning";
-  }
-  if (args.domain === "content_analysis") {
-    return "policy_update";
-  }
-  if (args.mode === "scenario_pack_rollout") {
-    return "config_update";
-  }
-  if (args.domain === "discovery" || args.domain === "sequences") {
-    return "system_update";
-  }
-  return null;
-}
-
-function inferOperatorTuningLayer(args: {
-  requested?: unknown;
-  mode: OperatorFlowMode;
-  domain?: OperatingDomain;
-  changeIntent?: OperatorChangeIntent | null;
-  residualBucket?: string | null;
-  reportKind?: string | null;
-}): OperatorTuningLayer | null {
-  const requested = normalizeOperatorTuningLayer(args.requested);
-  if (requested) {
-    return requested;
-  }
-  const residual = normalizeText(args.residualBucket);
-  const reportKind = normalizeText(args.reportKind);
-  if (args.domain === "llm_budget" || args.changeIntent === "llm_tuning" || residual.includes("provider")) {
-    return "llm_provider";
-  }
-  if (residual.includes("technical_filter") || residual.includes("short_tokens") || residual.includes("wrapper")) {
-    return "technical_filter";
-  }
-  if (residual.includes("semantic") || residual.includes("no_system_match")) {
-    return "semantic_match";
-  }
-  if (residual.includes("gray") || residual.includes("hold")) {
-    return "gray_zone_review";
-  }
-  if (
-    args.mode === "source_onboarding" ||
-    args.domain === "channels" ||
-    args.domain === "website_pipeline" ||
-    args.changeIntent === "source_tuning" ||
-    reportKind.includes("source")
-  ) {
-    return "acquisition";
-  }
-  if (args.domain === "selection" || args.changeIntent === "selection_tuning") {
-    return "final_selection";
-  }
-  return null;
-}
-
-function buildOperatorIntentGuidance(args: {
-  mode: OperatorFlowMode;
-  domain?: OperatingDomain;
-  objective?: string | null;
-  residualBucket?: string | null;
-  reportKind?: string | null;
-  changeIntent?: unknown;
-  cleanupIntent?: unknown;
-  tuningLayer?: unknown;
-  updateRisk?: unknown;
-}) {
-  const changeIntent = inferOperatorChangeIntent({
-    requested: args.changeIntent,
-    mode: args.mode,
-    domain: args.domain,
-    objective: args.objective,
-    residualBucket: args.residualBucket,
-    reportKind: args.reportKind,
-  });
-  const cleanupIntent = normalizeOperatorCleanupIntent(args.cleanupIntent);
-  const tuningLayer = inferOperatorTuningLayer({
-    requested: args.tuningLayer,
-    mode: args.mode,
-    domain: args.domain,
-    changeIntent,
-    residualBucket: args.residualBucket,
-    reportKind: args.reportKind,
-  });
-  const updateRisk = normalizeOperatorUpdateRisk(args.updateRisk);
-
-  if (args.mode === "cleanup") {
-    return {
-      changeIntent,
-      cleanupIntent,
-      tuningLayer,
-      updateRisk,
-      intentSequence: [
-        "read inventory for the affected entities",
-        "classify retained evidence, reversible archive/deactivate actions, and destructive actions",
-        "archive or deactivate before deleting whenever lineage matters",
-        "use destructive tools only with existing scopes and confirm=true",
-        "read back final lifecycle state and run operator.report.verify reportKind=cleanup",
-      ],
-      intentGuardrails: [
-        "Do not delete retained audit evidence, protected system objects, or unknown artifacts from a cleanup label alone.",
-        "Cleanup proof is lifecycle-state proof, not selection or source-quality proof.",
-      ],
-      intentProofRequired: [
-        "admin.summary.get or relevant list/read inventory",
-        "read-back after archive/deactivate/delete/revoke",
-        "operator.report.verify reportKind=cleanup",
-      ],
-      intentBlockedUntil: [
-        "Blocked until inventory, chosen reversible/destructive action list, read-back and cleanup report verification exist.",
-      ],
-      intentWarnings: cleanupIntent
-        ? [`cleanupIntent=${cleanupIntent} is advisory and does not bypass destructive confirmation.`]
-        : ["cleanupIntent is optional, but clients should name it before broad cleanup recommendations."],
-    };
-  }
-
-  if (changeIntent === "selection_tuning") {
-    return {
-      changeIntent,
-      cleanupIntent,
-      tuningLayer,
-      updateRisk,
-      intentSequence: [
-        "read operator.selection.dashboard and residual summaries",
-        "inspect representative candidates and the affected system interest/read compile status",
-        "apply one scoped config edit only after evidence identifies the owner",
-        "run bounded maintenance.reindex.request with explicit docIds",
-        "verify with operator.report.verify reportKind=selection includeSamples=true",
-      ],
-      intentGuardrails: [
-        "Filter rows and counters are diagnostics, not selected proof.",
-        "Do not use keyword/prototype broadening, broad strictness, or LLM template rewrites as the first hidden-signal repair.",
-      ],
-      intentProofRequired: [
-        "operator.selection.dashboard",
-        "signal_candidates.residuals.summary/list and representative explains",
-        "system_interests.read plus compile status",
-        "bounded docIds replay and operator.report.verify selection samples",
-      ],
-      intentBlockedUntil: [
-        "Blocked until residual/read-back/replay/report verification exists for the affected selection layer.",
-      ],
-      intentWarnings:
-        tuningLayer === "technical_filter"
-          ? ["technical_filter tuning must prove candidate impact with distinct candidate samples before semantic tuning."]
-          : ["Selection tuning must keep acquisition proof separate from final selected proof."],
-    };
-  }
-
-  if (changeIntent === "llm_tuning") {
-    return {
-      changeIntent,
-      cleanupIntent,
-      tuningLayer,
-      updateRisk,
-      intentSequence: [
-        "classify no_reviewable_path, review_disabled, budget_exhausted, worker_not_running, credentials, and provider endpoint/model errors",
-        "read llm_budget.summary, operator.system.health and representative candidate explains",
-        "change budget/template/model settings only after a reviewable path or provider issue is isolated",
-        "run bounded replay when selection changes are involved",
-        "verify with operator.report.verify reportKind=llm_budget and selection when applicable",
-      ],
-      intentGuardrails: [
-        "Zero LLM spend is not proof that LLM is broken.",
-        "LLM tuning cannot bypass semantic_rejected/no_system_match.",
-      ],
-      intentProofRequired: [
-        "llm_budget.summary",
-        "operator.system.health",
-        "operator.issue.explain or provider error samples",
-        "operator.report.verify reportKind=llm_budget",
-      ],
-      intentBlockedUntil: [
-        "Blocked until the LLM-review layer is classified and provider/model readiness is separated from selection tuning.",
-      ],
-      intentWarnings: ["Provider endpoint/model errors are provider preflight failures, not budget tuning evidence."],
-    };
-  }
-
-  if (changeIntent === "source_tuning" || changeIntent === "cadence_update") {
-    return {
-      changeIntent,
-      cleanupIntent,
-      tuningLayer,
-      updateRisk,
-      intentSequence: [
-        "read current channel/source state",
-        "run bottlenecks, alternatives or probe when source shape is uncertain",
-        "apply one bounded source/cadence/provider update through MCP/admin",
-        "read back channel, fetch run, web resource or source inventory state",
-        "verify downstream selection separately when selection claims are made",
-      ],
-      intentGuardrails: [
-        "Source acquisition proof is not selection proof.",
-        "Do not auto-create fallback sources from stale reports or invalid feed URLs.",
-      ],
-      intentProofRequired: [
-        "channels.read/list or discovery source inventory read-back",
-        "channels.bottlenecks.* or probe/alternative evidence when repairing source shape",
-        "fetch_runs/web_resources/source inventory proof",
-        "operator.report.verify for source and selection claims separately",
-      ],
-      intentBlockedUntil: [
-        "Blocked until source read-back and acquisition proof exist; selection claims remain blocked until downstream selection proof exists.",
-      ],
-      intentWarnings: ["Acquisition, projection and final selection are separate layers."],
-    };
-  }
-
-  return {
-    changeIntent,
-    cleanupIntent,
-    tuningLayer,
-    updateRisk,
-    intentSequence: [
-      "read current affected state",
-      "apply one scoped staged write only after owner and intent are clear",
-      "read back persisted state",
-      "run bounded sample proof or probe",
-      "verify before expanding scope",
-    ],
-    intentGuardrails: [
-      "Mutation response is not verified effect.",
-      "Schema, model, policy and config updates require compatibility/read-back proof before rollout claims.",
-    ],
-    intentProofRequired: [
-      "current-state read-back",
-      "post-write read-back",
-      "bounded sample proof or probe",
-      "operator.report.verify or operator.effect.verify as applicable",
-    ],
-    intentBlockedUntil: [
-      "Blocked from rollout claims until current read-back, write read-back, sample proof and report verification exist.",
-    ],
-    intentWarnings:
-      updateRisk === "high"
-        ? ["High-risk updates require explicit operator approval and narrow affected scope before mutation."]
-        : ["Intent fields are advisory and do not make write tools mode-dependent."],
-  };
-}
 
 function compactStringList(value: unknown): string[] {
   return readStringArray(value).map((entry) => entry.trim()).filter(Boolean);
-}
-
-function readAffectedScope(value: unknown): string[] {
-  return readStringArray(value).map((entry) => entry.trim()).filter(Boolean);
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
 }
 
 function readCountField(row: Record<string, unknown> | undefined, field: string): number {
@@ -799,6 +84,123 @@ const SELECTION_COUNTER_SEMANTICS = {
     "Final selected proof comes from final_selection_results/content_items plus representative selected and rejected samples.",
 };
 
+const SELECTION_SCORE_THRESHOLDS = {
+  irrelevantMaxThreshold: 0.45,
+  relevantMinThreshold: 0.72,
+  grayZoneRange: "0.45 < S_final < 0.72",
+  source: "services/workers/app/scoring.py decide_criterion",
+};
+
+function isLabelLikeCue(value: unknown): boolean {
+  const cue = String(value ?? "").trim();
+  if (!cue) {
+    return false;
+  }
+  return /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/iu.test(cue);
+}
+
+function readCandidateSignalGroups(definitionJson: unknown) {
+  const definition = isRecord(definitionJson) ? definitionJson : ({} as Record<string, unknown>);
+  const candidateSignals = isRecord(definition.candidateSignals)
+    ? definition.candidateSignals
+    : {};
+  const readGroups = (key: "positiveGroups" | "negativeGroups") => {
+    const groups = Array.isArray(candidateSignals[key]) ? candidateSignals[key] : [];
+    return groups
+      .map((group, index) => {
+        if (typeof group === "string") {
+          return {
+            name: group,
+            cues: [group],
+            index,
+          };
+        }
+        const record = isRecord(group) ? group : {};
+        const cues = [
+          ...readStringArray(record.cues),
+          ...readStringArray(record.fragments),
+          ...readStringArray(record.values),
+        ];
+        return {
+          name: String(record.name ?? record.groupName ?? `group_${index + 1}`),
+          cues,
+          index,
+        };
+      })
+      .filter((group) => group.name || group.cues.length > 0);
+  };
+  return {
+    positiveGroups: readGroups("positiveGroups"),
+    negativeGroups: readGroups("negativeGroups"),
+  };
+}
+
+function buildCandidateSignalQualityWarningsFromDefinitions(
+  rows: Array<Record<string, unknown>>
+) {
+  const labelLikeCueWarnings: Array<Record<string, unknown>> = [];
+  const singleCueGroups: Array<Record<string, unknown>> = [];
+  const zeroCueGroups: Array<Record<string, unknown>> = [];
+  let positiveCueGroupCount = 0;
+  let negativeCueGroupCount = 0;
+  for (const row of rows) {
+    const groups = readCandidateSignalGroups(row.definitionJson);
+    const allGroups = [
+      ...groups.positiveGroups.map((group) => ({ ...group, polarity: "positive" })),
+      ...groups.negativeGroups.map((group) => ({ ...group, polarity: "negative" })),
+    ];
+    positiveCueGroupCount += groups.positiveGroups.length;
+    negativeCueGroupCount += groups.negativeGroups.length;
+    for (const group of allGroups) {
+      if (group.cues.length === 0) {
+        zeroCueGroups.push({
+          interestTemplateId: row.interestTemplateId,
+          name: row.name,
+          groupName: group.name,
+          polarity: group.polarity,
+          warning: "candidateSignals group has no literal cue fragments.",
+        });
+      }
+      if (group.cues.length === 1) {
+        singleCueGroups.push({
+          interestTemplateId: row.interestTemplateId,
+          name: row.name,
+          groupName: group.name,
+          polarity: group.polarity,
+          warning: "single-cue group has weak evidence diversity; verify with bounded replay.",
+        });
+      }
+      for (const cue of group.cues) {
+        if (!isLabelLikeCue(cue)) {
+          continue;
+        }
+        labelLikeCueWarnings.push({
+          interestTemplateId: row.interestTemplateId,
+          name: row.name,
+          groupName: group.name,
+          polarity: group.polarity,
+          cue,
+          warning:
+            "Cue looks like an id/concept label. candidateSignals cues must be literal observable text fragments that can appear in candidate text.",
+        });
+      }
+    }
+  }
+  return {
+    candidateSignalsConfigured: positiveCueGroupCount + negativeCueGroupCount > 0,
+    positiveCueGroupConfiguredCount: positiveCueGroupCount,
+    negativeCueGroupConfiguredCount: negativeCueGroupCount,
+    candidateSignalsQualityWarnings: [
+      ...labelLikeCueWarnings,
+      ...singleCueGroups.slice(0, 25),
+      ...zeroCueGroups.slice(0, 25),
+    ],
+    labelLikeCueWarnings,
+    singleCueGroupWarnings: singleCueGroups,
+    zeroCueGroupWarnings: zeroCueGroups,
+  };
+}
+
 function sourceClassExpression(): string {
   return `
     case
@@ -827,6 +229,12 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
     topAffectedRows,
     llmProviderErrorRows,
     activeTestChannelRows,
+    candidateSignalConfigRows,
+    candidateSignalRuntimeRows,
+    staleProfileRows,
+    scoreDistributionRows,
+    finalSelectionReasonRows,
+    embeddingDiagnosticRows,
   ] = await Promise.all([
     countQuery(
       pool,
@@ -1065,6 +473,136 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
         order by "activeFailures" desc, count desc
       `
     ),
+    countQuery(
+      pool,
+      `
+        select
+          it.interest_template_id::text as "interestTemplateId",
+          it.name,
+          sp.definition_json as "definitionJson"
+        from interest_templates it
+        left join selection_profiles sp on sp.source_interest_template_id = it.interest_template_id
+          and sp.status = 'active'
+        where it.is_active = true
+        order by it.updated_at desc, it.name asc
+        limit 100
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          count(*) filter (where ifr.explain_json ? 'candidateSignals')::int as "candidateSignalsRecoveryRows",
+          count(*) filter (
+            where coalesce((ifr.explain_json -> 'candidateSignals' ->> 'positiveSignalCount')::int, 0) > 0
+          )::int as "positiveCueGroupHitCount",
+          count(*) filter (
+            where coalesce((ifr.explain_json -> 'candidateSignals' ->> 'noiseSignalCount')::int, 0) > 0
+          )::int as "negativeCueGroupHitCount",
+          count(*) filter (
+            where coalesce((ifr.explain_json -> 'candidateSignals' ->> 'positiveSignalHitCount')::int, 0) > 0
+          )::int as "positiveCueFragmentHitRows",
+          count(*)::int as "evaluatedRows"
+        from interest_filter_results ifr
+        where ifr.filter_scope = 'system_criterion'
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        with versions as (
+          select
+            ifr.doc_id,
+            reasons.reason,
+            sp.version as "activeSelectionProfileVersion",
+            nullif(ifr.explain_json #>> '{selectionProfile,selectionProfileVersion}', '')::int as "filterResultProfileVersion"
+          from interest_filter_results ifr
+          left join criteria c on c.criterion_id = ifr.criterion_id
+          left join selection_profiles sp on sp.source_interest_template_id = c.source_interest_template_id
+            and sp.status = 'active'
+          left join lateral jsonb_array_elements_text(
+            case
+              when jsonb_typeof(coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)) = 'array'
+              then coalesce(ifr.explain_json -> 'filterReasons', '[]'::jsonb)
+              else '[]'::jsonb
+            end
+          ) as reasons(reason) on true
+          where ifr.filter_scope = 'system_criterion'
+        )
+        select
+          "activeSelectionProfileVersion",
+          "filterResultProfileVersion",
+          count(*)::int as "filterRows",
+          count(distinct doc_id)::int as "distinctCandidateCount",
+          count(*) filter (
+            where "activeSelectionProfileVersion" is not null
+              and "filterResultProfileVersion" is not null
+              and "activeSelectionProfileVersion" <> "filterResultProfileVersion"
+          )::int as "staleFilterResultRows",
+          coalesce(reason, 'unknown') as reason
+        from versions
+        group by "activeSelectionProfileVersion", "filterResultProfileVersion", coalesce(reason, 'unknown')
+        order by "staleFilterResultRows" desc, "filterRows" desc
+        limit 50
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        with scores as (
+          select
+            nullif(ifr.explain_json ->> 'S_final', '')::float8 as s_final,
+            nullif(ifr.explain_json ->> 'S_pos', '')::float8 as s_pos,
+            nullif(ifr.explain_json ->> 'S_lex', '')::float8 as s_lex,
+            nullif(ifr.explain_json ->> 'S_meta', '')::float8 as s_meta
+          from interest_filter_results ifr
+          where ifr.filter_scope = 'system_criterion'
+        )
+        select
+          min(s_final) as "minSFinal",
+          percentile_cont(0.5) within group (order by s_final) as "medianSFinal",
+          max(s_final) as "maxSFinal",
+          percentile_cont(0.5) within group (order by s_pos) as "medianSPos",
+          max(s_pos) as "maxSPos",
+          percentile_cont(0.5) within group (order by s_lex) as "medianSLex",
+          max(s_lex) as "maxSLex",
+          percentile_cont(0.5) within group (order by s_meta) as "medianSMeta",
+          max(s_meta) as "maxSMeta",
+          count(*) filter (where s_final > 0.34 and s_final <= 0.45)::int as "nearGrayThresholdRows",
+          count(*) filter (where s_final > 0.45 and s_final < 0.72)::int as "grayZoneScoreRows"
+        from scores
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          coalesce(final_decision, 'unknown') as "finalDecision",
+          coalesce(explain_json ->> 'selectionReason', explain_json ->> 'selectionBlockerReason', 'unknown') as reason,
+          count(*)::int as count
+        from final_selection_results
+        group by coalesce(final_decision, 'unknown'), coalesce(explain_json ->> 'selectionReason', explain_json ->> 'selectionBlockerReason', 'unknown')
+        order by count desc, "finalDecision" asc, reason asc
+        limit 25
+      `
+    ),
+    countQuery(
+      pool,
+      `
+        select
+          count(*) filter (
+            where jsonb_typeof(coalesce(cc.compiled_json -> 'positive_embedding_ids', '[]'::jsonb)) = 'array'
+              and jsonb_array_length(coalesce(cc.compiled_json -> 'positive_embedding_ids', '[]'::jsonb)) > 0
+          )::int as "criteriaWithPositiveEmbeddings",
+          count(*) filter (
+            where coalesce(nullif(ifr.explain_json ->> 'S_pos', '')::float8, 0) > 0
+          )::int as "rowsWithPositiveScore",
+          count(*)::int as "evaluatedRows"
+        from interest_filter_results ifr
+        left join criteria_compiled cc on cc.criterion_id = ifr.criterion_id
+        where ifr.filter_scope = 'system_criterion'
+      `
+    ),
   ]);
 
   const stats = pipelineStats[0] ?? {};
@@ -1095,6 +633,50 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
   const filterRowsNotCandidateRows = filterReasonBreakdown.some(
     (row) => row.distinctCandidateCount > 0 && row.filterRows >= row.distinctCandidateCount * 2
   );
+  const candidateSignalQuality =
+    buildCandidateSignalQualityWarningsFromDefinitions(candidateSignalConfigRows);
+  const candidateSignalRuntime = candidateSignalRuntimeRows[0] ?? {};
+  const candidateSignalsRecoveryRows = readCountField(
+    candidateSignalRuntime,
+    "candidateSignalsRecoveryRows"
+  );
+  const positiveCueGroupHitCount = readCountField(
+    candidateSignalRuntime,
+    "positiveCueGroupHitCount"
+  );
+  const negativeCueGroupHitCount = readCountField(
+    candidateSignalRuntime,
+    "negativeCueGroupHitCount"
+  );
+  const evaluatedRows = readCountField(candidateSignalRuntime, "evaluatedRows");
+  const candidateSignalsHitRate =
+    evaluatedRows > 0 ? Number((positiveCueGroupHitCount / evaluatedRows).toFixed(4)) : 0;
+  const staleFilterResultRows = staleProfileRows.reduce(
+    (sum, row) => sum + Number(row.staleFilterResultRows ?? 0),
+    0
+  );
+  const filterProfileVersions = uniqueStrings(
+    staleProfileRows.map((row) => String(row.filterResultProfileVersion ?? "unknown"))
+  );
+  const activeProfileVersions = uniqueStrings(
+    staleProfileRows.map((row) => String(row.activeSelectionProfileVersion ?? "unknown"))
+  );
+  const mixedProfileVersions = filterProfileVersions.filter((value) => value !== "unknown").length > 1;
+  const staleRowsByReason = staleProfileRows
+    .filter((row) => Number(row.staleFilterResultRows ?? 0) > 0)
+    .map((row) => ({
+      reason: String(row.reason ?? "unknown"),
+      activeSelectionProfileVersion: row.activeSelectionProfileVersion ?? null,
+      filterResultProfileVersion: row.filterResultProfileVersion ?? null,
+      staleFilterResultRows: Number(row.staleFilterResultRows ?? 0),
+      distinctCandidateCount: Number(row.distinctCandidateCount ?? 0),
+    }));
+  const scoreDistribution = scoreDistributionRows[0] ?? {};
+  const maxSFinal = Number(scoreDistribution.maxSFinal ?? 0);
+  const embeddingDiagnostics = embeddingDiagnosticRows[0] ?? {};
+  const criteriaEmbeddingsPresent =
+    readCountField(embeddingDiagnostics, "criteriaWithPositiveEmbeddings") > 0;
+  const positiveScoresPresent = readCountField(embeddingDiagnostics, "rowsWithPositiveScore") > 0;
 
   return {
     technicalFilterRows,
@@ -1118,6 +700,55 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
     contentKindDistribution: contentKindRows,
     contentKindMismatches: contentKindMismatchRows,
     llmProviderErrors,
+    scoreThresholds: SELECTION_SCORE_THRESHOLDS,
+    scoreDistribution,
+    semanticEvaluatedRowsFresh:
+      staleFilterResultRows === 0 ? semanticEvaluatedRows : Math.max(semanticEvaluatedRows - staleFilterResultRows, 0),
+    technicalFilteredRowsFresh:
+      staleFilterResultRows === 0 ? technicalFilterRows : Math.max(technicalFilterRows - staleFilterResultRows, 0),
+    staleRowsByReason,
+    staleProfileDiagnostics: {
+      activeSelectionProfileVersions: activeProfileVersions,
+      filterResultProfileVersions: filterProfileVersions,
+      staleFilterResultRows,
+      mixedProfileVersions,
+      staleReplayPossible: staleFilterResultRows > 0 || mixedProfileVersions,
+      lastReplayJobId: null,
+      lastReplayCompletedAt: null,
+      rows: staleProfileRows,
+    },
+    finalSelectionReasonBreakdown: finalSelectionReasonRows,
+    candidateSignalsConfigured: candidateSignalQuality.candidateSignalsConfigured,
+    candidateSignalsHitRate,
+    positiveCueGroupConfiguredCount: candidateSignalQuality.positiveCueGroupConfiguredCount,
+    negativeCueGroupConfiguredCount: candidateSignalQuality.negativeCueGroupConfiguredCount,
+    positiveCueGroupHitCount,
+    negativeCueGroupHitCount,
+    zeroHitCueGroups:
+      candidateSignalQuality.candidateSignalsConfigured && positiveCueGroupHitCount + negativeCueGroupHitCount === 0
+        ? candidateSignalConfigRows.map((row) => ({
+            interestTemplateId: row.interestTemplateId,
+            name: row.name,
+            warning:
+              "No configured candidateSignals cue groups produced hits in current interest_filter_results; inspect representative rejected docs and replace concept-label cues with literal fragments.",
+          }))
+        : [],
+    labelLikeCueWarnings: candidateSignalQuality.labelLikeCueWarnings,
+    candidateSignalsQualityWarnings: candidateSignalQuality.candidateSignalsQualityWarnings,
+    candidateSignalsRecoveryRows,
+    embeddingDiagnostics: {
+      criteriaEmbeddingsPresent,
+      positiveScoresPresent,
+      rowsWithPositiveScore: readCountField(embeddingDiagnostics, "rowsWithPositiveScore"),
+      criteriaWithPositiveEmbeddings: readCountField(
+        embeddingDiagnostics,
+        "criteriaWithPositiveEmbeddings"
+      ),
+      interestCentroidsNotSelectionRootCause:
+        criteriaEmbeddingsPresent && positiveScoresPresent
+          ? "interest_centroids empty may affect other paths, but current system-criterion scoring is using criteria_compiled embeddings."
+          : null,
+    },
     sourceHealthNoise: {
       bySourceClass: activeTestChannelRows,
       activeTestOrAuditFailureCount,
@@ -1129,6 +760,18 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
       llmProviderEndpointError: providerEndpointErrorCount > 0,
       activeTestChannelNoise: activeTestOrAuditFailureCount > 0,
       filterRowsNotCandidateRows,
+      belowGrayThreshold: maxSFinal > 0 && maxSFinal <= SELECTION_SCORE_THRESHOLDS.irrelevantMaxThreshold,
+      zeroCandidateSignalHits:
+        candidateSignalQuality.candidateSignalsConfigured &&
+        positiveCueGroupHitCount + negativeCueGroupHitCount === 0,
+      mixedProfileVersions,
+      staleReplayPossible: staleFilterResultRows > 0 || mixedProfileVersions,
+      hardGateUnsafeForHiddenSignal: Number(filterReasonCounts.must_have_any ?? 0) > 0,
+      globalHardGateOnMixedSignal: Number(filterReasonCounts.must_have_any ?? 0) > 0,
+      semanticEmbeddingsPresentButBelowThreshold:
+        criteriaEmbeddingsPresent &&
+        positiveScoresPresent &&
+        maxSFinal <= SELECTION_SCORE_THRESHOLDS.irrelevantMaxThreshold,
     },
   };
 }
@@ -1216,6 +859,18 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     llmProviderEndpointError: Boolean(diagnosticFlags.llmProviderEndpointError),
     activeTestChannelNoise: Boolean(diagnosticFlags.activeTestChannelNoise),
     filterRowsNotCandidateRows: Boolean(diagnosticFlags.filterRowsNotCandidateRows),
+    belowGrayThreshold: Boolean(diagnosticFlags.belowGrayThreshold),
+    zeroCandidateSignalHits: Boolean(diagnosticFlags.zeroCandidateSignalHits),
+    mixedProfileVersions: Boolean(diagnosticFlags.mixedProfileVersions),
+    hardGateUnsafeForHiddenSignal: Boolean(diagnosticFlags.hardGateUnsafeForHiddenSignal),
+    globalHardGateOnMixedSignal: Boolean(diagnosticFlags.globalHardGateOnMixedSignal),
+    semanticEmbeddingsPresentButBelowThreshold: Boolean(
+      diagnosticFlags.semanticEmbeddingsPresentButBelowThreshold
+    ),
+    interestCentroidsNotSelectionRootCause:
+      isRecord(selectionPipelineDiagnostics.embeddingDiagnostics)
+        ? selectionPipelineDiagnostics.embeddingDiagnostics.interestCentroidsNotSelectionRootCause
+        : null,
     note:
       "Gray-zone collapse is not automatically precision improvement; verify replay freshness, residual distribution, rejected samples, selected quality, and hold quality.",
   };
@@ -1249,6 +904,24 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     filterReasonCounts: selectionPipelineDiagnostics.filterReasonCounts ?? {},
     filterReasonBreakdown: selectionPipelineDiagnostics.filterReasonBreakdown ?? [],
     counterSemantics: selectionPipelineDiagnostics.counterSemantics ?? SELECTION_COUNTER_SEMANTICS,
+    scoreThresholds: selectionPipelineDiagnostics.scoreThresholds ?? SELECTION_SCORE_THRESHOLDS,
+    scoreDistribution: selectionPipelineDiagnostics.scoreDistribution ?? {},
+    finalSelectionReasonBreakdown:
+      selectionPipelineDiagnostics.finalSelectionReasonBreakdown ?? [],
+    candidateSignalsConfigured: Boolean(selectionPipelineDiagnostics.candidateSignalsConfigured),
+    candidateSignalsHitRate: Number(selectionPipelineDiagnostics.candidateSignalsHitRate ?? 0),
+    positiveCueGroupHitCount: Number(
+      selectionPipelineDiagnostics.positiveCueGroupHitCount ?? 0
+    ),
+    negativeCueGroupHitCount: Number(
+      selectionPipelineDiagnostics.negativeCueGroupHitCount ?? 0
+    ),
+    zeroHitCueGroups: selectionPipelineDiagnostics.zeroHitCueGroups ?? [],
+    labelLikeCueWarnings: selectionPipelineDiagnostics.labelLikeCueWarnings ?? [],
+    candidateSignalsRecoveryRows: Number(
+      selectionPipelineDiagnostics.candidateSignalsRecoveryRows ?? 0
+    ),
+    staleProfileDiagnostics: selectionPipelineDiagnostics.staleProfileDiagnostics ?? {},
     selectionPipelineDiagnostics,
     discrepancyExplanation:
       "signal_candidates.list and the admin Signal Candidates page show raw editorial observations. content_items.list and final_selection_results selected rows show public selected lead signals.",
@@ -2722,101 +2395,6 @@ async function countQuery(pool: Pool, sql: string, params: unknown[] = []) {
   return result.rows;
 }
 
-export function getOperatingModelGuide() {
-  return {
-    model: "observe -> diagnose -> recommend -> guarded change -> verify effect -> monitor",
-    domains: OPERATING_DOMAIN_REGISTRY,
-    operatingRules: [
-      "Operational tools are read-only unless their normal MCP tool name already advertises a write scope.",
-      "Diagnosis must state source-of-truth evidence and stale-data warnings.",
-      "Tuning recommendations can include suggestedToolCalls, but they never execute them.",
-      "After writes, clients should read the affected entity plus signalops://ops/health and signalops://ops/issues.",
-    ],
-    fallbackForLimitedClients: {
-      notifications:
-        "If resources/subscribe is not supported, mutation responses include nextReadBack resources/tools.",
-      elicitation:
-        "If client-side elicitation is unavailable, operator.tuning.recommend returns tuningChoices and asks the client to choose an objective before writing.",
-    },
-  };
-}
-
-export function getDiagnosticsGuide(domain: string) {
-  const guide = OPERATING_DOMAIN_REGISTRY[domain as OperatingDomain];
-  return guide
-    ? {
-        domain,
-        guide,
-        diagnosticFlow: [
-          "Start with operator.system.health scoped to this domain.",
-          "Use operator.issue.explain for the concrete symptom.",
-          "Inspect the suggested samples with domain list/read/explain tools.",
-          "Call operator.tuning.recommend only after the repeated evidence pattern is clear.",
-        ],
-      }
-    : {
-        domain,
-        knownDomains: OPERATING_DOMAIN_VALUES,
-        error: "Unknown operating domain.",
-      };
-}
-
-export function getTuningGuide(domain: string) {
-  const guide = OPERATING_DOMAIN_REGISTRY[domain as OperatingDomain];
-  const selectionAddendum =
-    domain === "selection"
-      ? {
-          zeroSelectedCalibration: [
-            "Read admin.summary.get, signal_candidates.residuals.summary/list, and 1-3 representative signal_candidates.explain rows before writes.",
-            "For semantic_rejected/no_system_match, inspect the affected system_interests.read output, compile status, and candidateSignals before changing strictness or templates.",
-            "Apply one-interest/one-candidate calibration only: bounded write, MCP read-back, bounded maintenance.reindex.request docIds replay, then operator.report.verify.",
-          ],
-          semanticRejectedNoSystemMatch: {
-            meaning:
-              "The item did not reach a matching criterion or reviewable gray-zone path, so LLM template tuning alone cannot recover it.",
-            recovery:
-              "Use signal families, representative positive prototypes, near-miss negatives, and candidateSignals cue groups to create item-level evidence for the affected interest.",
-            invariant: "llmReviewMode=always does not bypass semantic_rejected/no_system_match.",
-          },
-          llmDiagnostics: [
-            "0 LLM spend can mean no_pending_gray_zone, semantic rejection before LLM, llm_review_disabled, budget_exhausted, worker_not_running, or provider_credentials_missing.",
-            "Classify the reason with llm_budget.summary, operator.system.health, operator.issue.explain, and representative explains before editing budgets/templates.",
-          ],
-          antiPatterns: [
-            "Do not mass-set strictness=broad for 0 selected.",
-            "Do not mass edit interests or rewrite LLM templates without representative explains.",
-            "Do not treat RSS/channel volume as selected-signal proof.",
-            "Do not mask API/portal/search sources as RSS/website.",
-          ],
-          primaryScenario: "signalops://guide/scenarios/selection-calibration",
-        }
-      : {};
-  return guide
-    ? {
-        domain,
-        tuningLevers: guide.tuningLevers,
-        readBackChecks: guide.readBackChecks,
-        safeTuningRules: [
-          "Choose one objective per tuning session.",
-          "Prefer narrow configuration changes over broad rewrites.",
-          "Do not use downstream diagnostics as automatic approval; use them as operator evidence.",
-          "Verify effect with operator.effect.verify after applying guarded writes.",
-        ],
-        objectives: [
-          "increase_recall",
-          "increase_precision",
-          "reduce_cost",
-          "debug_source",
-          "stabilize_discovery",
-        ],
-        ...selectionAddendum,
-      }
-    : {
-        domain,
-        knownDomains: OPERATING_DOMAIN_VALUES,
-        error: "Unknown operating domain.",
-      };
-}
 
 export async function buildSystemHealth(
   { sdk, pool }: McpToolContext,
@@ -3486,27 +3064,28 @@ export async function recommendOperatorTuning(
   const residualBucket = readOptionalString(args.residualBucket);
   const sinceHours = readSinceHours(args.sinceHours, 24);
   const entityIds = readEntityIds(args.entityIds);
-  const flowMode = inferOperatorFlowMode({
-    requested: args.operationMode,
+  const flowRoute = buildOperatorFlowRoute({
+    ...args,
     domain,
     objective,
     residualBucket,
   });
-  const flowGuidance = buildOperatorFlowGuidance({
-    mode: flowMode,
-    operatorOverrideReason: readOptionalString(args.operatorOverrideReason),
-    affectedScope: readAffectedScope(args.affectedScope),
-  });
-  const intentGuidance = buildOperatorIntentGuidance({
-    mode: flowMode,
-    domain,
-    objective,
-    residualBucket,
-    changeIntent: args.changeIntent,
-    cleanupIntent: args.cleanupIntent,
-    tuningLayer: args.tuningLayer,
-    updateRisk: args.updateRisk,
-  });
+  const flowMode = flowRoute.flowMode;
+  const signalVisibility = flowRoute.signalVisibility;
+  const evidenceLaneType = flowRoute.evidenceLaneType;
+  const hardGatePolicy = flowRoute.hardGatePolicy;
+  const selectionPipelineDiagnostics =
+    domain === "selection" ? await readSelectionPipelineDiagnostics(context.pool) : {};
+  const normalizedResidual = normalizeText(residualBucket);
+  const selectionRecallContext =
+    domain === "selection" &&
+    (objective === "increase_recall" ||
+      normalizedResidual.includes("0 selected") ||
+      normalizedResidual.includes("zero selected") ||
+      normalizedResidual.includes("semantic_rejected") ||
+      normalizedResidual.includes("no_system_match") ||
+      normalizedResidual.includes("technical_filter_rejected"));
+  const mandatoryMarkerProofRequired = flowRoute.mandatoryMarkerProofRequired;
   const guide = OPERATING_DOMAIN_REGISTRY[domain];
   const issueExplanation = await explainOperatorIssue(context, {
     symptom: residualBucket ?? objective,
@@ -3517,35 +3096,76 @@ export async function recommendOperatorTuning(
   });
 
   const recommendations = buildTuningRecommendations(domain, objective, residualBucket);
-  const strictRecommendation = buildStrictRecommendationLevels(
-    domain,
-    objective,
-    residualBucket,
-    flowMode,
-    flowGuidance.operator_override_allowed
+  const candidateSignalsHitRate = Number(
+    selectionPipelineDiagnostics.candidateSignalsHitRate ?? 0
   );
+  const candidateSignalsQualityWarnings = Array.isArray(
+    selectionPipelineDiagnostics.candidateSignalsQualityWarnings
+  )
+    ? selectionPipelineDiagnostics.candidateSignalsQualityWarnings
+    : [];
+  const stalenessWarnings =
+    isRecord(selectionPipelineDiagnostics.staleProfileDiagnostics) &&
+    selectionPipelineDiagnostics.staleProfileDiagnostics.staleReplayPossible
+      ? [
+          "Selection filter rows include stale or mixed selection profile versions; read maintenance.reindex_jobs.list and replay explicit docIds before treating counters as current.",
+        ]
+      : [];
+  const hiddenDoNotDoYet =
+    selectionRecallContext && ["hidden_intent", "mixed", "unknown"].includes(signalVisibility)
+      ? [
+          "Do not add broad must-have terms for hidden/unknown recall recovery.",
+          "Do not replace must-have terms with short_tokens_required as an OR keyword gate.",
+          "Do not switch strictness=broad as the first response.",
+          "Do not rewrite LLM templates or increase LLM budget before a reviewable path exists.",
+          "Do not add more RSS/source volume before selection proof.",
+          "Do not call discovery.brief.preview persisted Discovery proof.",
+        ]
+      : [];
+  const hiddenMustDoNext =
+    selectionRecallContext &&
+    Boolean(selectionPipelineDiagnostics.candidateSignalsConfigured) &&
+    candidateSignalsHitRate === 0
+      ? [
+          "Inspect 10-20 representative rejected docs and replace label-like candidateSignals cues with literal observable cue groups before changing hard gates or LLM settings.",
+        ]
+      : [];
   return {
     generatedAt: new Date().toISOString(),
     domain,
     objective,
     residualBucket,
+    flowRoute,
+    signalVisibility,
+    evidenceLaneType,
+    evidenceLaneGuidance: flowRoute.evidenceLaneGuidance,
+    hardGatePolicy,
+    mandatoryMarkerProofRequired,
+    candidateSignalsHitRate,
+    candidateSignalsQualityWarnings,
+    stalenessWarnings,
+    scoreThresholdDiagnostics: {
+      thresholds: selectionPipelineDiagnostics.scoreThresholds ?? SELECTION_SCORE_THRESHOLDS,
+      distribution: selectionPipelineDiagnostics.scoreDistribution ?? {},
+      diagnosticFlags: selectionPipelineDiagnostics.diagnosticFlags ?? {},
+    },
     flowMode,
-    flowSequence: flowGuidance.flowSequence,
-    operator_override_allowed: flowGuidance.operator_override_allowed,
-    operator_override_requires: flowGuidance.operator_override_requires,
-    proofRequired: flowGuidance.proofRequired,
-    proofStatus: flowGuidance.proofStatus,
-    missingProof: flowGuidance.missingProof,
-    operatorOverrideNotes: flowGuidance.operatorOverrideNotes,
-    changeIntent: intentGuidance.changeIntent,
-    cleanupIntent: intentGuidance.cleanupIntent,
-    tuningLayer: intentGuidance.tuningLayer,
-    updateRisk: intentGuidance.updateRisk,
-    intentSequence: intentGuidance.intentSequence,
-    intentGuardrails: intentGuidance.intentGuardrails,
-    intentProofRequired: intentGuidance.intentProofRequired,
-    intentBlockedUntil: intentGuidance.intentBlockedUntil,
-    intentWarnings: intentGuidance.intentWarnings,
+    flowSequence: flowRoute.flowSequence,
+    operator_override_allowed: flowRoute.operator_override_allowed,
+    operator_override_requires: flowRoute.operator_override_requires,
+    proofRequired: flowRoute.proofRequired,
+    proofStatus: flowRoute.proofStatus,
+    missingProof: flowRoute.missingProof,
+    operatorOverrideNotes: flowRoute.operatorOverrideNotes,
+    changeIntent: flowRoute.changeIntent,
+    cleanupIntent: flowRoute.cleanupIntent,
+    tuningLayer: flowRoute.tuningLayer,
+    updateRisk: flowRoute.updateRisk,
+    intentSequence: flowRoute.intentSequence,
+    intentGuardrails: flowRoute.intentGuardrails,
+    intentProofRequired: flowRoute.intentProofRequired,
+    intentBlockedUntil: flowRoute.intentBlockedUntil,
+    intentWarnings: flowRoute.intentWarnings,
     diagnosis: issueExplanation.diagnosis,
     evidence: issueExplanation.evidence,
     tuningChoices: [
@@ -3556,10 +3176,13 @@ export async function recommendOperatorTuning(
       "stabilize_discovery",
     ],
     recommendedChanges: recommendations.recommendedChanges,
-    must_do_next: strictRecommendation.must_do_next,
-    allowed_after: strictRecommendation.allowed_after,
-    do_not_do_yet: strictRecommendation.do_not_do_yet,
-    blocked_until: strictRecommendation.blocked_until,
+    must_do_next: [...hiddenMustDoNext, ...flowRoute.mustDoNext],
+    allowed_after: flowRoute.allowedAfter,
+    do_not_do_yet: uniqueStrings([
+      ...hiddenDoNotDoYet,
+      ...flowRoute.doNotDoYet,
+    ]),
+    blocked_until: flowRoute.blockedUntil,
     riskLevel: recommendations.riskLevel,
     expectedEffect: recommendations.expectedEffect,
     verificationPlan: [
@@ -3574,182 +3197,6 @@ export async function recommendOperatorTuning(
   };
 }
 
-function buildStrictRecommendationLevels(
-  domain: OperatingDomain,
-  objective: string,
-  residualBucket: string | null,
-  flowMode: OperatorFlowMode = "diagnostic",
-  operatorOverrideAllowed = false
-) {
-  if (flowMode === "expert_override") {
-    return {
-      must_do_next: [
-        operatorOverrideAllowed
-          ? "Read back affected entities immediately after the explicit operator override action, then verify with operator.report.verify before reporting success."
-          : "Collect operatorOverrideReason and affectedScope before treating expert override as allowed.",
-      ],
-      allowed_after: [
-        "Apply only the explicitly chosen bounded action after the operator names expected effect, read-back target, verification target, and rollback or previous-state hint.",
-        "Continue or expand only after MCP read-back and report verification show the intended effect.",
-      ],
-      do_not_do_yet: [
-        "Do not treat expert override as permission for unbounded mass edits, domain-specific runtime defaults, or skipped final verification.",
-      ],
-      blocked_until: operatorOverrideAllowed
-        ? ["Blocked from success claims until read-back and operator.report.verify proof exist."]
-        : [
-            "Blocked until operatorOverrideReason, affectedScope, read-back target, verification target, and rollback or previous-state hint are explicit.",
-          ],
-    };
-  }
-  if (flowMode === "planned_change") {
-    return {
-      must_do_next: [
-        "State the operator intent, read the affected current config/state, and propose one scoped staged write before any broader rollout.",
-      ],
-      allowed_after: [
-        "One bounded MCP/admin write after current read-back confirms the affected owner.",
-        "Sample replay or source probe after write read-back confirms persisted state.",
-        "Expand scope only after operator.report.verify or operator.effect.verify confirms expected movement.",
-      ],
-      do_not_do_yet: [
-        "Do not present a mutation response as verified effect.",
-        "Do not run emergency zero-selected diagnosis unless current read-back shows a diagnostic failure state.",
-      ],
-      blocked_until: [
-        "Blocked from rollout claims until current-state read-back, write read-back, sample replay/probe, and report verification exist.",
-      ],
-    };
-  }
-  if (flowMode === "source_onboarding") {
-    return {
-      must_do_next: [
-        "Plan source/provider shape, probe or review alternatives, then apply only through MCP/admin onboarding with read-back.",
-      ],
-      allowed_after: [
-        "channels.bulk_onboard.plan/apply/verify or Discovery vNext routing handoff after source evidence is current.",
-        "Downstream selection tuning only after persisted candidates/resources prove acquisition worked.",
-      ],
-      do_not_do_yet: [
-        "Do not auto-create website/RSS/API alternatives from stale reports or invalid feed URLs without probe/read-back evidence.",
-        "Do not report source acquisition as selected-signal proof.",
-      ],
-      blocked_until: [
-        "Blocked until source bottlenecks/alternatives, apply read-back, fetch/resource or source inventory proof, and downstream report verification exist.",
-      ],
-    };
-  }
-  if (flowMode === "scenario_pack_rollout") {
-    return {
-      must_do_next: [
-        "Load the scenario pack as operator config evidence, preview the diff against current MCP/admin state, and request explicit approval before writes.",
-      ],
-      allowed_after: [
-        "Apply approved config only through MCP/admin, read back persisted state, run bounded replay, then verify with samples.",
-      ],
-      do_not_do_yet: [
-        "Do not encode scenario vocabulary into runtime defaults, prompts, required tests, or hardcoded policies.",
-      ],
-      blocked_until: [
-        "Blocked until preview diff, approved config scope, read-back, bounded replay and report verification exist.",
-      ],
-    };
-  }
-  if (flowMode === "cleanup") {
-    return {
-      must_do_next: [
-        "Build a read-only inventory, separate reversible archive/deactivate actions from destructive actions, and verify final lifecycle state.",
-      ],
-      allowed_after: [
-        "Use destructive tools only with existing scopes and confirm=true after inventory proves the target is disposable.",
-      ],
-      do_not_do_yet: [
-        "Do not delete protected/default/system objects or retained audit evidence without explicit operator confirmation.",
-      ],
-      blocked_until: [
-        "Blocked until inventory, chosen reversible/destructive action list, read-back, and cleanup report verification exist.",
-      ],
-    };
-  }
-  const normalizedResidual = normalizeText(residualBucket);
-  const selectionRecall =
-    domain === "selection" &&
-    (objective === "increase_recall" ||
-      normalizedResidual.includes("0 selected") ||
-      normalizedResidual.includes("zero selected") ||
-      normalizedResidual.includes("semantic_rejected") ||
-      normalizedResidual.includes("no_system_match") ||
-      normalizedResidual.includes("technical_filter_rejected"));
-  if (selectionRecall) {
-    return {
-      must_do_next: [
-        "Read operator.selection.dashboard, signal_candidates.residuals.summary/list, 1-3 signal_candidates.explain rows, system_interests.read, and system_interests.compile_status.list before proposing any write.",
-        "If a write was already attempted, verify actual profile/candidateSignals/compile status with MCP read-back before replay.",
-      ],
-      allowed_after: [
-        "One bounded system_interests.update using canonical fields after representative evidence identifies the affected interest.",
-        "maintenance.reindex.request with 25-50 explicit docIds after write read-back confirms persisted state.",
-        "operator.report.verify reportKind=selection includeSamples=true after maintenance.reindex_jobs.list shows completion.",
-      ],
-      do_not_do_yet: [
-        "Do not mass edit interests, switch strictness=broad, expand positive terms, rewrite LLM templates, or add more RSS as the first response.",
-        "Do not report LLM failure from zero spend until no_reviewable_path, review_disabled, budget_exhausted, worker_not_running, provider_credentials_missing, and provider_endpoint_error are classified.",
-      ],
-      blocked_until: [
-        "Blocked until residual summary/list, representative explains, affected interest read-back, compile/profile read-back, bounded docIds replay result, and operator.report.verify proof exist.",
-      ],
-    };
-  }
-  if (
-    domain === "llm_budget" ||
-    objective === "reduce_cost" ||
-    normalizedResidual.includes("0 llm") ||
-    normalizedResidual.includes("zero llm")
-  ) {
-    return {
-      must_do_next: [
-        "Classify absent LLM review as no_reviewable_path, review_disabled, budget_exhausted, worker_not_running, provider_credentials_missing, or provider_endpoint_error before changing budget/templates.",
-      ],
-      allowed_after: [
-        "Tune budget or templates only after candidates are proven to reach a reviewable gray/hold path or provider endpoint errors are isolated.",
-      ],
-      do_not_do_yet: [
-        "Do not call LLM broken and do not tune spend from zero LLM usage alone.",
-        "Do not rewrite LLM templates to bypass semantic_rejected/no_system_match.",
-      ],
-      blocked_until: [
-        "Blocked until llm_budget.summary, operator.system.health, operator.issue.explain, residuals, and representative explains identify the exact LLM-review layer.",
-      ],
-    };
-  }
-  if (domain === "discovery" || objective === "stabilize_discovery") {
-    return {
-      must_do_next: [
-        "Report Discovery status with candidate count, distinct persisted candidates, probe coverage, warnings, routing decisions, and handoff counts.",
-        "Treat passed_with_quality_gap as partial proof only.",
-      ],
-      allowed_after: [
-        "Run channels.bottlenecks.* and channels.alternatives.plan for broken RSS/API/website shape.",
-        "Register/apply sources only through MCP/admin, then sync/read-back/verify.",
-      ],
-      do_not_do_yet: [
-        "Do not use discovery.brief.preview as a bypass for domain_contamination or persisted artifact validation.",
-        "Do not auto-trust listing/website sources without SourceUnderstanding and downstream selection proof.",
-      ],
-      blocked_until: [
-        "Blocked until Discovery run read-back, source inventory/routing evidence, probe coverage warnings, and source/channel verification are available.",
-      ],
-    };
-  }
-  return {
-    must_do_next: [
-      "Read current state, classify the failing layer, and call operator.report.verify before proposing writes.",
-    ],
-    allowed_after: ["Apply one bounded MCP/admin write only after read-back evidence identifies the owner."],
-    do_not_do_yet: ["Do not mass edit configuration or report success from intent without MCP read-back."],
-    blocked_until: ["Blocked until read-back and verification proof exist."],
-  };
-}
 
 function buildTuningRecommendations(
   domain: OperatingDomain,
@@ -4228,6 +3675,20 @@ export async function buildOperationalReportVerification(
     tuningLayer: flowContext.tuningLayer,
     updateRisk: flowContext.updateRisk,
   });
+  const signalVisibility = inferSignalVisibility({
+    requested: flowContext.signalVisibility,
+    residualBucket: reportKind,
+  });
+  const evidenceLaneType = normalizeEvidenceLaneType(flowContext.evidenceLaneType);
+  const hardGatePolicy = inferHardGatePolicy({
+    requested: flowContext.hardGatePolicy,
+    signalVisibility,
+  });
+  const evidenceLaneGuidance = buildEvidenceLaneGuidance({
+    signalVisibility,
+    evidenceLaneType,
+    hardGatePolicy,
+  });
   if (reportKind === "funnel_calibration") {
     const domainPrefix = readOptionalString(entityIds.domainPrefix) ?? null;
     const audit = await buildFunnelAudit(context, {
@@ -4306,15 +3767,56 @@ export async function buildOperationalReportVerification(
       ...flowGuidance.missingProof,
       "Selected proof requires final_selection_results/content_items samples or bounded replay verification; processor counters alone are not sufficient.",
     ];
+    const staleProfileDiagnostics = isRecord(pipelineDiagnostics.staleProfileDiagnostics)
+      ? pipelineDiagnostics.staleProfileDiagnostics
+      : {};
+    const staleReplayPossible = Boolean(staleProfileDiagnostics.staleReplayPossible);
+    const selectionProofStatus =
+      flowGuidance.proofStatus === "blocked"
+        ? "blocked"
+        : staleReplayPossible
+          ? "partial"
+          : "partial";
+    const mandatoryMarkerProofRequired =
+      ["hidden_intent", "mixed", "unknown"].includes(signalVisibility) &&
+      hardGatePolicy !== "allowed" &&
+      isRecord(pipelineDiagnostics.diagnosticFlags) &&
+      Boolean(
+        pipelineDiagnostics.diagnosticFlags.hardGateUnsafeForHiddenSignal ||
+          pipelineDiagnostics.diagnosticFlags.globalHardGateOnMixedSignal
+      );
     return {
       reportKind,
       verifiedAt: new Date().toISOString(),
       entityIds,
       domain,
+      signalVisibility,
+      evidenceLaneType,
+      evidenceLaneGuidance,
+      hardGatePolicy,
+      mandatoryMarkerProofRequired,
+      candidateSignalsHitRate: Number(pipelineDiagnostics.candidateSignalsHitRate ?? 0),
+      candidateSignalsQualityWarnings:
+        pipelineDiagnostics.candidateSignalsQualityWarnings ?? [],
+      stalenessWarnings: staleReplayPossible
+        ? [
+            "Selection report contains stale or mixed profile versions; replay explicit docIds and re-verify before claiming current effect.",
+          ]
+        : [],
+      scoreThresholdDiagnostics: {
+        thresholds: pipelineDiagnostics.scoreThresholds ?? SELECTION_SCORE_THRESHOLDS,
+        distribution: pipelineDiagnostics.scoreDistribution ?? {},
+        diagnosticFlags: pipelineDiagnostics.diagnosticFlags ?? {},
+      },
       flowMode,
       flowSequence: flowGuidance.flowSequence,
-      proofStatus: flowGuidance.proofStatus === "blocked" ? "blocked" : "partial",
-      missingProof: selectionMissingProof,
+      proofStatus: selectionProofStatus,
+      missingProof: staleReplayPossible
+        ? [
+            ...selectionMissingProof,
+            "Freshness proof is missing because staleFilterResultRows or mixedProfileVersions remain.",
+          ]
+        : selectionMissingProof,
       operatorOverrideNotes: flowGuidance.operatorOverrideNotes,
       changeIntent: intentGuidance.changeIntent,
       cleanupIntent: intentGuidance.cleanupIntent,
@@ -4339,6 +3841,9 @@ export async function buildOperationalReportVerification(
         expectedResultRows: pipelineDiagnostics.expectedResultRows,
         materializedResultRows: pipelineDiagnostics.materializedResultRows,
         filterReasonCounts: pipelineDiagnostics.filterReasonCounts,
+        staleFilterResultRows: staleProfileDiagnostics.staleFilterResultRows ?? 0,
+        candidateSignalsRecoveryRows: pipelineDiagnostics.candidateSignalsRecoveryRows,
+        candidateSignalsHitRate: pipelineDiagnostics.candidateSignalsHitRate,
       },
       pipelineDiagnostics,
       filterReasonBreakdown: pipelineDiagnostics.filterReasonBreakdown ?? [],
@@ -4347,11 +3852,32 @@ export async function buildOperationalReportVerification(
         pendingCandidateCount: pipelineDiagnostics.pendingCandidateCount,
         expectedResultRows: pipelineDiagnostics.expectedResultRows,
         materializedResultRows: pipelineDiagnostics.materializedResultRows,
+        activeSelectionProfileVersion:
+          Array.isArray(staleProfileDiagnostics.activeSelectionProfileVersions)
+            ? staleProfileDiagnostics.activeSelectionProfileVersions
+            : [],
+        filterResultProfileVersions:
+          Array.isArray(staleProfileDiagnostics.filterResultProfileVersions)
+            ? staleProfileDiagnostics.filterResultProfileVersions
+            : [],
+        staleFilterResultRows: staleProfileDiagnostics.staleFilterResultRows ?? 0,
+        mixedProfileVersions: Boolean(staleProfileDiagnostics.mixedProfileVersions),
+        lastReplayJobId: staleProfileDiagnostics.lastReplayJobId ?? null,
+        lastReplayCompletedAt: staleProfileDiagnostics.lastReplayCompletedAt ?? null,
         staleReplayPossible:
           Number(pipelineDiagnostics.pendingCandidateCount ?? 0) > 0 ||
           Number(pipelineDiagnostics.expectedResultRows ?? 0) !==
-            Number(pipelineDiagnostics.materializedResultRows ?? 0),
+            Number(pipelineDiagnostics.materializedResultRows ?? 0) ||
+          staleReplayPossible,
       },
+      scoreThresholds: pipelineDiagnostics.scoreThresholds ?? SELECTION_SCORE_THRESHOLDS,
+      scoreDistribution: pipelineDiagnostics.scoreDistribution ?? {},
+      semanticEvaluatedRowsFresh: pipelineDiagnostics.semanticEvaluatedRowsFresh,
+      technicalFilteredRowsFresh: pipelineDiagnostics.technicalFilteredRowsFresh,
+      staleRowsByReason: pipelineDiagnostics.staleRowsByReason ?? [],
+      finalSelectionReasonBreakdown: pipelineDiagnostics.finalSelectionReasonBreakdown ?? [],
+      zeroHitCueGroups: pipelineDiagnostics.zeroHitCueGroups ?? [],
+      labelLikeCueWarnings: pipelineDiagnostics.labelLikeCueWarnings ?? [],
       pendingRows: pipelineDiagnostics.pendingCandidateCount ?? 0,
       samples: includeSamples ? audit.samples : {},
       proofWarnings: [

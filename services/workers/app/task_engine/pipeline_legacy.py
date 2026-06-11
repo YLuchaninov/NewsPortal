@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any, Awaitable, Callable, Final, Mapping
 
 from ..signal_candidate_extraction_processor import (
@@ -60,22 +59,14 @@ class LegacyJobShim:
     data: dict[str, Any]
 
 
-@lru_cache(maxsize=1)
-def _load_legacy_main_module() -> Any:
-    from .. import main as legacy_main
-
-    return legacy_main
-
-
 def load_legacy_handler(handler_name: str) -> LegacyHandler:
     direct_handler = DIRECT_PROCESSOR_HANDLERS.get(handler_name)
     if direct_handler is not None:
         return direct_handler
 
-    handler = getattr(_load_legacy_main_module(), handler_name, None)
-    if handler is None or not callable(handler):
-        raise LookupError(f"Legacy worker handler {handler_name} was not found.")
-    return handler
+    raise LookupError(
+        f"Legacy worker handler {handler_name} was not found in the direct processor registry."
+    )
 
 
 def _camel_to_snake(value: str) -> str:

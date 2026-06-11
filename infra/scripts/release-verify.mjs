@@ -14,6 +14,11 @@ const steps = [
     args: ["check:compliance"],
   },
   {
+    name: "operator-truth-parity",
+    command: "pnpm",
+    args: ["check:operator-truth-parity"],
+  },
+  {
     name: "lint",
     command: "pnpm",
     args: ["lint"],

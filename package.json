@@ -10,6 +10,7 @@
     "check:dependency-compliance": "node infra/scripts/check-dependency-compliance.mjs",
     "check:domain-neutrality": "node infra/scripts/check-domain-neutrality.mjs",
     "check:env-sync": "node infra/scripts/check-env-sync.mjs",
+    "check:operator-truth-parity": "node infra/scripts/check-operator-truth-parity.mjs",
     "check:production-image-contents": "node infra/scripts/check-production-image-contents.mjs",
     "check:python-image-size": "node infra/scripts/check-python-image-size.mjs",
     "check:runtime-image-sizes": "node infra/scripts/check-runtime-image-sizes.mjs",
@@ -109,18 +110,18 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.9",
-    "@eslint/js": "^10.0.1",
-    "@types/node": "^24.0.1",
-    "@types/pg": "^8.15.6",
-    "@typescript-eslint/eslint-plugin": "^8.57.1",
-    "@typescript-eslint/parser": "^8.57.1",
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.12.0",
+    "@types/pg": "8.18.0",
+    "@typescript-eslint/eslint-plugin": "8.57.1",
+    "@typescript-eslint/parser": "8.57.1",
     "esbuild": "0.27.4",
-    "eslint": "^10.1.0",
+    "eslint": "10.1.0",
     "eslint-plugin-astro": "1.7.0",
-    "globals": "^17.4.0",
+    "globals": "17.4.0",
     "playwright": "1.58.2",
-    "tsx": "^4.20.3",
-    "typescript": "^5.9.2"
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
   },
   "pnpm": {
     "overrides": {

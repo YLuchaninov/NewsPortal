@@ -20,6 +20,24 @@ export const composeArgs = [
   "infra/docker/compose.dev.yml",
 ];
 
+function currentComposeArgs() {
+  const envFile = String(process.env.SIGNALOPS_COMPOSE_ENV_FILE ?? ".env.dev").trim() || ".env.dev";
+  const args = [
+    "compose",
+    "--env-file",
+    envFile,
+    "-f",
+    "infra/docker/compose.yml",
+    "-f",
+    "infra/docker/compose.dev.yml",
+  ];
+  const extraFile = String(process.env.SIGNALOPS_COMPOSE_EXTRA_FILE ?? "").trim();
+  if (extraFile) {
+    args.push("-f", extraFile);
+  }
+  return args;
+}
+
 const STACK_SERVICES = [
   "postgres",
   "redis",
@@ -197,11 +215,11 @@ export function runCommand(command, args, options = {}) {
 }
 
 export function runCompose(...args) {
-  return runCommand("docker", [...composeArgs, ...args]);
+  return runCommand("docker", [...currentComposeArgs(), ...args]);
 }
 
 export function runComposeCapture(...args) {
-  return runCommand("docker", [...composeArgs, ...args], { capture: true });
+  return runCommand("docker", [...currentComposeArgs(), ...args], { capture: true });
 }
 
 export async function readEnvFile(relativePath) {
@@ -425,8 +443,21 @@ export function extractCookie(setCookies) {
   return cookie.split(";")[0];
 }
 
+export function isAdminActionTokenExpiryError(error) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const bodyPreview = String(error?.httpDiagnostics?.bodyPreview ?? "");
+  return /invalid or expired admin action token/i.test(`${message}\n${bodyPreview}`);
+}
+
 const adminActionTokenCache = new Map();
 const webActionTokenCache = new Map();
+
+function clearActionTokenCaches(url, cookie) {
+  const target = new URL(url);
+  const cacheKey = `${target.origin}|${cookie}`;
+  adminActionTokenCache.delete(cacheKey);
+  webActionTokenCache.delete(cacheKey);
+}
 const adminActionScopes = new Map([
   ["/bff/admin/signal-candidates/enrichment-retry", "signal_candidates.enrichment-retry"],
   ["/bff/admin/automation", "automation"],
@@ -467,6 +498,13 @@ function resolveAdminActionScope(url) {
   }
   if (pathname.startsWith("/bff/admin/user-interests/")) {
     return "user-interests";
+  }
+  return "";
+}
+
+function adminActionTokenFallbackPage(scope) {
+  if (scope === "channels.bulk" || scope === "channels.bulk.preflight") {
+    return "/channels/import";
   }
   return "";
 }
@@ -523,6 +561,7 @@ async function readAdminActionToken(url, cookie, timeoutMs) {
   const cacheKey = `${target.origin}|${cookie}`;
   let tokens = adminActionTokenCache.get(cacheKey);
   if (!tokens) {
+    tokens = {};
     const response = await sendRequest(`${target.origin}/`, {
       method: "GET",
       headers: {
@@ -531,10 +570,25 @@ async function readAdminActionToken(url, cookie, timeoutMs) {
       },
       timeoutMs,
     });
-    if (response.status < 200 || response.status >= 300) {
-      return "";
+    if (response.status >= 200 && response.status < 300) {
+      tokens = parseAdminActionTokens(response.text);
     }
-    tokens = parseAdminActionTokens(response.text);
+    if (!String(tokens[scope] ?? "").trim()) {
+      const fallbackPage = adminActionTokenFallbackPage(scope);
+      if (fallbackPage) {
+        const fallbackResponse = await sendRequest(`${target.origin}${fallbackPage}`, {
+          method: "GET",
+          headers: {
+            Accept: "text/html",
+            Cookie: cookie,
+          },
+          timeoutMs,
+        });
+        if (fallbackResponse.status >= 200 && fallbackResponse.status < 300) {
+          tokens = { ...tokens, ...parseAdminActionTokens(fallbackResponse.text) };
+        }
+      }
+    }
     adminActionTokenCache.set(cacheKey, tokens);
   }
   return String(tokens[scope] ?? "").trim();
@@ -590,7 +644,7 @@ async function readWebActionToken(url, cookie, timeoutMs) {
   return scope ? String(bundle.tokens[scope] ?? "").trim() : "";
 }
 
-export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {}) {
+async function postFormOnce(url, payload, { cookie, timeoutMs = 15000 } = {}) {
   const target = new URL(url);
   const adminActionToken = await readAdminActionToken(url, cookie, timeoutMs);
   const webActionToken = await readWebActionToken(url, cookie, timeoutMs);
@@ -619,7 +673,19 @@ export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {})
   };
 }
 
-export async function postJson(
+export async function postForm(url, payload, { cookie, timeoutMs = 15000 } = {}) {
+  try {
+    return await postFormOnce(url, payload, { cookie, timeoutMs });
+  } catch (error) {
+    if (!cookie || !isAdminActionTokenExpiryError(error)) {
+      throw error;
+    }
+    clearActionTokenCaches(url, cookie);
+    return await postFormOnce(url, payload, { cookie, timeoutMs });
+  }
+}
+
+async function postJsonOnce(
   url,
   payload,
   { cookie, bearerToken, expectStatus, timeoutMs = 20000 } = {}
@@ -659,6 +725,22 @@ export async function postJson(
     headers: response.headers,
     text: response.text,
   };
+}
+
+export async function postJson(
+  url,
+  payload,
+  { cookie, bearerToken, expectStatus, timeoutMs = 20000 } = {}
+) {
+  try {
+    return await postJsonOnce(url, payload, { cookie, bearerToken, expectStatus, timeoutMs });
+  } catch (error) {
+    if (!cookie || !isAdminActionTokenExpiryError(error)) {
+      throw error;
+    }
+    clearActionTokenCaches(url, cookie);
+    return await postJsonOnce(url, payload, { cookie, bearerToken, expectStatus, timeoutMs });
+  }
 }
 
 export async function getJson(url, { cookie, bearerToken, expectStatus, timeoutMs = 15000 } = {}) {

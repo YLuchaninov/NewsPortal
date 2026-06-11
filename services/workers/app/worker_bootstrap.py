@@ -36,56 +36,9 @@ async def run_user_digest_scheduler_until_stopped(
 
 
 async def run_workers(deps: dict[str, Any], logger: logging.Logger) -> None:
-    enable_legacy_queue_consumers = deps["legacy_queue_consumers_enabled"]()
     enable_sequence_runner = deps["sequence_runner_enabled"]()
     enable_sequence_cron_scheduler = deps["sequence_cron_scheduler_enabled"]()
     enable_user_digest_scheduler = deps["user_digest_scheduler_enabled"]()
-    legacy_workers: list[tuple[str, str, Worker]] = []
-    if enable_legacy_queue_consumers:
-        legacy_workers = [
-            _build_worker(deps, "normalize", "NORMALIZE_QUEUE", "process_normalize", 4),
-            _build_worker(deps, "dedup", "DEDUP_QUEUE", "process_dedup", 4),
-            _build_worker(deps, "embed", "EMBED_QUEUE", "process_embed", 2),
-            _build_worker(deps, "cluster", "CLUSTER_QUEUE", "process_cluster", 2),
-            _build_worker(
-                deps,
-                "match.criteria",
-                "CRITERIA_MATCH_QUEUE",
-                "process_match_criteria",
-                2,
-            ),
-            _build_worker(
-                deps,
-                "match.interests",
-                "INTEREST_MATCH_QUEUE",
-                "process_match_interests",
-                2,
-            ),
-            _build_worker(deps, "notify", "NOTIFY_QUEUE", "process_notify", 2),
-            _build_worker(deps, "llm.review", "LLM_REVIEW_QUEUE", "process_llm_review", 1),
-            _build_worker(
-                deps,
-                "feedback.ingest",
-                "FEEDBACK_INGEST_QUEUE",
-                "process_feedback_ingest",
-                2,
-            ),
-            _build_worker(deps, "reindex", "REINDEX_QUEUE", "process_reindex", 1),
-            _build_worker(
-                deps,
-                "interest.compile",
-                "INTEREST_COMPILE_QUEUE",
-                "process_interest_compile",
-                2,
-            ),
-            _build_worker(
-                deps,
-                "criterion.compile",
-                "CRITERION_COMPILE_QUEUE",
-                "process_criterion_compile",
-                2,
-            ),
-        ]
     sequence_worker: Worker | None = None
     if enable_sequence_runner:
         sequence_repository = deps["PostgresSequenceRepository"]()
@@ -108,8 +61,6 @@ async def run_workers(deps: dict[str, Any], logger: logging.Logger) -> None:
             },
         )
 
-    for label, _queue_name, worker in legacy_workers:
-        worker.on("failed", build_worker_error_handler(label, logger))
     if sequence_worker is not None:
         sequence_worker.on("failed", build_worker_error_handler("sequence", logger))
 
@@ -137,7 +88,7 @@ async def run_workers(deps: dict[str, Any], logger: logging.Logger) -> None:
             run_user_digest_scheduler_until_stopped(stop_event, deps, logger)
         )
 
-    consumed_queues = [queue_name for _label, queue_name, _worker in legacy_workers]
+    consumed_queues: list[str] = []
     if sequence_worker is not None:
         consumed_queues.append(deps["SEQUENCE_QUEUE"])
 
@@ -155,37 +106,11 @@ async def run_workers(deps: dict[str, Any], logger: logging.Logger) -> None:
             "User digest scheduler enabled with poll interval %.1fs.",
             deps["user_digest_poll_interval_seconds"](),
         )
-    if enable_legacy_queue_consumers:
-        logger.warning("Legacy queue consumers are enabled alongside sequence runtime.")
     await stop_event.wait()
     logger.info("Worker shutdown requested. Closing BullMQ consumers.")
     if sequence_scheduler_task is not None:
         await sequence_scheduler_task
     if user_digest_scheduler_task is not None:
         await user_digest_scheduler_task
-    for _label, _queue_name, worker in legacy_workers:
-        await worker.close()
     if sequence_worker is not None:
         await sequence_worker.close()
-
-
-def _build_worker(
-    deps: dict[str, Any],
-    label: str,
-    queue_key: str,
-    processor_key: str,
-    concurrency: int,
-) -> tuple[str, str, Worker]:
-    queue_name = deps[queue_key]
-    return (
-        label,
-        queue_name,
-        Worker(
-            queue_name,
-            deps[processor_key],
-            {
-                "connection": deps["build_redis_connection_options"](),
-                "concurrency": concurrency,
-            },
-        ),
-    )

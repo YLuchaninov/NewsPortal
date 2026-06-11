@@ -10,12 +10,12 @@ Universal Task Engine is the sequence-based execution model for SignalOps: decla
 
 - UTE foundation through final cutover is shipped.
 - Default managed runtime path:
-  `outbox_events -> relay sequence lookup -> sequence_runs -> q.sequence -> TaskGraph plugins/legacy handler adapters`.
+  `outbox_events -> relay sequence lookup -> sequence_runs -> q.sequence -> TaskGraph plugins/direct processor adapters`.
 - Active default sequences are seeded/activated by migrations `0011` and `0012`.
 - Discovery and enrichment use the same engine through later migrations.
 - Content analysis plugins may extend default sequences with persisted analysis steps such as `content.ner_extract`, `content.system_interest_label_project` and `content.filter_gate`; their durable truth lives in PostgreSQL analysis/gate tables.
-- Direct fallback queue fanout remains only for non-sequence events such as `foundation.smoke.requested` and `source.channel.sync.requested`.
-- Legacy intermediate signal_candidate events are compatibility constants and not default fallback fanout.
+- Direct queue fanout remains only for non-sequence events such as `foundation.smoke.requested` and `source.channel.sync.requested`.
+- Legacy intermediate signal_candidate events are compatibility constants and not queue routing targets.
 
 ## Data model
 
@@ -49,14 +49,14 @@ Discovery domain truth lives in `.aidp/contracts/discovery-agent.md`; UTE only g
 
 ## Runtime flags
 
-Current important flags include `WORKER_ENABLE_SEQUENCE_RUNNER`, `WORKER_ENABLE_SEQUENCE_CRON_SCHEDULER`, `WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS`, `WORKER_SEQUENCE_RUNNER_CONCURRENCY`, lock/stall durations and cron poll interval.
+Current important flags include `WORKER_ENABLE_SEQUENCE_RUNNER`, `WORKER_ENABLE_SEQUENCE_CRON_SCHEDULER`, `WORKER_SEQUENCE_RUNNER_CONCURRENCY`, lock/stall durations and cron poll interval.
 
-Relay uses sequence routing by default unless explicitly disabled.
+Relay sequence routing is mandatory for sequence-managed outbox events.
 
 ## Failure modes
 
-- Contract says sequence default but runtime still uses legacy queues.
-- Hidden dual execution of legacy handler and sequence run.
+- Contract says sequence default but runtime still uses old per-stage queues.
+- Hidden dual execution of direct processor adapter and sequence run.
 - Critical state written only into context instead of PostgreSQL.
 - Run/task-run observability not persisted.
 - Historical repair loses frozen snapshots or sends retro notifications.

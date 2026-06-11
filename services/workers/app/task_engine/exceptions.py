@@ -41,3 +41,11 @@ class TaskValidationError(Exception):
     def __init__(self, errors: list[str]):
         super().__init__(f"Validation failed: {'; '.join(errors)}")
         self.errors = errors
+
+
+class SequenceRunMissingError(RuntimeError):
+    """Raised when a queued sequence job no longer has its parent run row."""
+
+    def __init__(self, run_id: str):
+        super().__init__(f"Sequence run {run_id} was not found.")
+        self.run_id = run_id

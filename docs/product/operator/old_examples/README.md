@@ -11,6 +11,7 @@ Use active docs first:
 Rules for files in this directory:
 
 - Do not treat URLs, command sequences, thresholds or old workflow names here as current runtime truth.
+- Do not reuse old `must_have_terms = OR` notes as hidden-signal guidance. Current docs treat any-of `must_have_terms` as a hard pre-semantic gate; see [Hidden-Signal Selection Reference](../hidden-signal-selection.md).
 - Check current code, migrations, package scripts, admin/MCP surfaces and active docs before reusing any snippet.
 - If an old example becomes current again, move the revised version back into the active docs tree and update links in the same change.
 

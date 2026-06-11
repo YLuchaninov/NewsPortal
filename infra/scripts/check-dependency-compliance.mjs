@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { validateNodeDependencySpec } from "./lib/dependency-specs.mjs";
+
 const repoRoot = process.cwd();
 const packageRootDirs = ["packages", "apps", "services"];
 const dependencySections = [
@@ -23,13 +25,6 @@ const forbiddenDependencyNames = new Set([
   `@extractus/${["feed", "extractor"].join("-")}`,
 ]);
 
-const forbiddenSpecPrefixes = [
-  "git+",
-  "git:",
-  "github:",
-  "http:",
-  "https:",
-];
 const forbiddenBaselinePythonRequirements = [
   /^sentence-transformers==/i,
   /^torch==/i,
@@ -102,11 +97,8 @@ function checkNodeDependency(manifestFile, section, name, spec) {
   if (forbiddenDependencyNames.has(name)) {
     issues.push(`${manifestFile} declares forbidden dependency ${name}.`);
   }
-  if (specText === "*" || specText === "latest") {
-    issues.push(`${manifestFile} declares floating dependency ${name}@${specText}.`);
-  }
-  if (forbiddenSpecPrefixes.some((prefix) => specText.startsWith(prefix))) {
-    issues.push(`${manifestFile} declares network/git dependency spec ${name}@${specText}.`);
+  for (const issue of validateNodeDependencySpec(name, specText)) {
+    issues.push(`${manifestFile} declares invalid dependency spec: ${issue}`);
   }
 
   const metadataPath = dependencyPackageJsonPath(manifestFile, name);

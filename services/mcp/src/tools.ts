@@ -44,14 +44,19 @@ import {
 import {
   OPERATING_DOMAIN_VALUES,
   OPERATING_REPORT_KINDS,
+  EVIDENCE_LANE_TYPE_VALUES,
+  HARD_GATE_POLICY_VALUES,
   OPERATOR_CHANGE_INTENT_VALUES,
   OPERATOR_CLEANUP_INTENT_VALUES,
+  OPERATOR_FLOW_SYMPTOM_VALUES,
   OPERATOR_FLOW_MODE_VALUES,
   OPERATOR_TUNING_LAYER_VALUES,
   OPERATOR_UPDATE_RISK_VALUES,
+  SIGNAL_VISIBILITY_VALUES,
   buildFunnelAudit,
   buildFunnelAutoplan,
   buildFunnelIterationRecommendation,
+  buildOperatorFlowRoute,
   buildOperationalReportVerification,
   buildSelectionPrecisionAudit,
   buildSelectionDashboard,
@@ -116,6 +121,84 @@ const operatorReportVerifySchema = {
       type: "string",
       enum: [...OPERATOR_UPDATE_RISK_VALUES],
     },
+    signalVisibility: {
+      type: "string",
+      enum: [...SIGNAL_VISIBILITY_VALUES],
+    },
+    evidenceLaneType: {
+      type: "string",
+      enum: [...EVIDENCE_LANE_TYPE_VALUES],
+    },
+    hardGatePolicy: {
+      type: "string",
+      enum: [...HARD_GATE_POLICY_VALUES],
+    },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFlowRouteSchema = {
+  type: "object",
+  properties: {
+    sessionGoal: { type: "string" },
+    domain: {
+      type: "string",
+      enum: [...OPERATING_DOMAIN_VALUES],
+    },
+    objective: {
+      type: "string",
+      enum: [
+        "increase_recall",
+        "increase_precision",
+        "reduce_cost",
+        "debug_source",
+        "stabilize_discovery",
+      ],
+    },
+    symptoms: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [...OPERATOR_FLOW_SYMPTOM_VALUES],
+      },
+    },
+    operationMode: {
+      type: "string",
+      enum: [...OPERATOR_FLOW_MODE_VALUES],
+    },
+    operatorOverrideReason: { type: "string" },
+    affectedScope: { type: "array", items: { type: "string" } },
+    changeIntent: {
+      type: "string",
+      enum: [...OPERATOR_CHANGE_INTENT_VALUES],
+    },
+    cleanupIntent: {
+      type: "string",
+      enum: [...OPERATOR_CLEANUP_INTENT_VALUES],
+    },
+    tuningLayer: {
+      type: "string",
+      enum: [...OPERATOR_TUNING_LAYER_VALUES],
+    },
+    updateRisk: {
+      type: "string",
+      enum: [...OPERATOR_UPDATE_RISK_VALUES],
+    },
+    signalVisibility: {
+      type: "string",
+      enum: [...SIGNAL_VISIBILITY_VALUES],
+    },
+    evidenceLaneType: {
+      type: "string",
+      enum: [...EVIDENCE_LANE_TYPE_VALUES],
+    },
+    hardGatePolicy: {
+      type: "string",
+      enum: [...HARD_GATE_POLICY_VALUES],
+    },
+    residualBucket: { type: "string" },
+    reportKind: { type: "string" },
+    includeSamples: { type: "boolean" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -199,6 +282,18 @@ const operatorTuningRecommendSchema = {
     updateRisk: {
       type: "string",
       enum: [...OPERATOR_UPDATE_RISK_VALUES],
+    },
+    signalVisibility: {
+      type: "string",
+      enum: [...SIGNAL_VISIBILITY_VALUES],
+    },
+    evidenceLaneType: {
+      type: "string",
+      enum: [...EVIDENCE_LANE_TYPE_VALUES],
+    },
+    hardGatePolicy: {
+      type: "string",
+      enum: [...HARD_GATE_POLICY_VALUES],
     },
     sinceHours: { type: "number" },
     includeSamples: { type: "boolean" },
@@ -311,6 +406,12 @@ const discoverySourceFamiliesCoverageSchema = {
 
 const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
+    "operator.flow.route",
+    "Route an operator session to the correct advisory flow, intent, required read-back, blocked actions, and proof gates before recommendations, writes, or final claims.",
+    operatorFlowRouteSchema,
+    async (_context, args) => buildOperatorFlowRoute(args)
+  ),
+  createReadTool(
     "operator.system.health",
     "Read DB/API-backed operational health across channels, website pipeline, selection, content analysis, LLM budget, discovery, sequences, and cleanup state.",
     operatorSystemHealthSchema,
@@ -398,6 +499,9 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
         cleanupIntent: args.cleanupIntent,
         tuningLayer: args.tuningLayer,
         updateRisk: args.updateRisk,
+        signalVisibility: args.signalVisibility,
+        evidenceLaneType: args.evidenceLaneType,
+        hardGatePolicy: args.hardGatePolicy,
       };
 
       if ((OPERATING_REPORT_KINDS as readonly string[]).includes(reportKind) || reportKind === "selection") {

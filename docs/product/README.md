@@ -10,6 +10,7 @@
 - [Product Blueprint](./architecture/product-blueprint.md) — главное описание продукта, архитектурных принципов и ограничений.
 - [Nonstandard Technical Decisions](./architecture/nonstandard-technical-decisions.md) — ключевые нестандартные решения, tradeoffs и внешние аналоги.
 - [Operator Guide](./operator/HOW_TO_USE.md) — повседневная работа в админке.
+- [Hidden-Signal Selection Reference](./operator/hidden-signal-selection.md) — три типа сигналов, hard-gate safety, candidateSignals и replay proof.
 - [Manual MVP Runbook](./operator/manual-mvp-runbook.md) — как поднять локальный контур и пройти ручную проверку.
 - [Local Product Testing](./operator/local-product-testing.md) — какие команды доказывают текущий локальный продуктовый контур.
 - [Documentation Inventory](../documentation-inventory.md) — карта docs и их статус после Discovery vNext/plugin sync.
@@ -17,6 +18,7 @@
 ## Практические справочники
 
 - [Example Bundles](./operator/examples/EXAMPLES.md) — проверенные RSS/template-конфигурации для manual testing.
+- [Hidden-Signal Selection](./operator/hidden-signal-selection.md) — operator reference для `explicit_marker`, `hidden_intent`, `mixed` и proof loops.
 - [Website Source Testing](./operator/examples/WEBSITE_SOURCES_TESTING.md) — operator checklist для website lane и `Resources`.
 - [Discovery vNext Blueprint](../discovery_vnext_blueprint.md) — active source specification for vNext-only discovery.
 - [Ingress Adapter Catalog Plan](../ingress-adapter-catalog-plan.md) — implementation/design notes for current adapter catalog and binding model.

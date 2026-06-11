@@ -5,7 +5,9 @@ import {
   buildHttpDiagnostics,
   extractHttpDiagnostics,
   extractMcpDiagnostics,
+  isAdminActionTokenExpiryError,
   parseJsonPayload,
+  selectAdminEmail,
 } from "../../../infra/scripts/lib/mcp-http-testkit.mjs";
 
 test("MCP live HTTP diagnostics preserve useful metadata for non-JSON HTML responses", () => {
@@ -91,4 +93,30 @@ test("MCP live diagnostics can serialize JSON-RPC tool errors for artifacts", ()
   assert.deepEqual(diagnostics?.requestArgs, {
     candidateId: "candidate-1",
   });
+});
+
+test("HTTP proof helper identifies retryable admin action token expiry", () => {
+  assert.equal(
+    isAdminActionTokenExpiryError(new Error("Invalid or expired admin action token.")),
+    true
+  );
+  const diagnosticError = new Error("Expected POST to return 200, got 403") as Error & {
+    httpDiagnostics?: { bodyPreview?: string };
+  };
+  diagnosticError.httpDiagnostics = {
+    bodyPreview: '{"error":"Invalid or expired admin action token."}',
+  };
+  assert.equal(isAdminActionTokenExpiryError(diagnosticError), true);
+  assert.equal(isAdminActionTokenExpiryError(new Error("Forbidden")), false);
+});
+
+test("selectAdminEmail creates isolated aliases for explicit emails and domain allowlists", () => {
+  assert.equal(
+    selectAdminEmail(["admin@example.com"], "run-1", { prefix: "proof" }),
+    "admin+proof-run-1@example.com"
+  );
+  assert.equal(
+    selectAdminEmail(["@example.com"], "run-1", { prefix: "proof" }),
+    "proof-run-1@example.com"
+  );
 });

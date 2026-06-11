@@ -74,14 +74,7 @@ export interface TaskGraphNode {
 
 export type TaskGraph = readonly TaskGraphNode[];
 
-export interface OutboxEventQueueMapOptions {
-  enableEmbedFanout?: boolean;
-}
-
-export function buildOutboxEventQueueMap(
-  _options?: OutboxEventQueueMapOptions
-): Record<string, readonly string[]> {
-  void _options;
+export function buildOutboxEventQueueMap(): Record<string, readonly string[]> {
   return {
     [FOUNDATION_SMOKE_EVENT]: [FOUNDATION_SMOKE_QUEUE],
     [SOURCE_CHANNEL_SYNC_REQUESTED_EVENT]: [FETCH_QUEUE]

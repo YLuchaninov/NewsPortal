@@ -6,6 +6,7 @@ import {
   ensureFirebasePasswordUser,
   fetchJson,
   postForm,
+  publicApiUrl,
   readAllowlistEntries,
   readEnvFile,
   requireConfigured,
@@ -635,9 +636,9 @@ function buildChannelPayload(runId, groupKey, site, overrides = {}) {
 
 async function listFetchRuns(channelId) {
   return fetchJson(
-    `http://127.0.0.1:8000/maintenance/fetch-runs?channel_id=${encodeURIComponent(
+    publicApiUrl(`/maintenance/fetch-runs?channel_id=${encodeURIComponent(
       channelId
-    )}&page=1&pageSize=5`,
+    )}&page=1&pageSize=5`),
     { timeoutMs: 20000 }
   );
 }
@@ -663,9 +664,9 @@ async function waitForLatestCompletedFetchRun(channelId, previousStartedAt = nul
 
 async function listResources(channelId, pageSize = 100) {
   return fetchJson(
-    `http://127.0.0.1:8000/maintenance/web-resources?channelId=${encodeURIComponent(
+    publicApiUrl(`/maintenance/web-resources?channelId=${encodeURIComponent(
       channelId
-    )}&page=1&pageSize=${pageSize}`,
+    )}&page=1&pageSize=${pageSize}`),
     { timeoutMs: 20000 }
   );
 }
@@ -769,10 +770,10 @@ async function inspectResourceDetails(resourceIds) {
   const details = [];
   for (const resourceId of resourceIds) {
     try {
-      const detail = await fetchJson(
-        `http://127.0.0.1:8000/maintenance/web-resources/${encodeURIComponent(resourceId)}`,
-        { timeoutMs: 20000 }
-      );
+    const detail = await fetchJson(
+        publicApiUrl(`/maintenance/web-resources/${encodeURIComponent(resourceId)}`),
+      { timeoutMs: 20000 }
+    );
       details.push(detail);
     } catch (error) {
       details.push({

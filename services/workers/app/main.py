@@ -146,7 +146,6 @@ from .notification_runtime import (
 )
 from .prompting import render_llm_prompt_template
 from .runtime_config import (
-    legacy_queue_consumers_enabled,
     sequence_cron_poll_interval_seconds,
     sequence_cron_scheduler_enabled,
     sequence_runner_concurrency,
@@ -275,7 +274,6 @@ WORKER_MAIN_COMPAT_EXPORTS = (
     INTEREST_CENTROIDS_INDEX_NAME,
     INTEREST_MATCH_QUEUE,
     is_signal_candidate_eligible_for_personalization,
-    legacy_queue_consumers_enabled,
     list_content_analysis_backfill_targets,
     list_gray_zone_target_ids,
     list_historical_backfill_snapshot_batch,

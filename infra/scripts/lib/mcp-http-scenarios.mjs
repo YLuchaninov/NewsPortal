@@ -1,7 +1,7 @@
 import {
   assertMcpSseHandshake,
-  apiBaseUrl,
   mcpBaseUrl,
+  nginxBaseUrl,
   postJson,
   readIdentifier,
   waitFor,
@@ -35,6 +35,36 @@ import {
   readRows,
   sqlLiteral,
 } from "./mcp-http-scenario-utils.mjs";
+
+export function readSourceInventoryScopeStatus(responsePayload) {
+  const sourceInventory = responsePayload?.sourceInventory;
+  if (!sourceInventory || typeof sourceInventory !== "object") {
+    return "";
+  }
+  const rawConfirmation =
+    sourceInventory.scope_confirmation_json ?? sourceInventory.scopeConfirmationJson;
+  const confirmation =
+    typeof rawConfirmation === "string" ? parseJsonPayloadSilently(rawConfirmation) : rawConfirmation;
+  if (!confirmation || typeof confirmation !== "object") {
+    return "";
+  }
+  return String(confirmation.scopeStatus ?? "").trim();
+}
+
+export function buildMcpScenarioApiUrl(pathname) {
+  const normalizedPathname = String(pathname ?? "").startsWith("/")
+    ? String(pathname)
+    : `/${String(pathname ?? "")}`;
+  return `${nginxBaseUrl}/api${normalizedPathname}`;
+}
+
+function parseJsonPayloadSilently(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 async function seedContentAnalysisCanaryRows(harness) {
   const subjectId = randomUUID();
@@ -1379,14 +1409,18 @@ async function scenarioDiscoveryOperatorFlows(harness) {
     sourceInventoryId,
     "Risk",
   ]);
-  const adminAction = await postJson(`${apiBaseUrl}/maintenance/discovery/source-inventory/action`, {
-    sourceInventoryId,
-    action: "confirm_scope",
-    reason: "deterministic MCP/admin source scope smoke",
-    createdBy: "mcp-http-scenarios",
-  });
+  const adminAction = await postJson(
+    buildMcpScenarioApiUrl("/maintenance/discovery/source-inventory/action"),
+    {
+      sourceInventoryId,
+      action: "confirm_scope",
+      reason: "deterministic MCP/admin source scope smoke",
+      createdBy: "mcp-http-scenarios",
+    },
+    { expectStatus: 200 }
+  );
   assert(
-    adminAction?.json?.sourceInventory?.scope_confirmation_json?.scopeStatus === "confirmed",
+    readSourceInventoryScopeStatus(adminAction?.json) === "confirmed",
     "confirm_scope action must confirm scope without destructive rollback."
   );
   const confirmationStatus = firstResultLine(
@@ -1612,6 +1646,13 @@ function buildReadToolCalls() {
     { name: "web_resources.list", args: { page: 1, pageSize: 20 } },
     { name: "fetch_runs.list", args: { page: 1, pageSize: 20 } },
     { name: "llm_budget.summary", args: {} },
+    { name: "operator.flow.route", args: {
+      sessionGoal: "deterministic MCP operator routing proof",
+      domain: "selection",
+      objective: "increase_recall",
+      symptoms: ["zero_selected"],
+      signalVisibility: "mixed",
+    } },
     { name: "operator.system.health", args: { domains: ["selection", "website_pipeline"], includeSamples: true } },
     { name: "operator.issue.explain", args: { symptom: "website resources projected but rejected", domain: "website_pipeline", includeSamples: true } },
     { name: "operator.tuning.recommend", args: { domain: "selection", objective: "increase_precision", residualBucket: "gray_zone_hold" } },

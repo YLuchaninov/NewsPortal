@@ -59,7 +59,7 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 
 1. Operators configure channels/sources in admin or through API/control-plane surfaces.
 2. Fetchers poll due channels, persist raw observations/resources/signal-candidates in PostgreSQL, and emit thin outbox events.
-3. Relay polls `outbox_events` and dispatches thin BullMQ jobs, currently including sequence-managed routing through `q.sequence`.
+3. Relay polls `outbox_events` and dispatches thin BullMQ jobs; sequence-managed events route through `q.sequence`.
 4. Workers read thin jobs, load authoritative state from PostgreSQL, write derived processing results, preserve inbox idempotency, and emit follow-up outbox events when needed.
 5. API/admin/web read materialized truth from PostgreSQL and derived index snapshots when relevant.
 6. Reindex/backfill and discovery flows are explicit operator-visible maintenance capabilities, not hidden side effects.

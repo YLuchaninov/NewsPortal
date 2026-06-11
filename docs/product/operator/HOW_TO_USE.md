@@ -130,6 +130,30 @@ Rules отвечают за system selection.
 
 Scope `interests` не является обязательным baseline для LLM review. Не делайте его hot path без отдельного решения.
 
+### Signal visibility и hard gates
+
+Полный reference: [Hidden-Signal Selection Reference](./hidden-signal-selection.md).
+
+Перед tuning классифицируйте интерес как один из типов:
+
+- `explicit_marker` — явный сигнал с доказанным обязательным маркером;
+- `hidden_intent` — скрытый или операционный intent, где нужная формулировка может вообще не использовать ваши термины;
+- `mixed` — несколько evidence paths в одном бизнес-смысле, например явные notices плюс скрытый операционный спрос.
+
+Для `hidden_intent` и `unknown` baseline должен оставлять `must_have_terms=[]` и `short_tokens_required=[]`. `must_have_terms` работает как any-of, но это всё равно hard pre-semantic gate: item без одного из терминов не дойдет до semantic/gray/LLM path. `short_tokens_required` — extracted-token requirement, а не замена OR keywords.
+
+Для `explicit_marker` hard gate допустим только после proof: representative samples должны показать, что marker действительно обязательный, затем нужен bounded replay и `operator.report.verify`. Для `mixed` не ставьте общий global hard gate на весь interest; разделите смысл на lane-like system interests/config entries или явно отделите hidden lane от explicit-marker lane.
+
+Для hidden/mixed recovery используйте:
+
+- representative positive prototypes как настоящие snippets, не keyword piles;
+- `candidateSignals` с literal cue fragments в `group.cues`;
+- near-miss negative prototypes and negative cue groups;
+- content-kind/source-context evidence;
+- bounded `docIds` replay and report verification.
+
+Админка и API теперь показывают advisory warnings для unsafe hard gates, phrase-like short tokens, label-like candidate cues and weak cue groups. Эти warnings не запрещают save, но требуют read-back и sample proof before broadening.
+
 ## Signal Candidates, Resources and Clusters
 
 `Signal Candidates` показывают editorial/content items.
@@ -157,6 +181,8 @@ Reindex нужен, когда изменились rules/profiles/templates и�
 - backfill должен быть видимым как job/run;
 - historical replay не должен рассылать retro notifications;
 - результат должен объяснять counts and residuals;
+- для selection replay проверяйте `selection_replay` / `selectionReplay`: `selectionReplayTargetCount`, `selectionReplayedCount`, `enrichmentTargetCount`, `enrichmentProcessedCount` and `skippedSelectionDueToEnrichmentState`;
+- completed job без replay counters не является достаточным доказательством, что старые rows пересчитаны по текущему profile;
 - если job завис, смотрите maintenance/read-model surfaces и worker logs.
 
 ## Automation and Task Plugins

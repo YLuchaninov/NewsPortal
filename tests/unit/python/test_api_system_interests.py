@@ -185,6 +185,43 @@ class ApiSystemInterestsTests(unittest.TestCase):
 
         self.assertEqual(result["selection_profile_policy_json"]["llmReviewMode"], "optional_high_value_only")
 
+    def test_system_interest_readback_exposes_hidden_signal_guardrail_warnings(self) -> None:
+        with patch.object(
+            api_main,
+            "query_one",
+            return_value={
+                "interest_template_id": "template-guardrails",
+                "must_have_terms": ["formal notice"],
+                "short_tokens_required": ["project signal"],
+                "selection_profile_family": "compatibility_interest_template",
+                "selection_profile_definition_json": {
+                    "candidateSignals": {
+                        "positiveGroups": [
+                            {"name": "notice_signal", "cues": ["event_published"]}
+                        ],
+                        "negativeGroups": [],
+                    }
+                },
+                "selection_profile_policy_json": {},
+            },
+        ):
+            result = api_main.get_system_interest("template-guardrails")
+
+        warning_kinds = {
+            warning["kind"] for warning in result["hard_gate_safety_warnings"]
+        }
+        self.assertIn("hard_gate_unsafe_for_hidden_signal", warning_kinds)
+        self.assertIn("short_token_gate_unsafe_for_hidden_signal", warning_kinds)
+        self.assertIn("invalid_short_token_phrase", warning_kinds)
+        candidate_warning_kinds = {
+            warning["kind"] for warning in result["candidate_signals_quality_warnings"]
+        }
+        self.assertIn("label_like_candidate_signal_cue", candidate_warning_kinds)
+        self.assertEqual(
+            result["selection_profile_candidate_signal_summary"]["qualityWarningCount"],
+            len(result["candidate_signals_quality_warnings"]),
+        )
+
     def test_get_system_interest_not_found_preserves_http_404(self) -> None:
         with patch.object(api_main, "query_one", return_value=None):
             with self.assertRaises(HTTPException) as raised:

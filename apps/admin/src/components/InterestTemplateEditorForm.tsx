@@ -4,6 +4,14 @@ import {
   ADMIN_SECTION_CARD_CLASS,
 } from "../lib/admin-ui-classes";
 
+export interface InterestTemplateAdvisoryWarning {
+  kind?: string;
+  path?: string;
+  cue?: string;
+  message?: string;
+  guidance?: string;
+}
+
 export interface InterestTemplateEditorValue {
   interestTemplateId?: string;
   name: string;
@@ -32,6 +40,8 @@ export interface InterestTemplateEditorValue {
   candidateSignalSource?: string;
   candidatePositiveSignalGroupCount?: string;
   candidateNegativeSignalGroupCount?: string;
+  candidateSignalsQualityWarnings?: InterestTemplateAdvisoryWarning[];
+  hardGateSafetyWarnings?: InterestTemplateAdvisoryWarning[];
 }
 
 interface InterestTemplateEditorFormProps {
@@ -60,6 +70,11 @@ export function InterestTemplateEditorForm({
   cancelHref,
   value,
 }: InterestTemplateEditorFormProps) {
+  const advisoryWarnings = [
+    ...(value.hardGateSafetyWarnings ?? []),
+    ...(value.candidateSignalsQualityWarnings ?? []),
+  ];
+
   return (
     <form method="post" action={action} className="space-y-6">
       <input type="hidden" name="kind" value="interest" />
@@ -161,7 +176,7 @@ export function InterestTemplateEditorForm({
             label="Positive prototypes"
             name="interest-template-positive-texts"
             required
-            helpText="One example item per line that should match this system interest."
+            helpText="Representative item snippets that should match semantically. Do not use this as keyword recovery for hidden signals."
             helpWide
           >
             <Textarea
@@ -176,7 +191,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Negative prototypes"
             name="interest-template-negative-texts"
-            helpText="Near-neighbor examples that should not match this system interest, to reduce false positives."
+            helpText="Near-neighbor examples that should not match, especially operational lookalikes and source-wrapper noise."
             helpWide
           >
             <Textarea
@@ -189,6 +204,45 @@ export function InterestTemplateEditorForm({
           </FormField>
         </div>
       </section>
+
+      {advisoryWarnings.length > 0 && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+          <div className="mb-3">
+            <h2 className="text-base font-semibold text-foreground">
+              Selection guardrail warnings
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              These warnings do not block saving. They mark places where hidden or mixed
+              signals can lose recall unless read-back, sample replay, and report verification
+              prove the gate or cue is safe.
+            </p>
+          </div>
+          <ul className="space-y-2 text-sm">
+            {advisoryWarnings.slice(0, 8).map((warning, index) => (
+              <li
+                key={`${warning.kind ?? "warning"}-${warning.path ?? index}`}
+                className="rounded-xl border border-amber-200/80 bg-background/80 px-3 py-2 dark:border-amber-900/30"
+              >
+                <p className="font-medium text-foreground">
+                  {warning.message ?? warning.kind ?? "Configuration warning"}
+                </p>
+                {(warning.path || warning.cue) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {[warning.path, warning.cue ? `cue:${warning.cue}` : ""]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+                {warning.guidance && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {warning.guidance}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className={ADMIN_SECTION_CARD_CLASS}>
         <div className="mb-5">
@@ -337,7 +391,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Must-have terms"
             name="interest-template-must-have"
-            helpText="One term per line. Signal candidates must contain at least one of these terms."
+            helpText="Any-of lexical gate, but still hard pre-semantic filtering. Keep empty for hidden or mixed signals unless mandatory-marker proof exists."
             helpWide
           >
             <Textarea
@@ -412,7 +466,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Required short tokens"
             name="interest-template-short-required"
-            helpText="Short keywords, acronyms, or stock tickers that must be present."
+            helpText="Extracted short-token requirement only. Do not use phrases or broad keyword OR lists here."
             helpWide
           >
             <Textarea
@@ -442,7 +496,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Candidate uplift positive cues"
             name="interest-template-candidate-positive-signals"
-            helpText="One group per line. Format: group_name: cue one | cue two | cue three. These cues help near-threshold items stay alive for gray-zone review."
+            helpText="One group per line. Format: group_name: literal cue one | literal cue two. group_name is a label; cues must be observable text fragments."
             helpWide
           >
             <Textarea
@@ -457,7 +511,7 @@ export function InterestTemplateEditorForm({
           <FormField
             label="Candidate uplift negative cues"
             name="interest-template-candidate-negative-signals"
-            helpText="One group per line. Format: group_name: cue one | cue two | cue three. Use these to block marketplace, hiring, or community noise from the candidate-recovery path."
+            helpText="One group per line. Use literal near-miss or noise fragments that should block candidate recovery for this lane."
             helpWide
           >
             <Textarea

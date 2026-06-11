@@ -505,6 +505,7 @@ function formatUpdatedAt(value: unknown): string {
 
                     <label class="grid gap-1.5">
                       <span class="text-sm font-medium">Positive prototypes</span>
+                      <span class="text-xs text-muted-foreground">Use representative snippets, not keyword piles. Hidden signals should recover through evidence and replay proof, not broad positive terms.</span>
                       <textarea
                         name="positive_texts"
                         rows="7"
@@ -541,7 +542,7 @@ function formatUpdatedAt(value: unknown): string {
                       <label class="grid gap-1.5">
                         <span class="text-sm font-medium">Must-have terms</span>
                         <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"></textarea>
-                        <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
+                        <span class="text-xs text-muted-foreground">Any-of lexical gate, but still hard pre-semantic filtering. Keep empty for hidden or mixed signals unless mandatory-marker proof exists.</span>
                       </label>
                       <label class="grid gap-1.5">
                         <span class="text-sm font-medium">Must-not-have terms</span>
@@ -564,6 +565,7 @@ function formatUpdatedAt(value: unknown): string {
                       <label class="grid gap-1.5">
                         <span class="text-sm font-medium">Required short tokens</span>
                         <input name="short_tokens_required" type="text" placeholder="AI, FTC" class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                        <span class="text-xs text-muted-foreground">Extracted short-token requirement only. Do not use phrases or broad keyword OR lists here.</span>
                       </label>
                       <label class="grid gap-1.5">
                         <span class="text-sm font-medium">Forbidden short tokens</span>
@@ -682,6 +684,7 @@ function formatUpdatedAt(value: unknown): string {
 
                         <label class="grid gap-1.5">
                           <span class="text-sm font-medium">Positive prototypes</span>
+                          <span class="text-xs text-muted-foreground">Use representative snippets, not keyword piles. Hidden signals should recover through evidence and replay proof, not broad positive terms.</span>
                           <textarea
                             name="positive_texts"
                             rows="6"
@@ -716,7 +719,7 @@ function formatUpdatedAt(value: unknown): string {
                           <label class="grid gap-1.5">
                             <span class="text-sm font-medium">Must-have terms</span>
                             <textarea name="must_have_terms" rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{formatLineListValue(selectedInterest.must_have_terms)}</textarea>
-                            <span class="text-xs text-muted-foreground">One term per line or comma-separated. Matching uses OR semantics.</span>
+                            <span class="text-xs text-muted-foreground">Any-of lexical gate, but still hard pre-semantic filtering. Keep empty for hidden or mixed signals unless mandatory-marker proof exists.</span>
                           </label>
                           <label class="grid gap-1.5">
                             <span class="text-sm font-medium">Must-not-have terms</span>
@@ -739,6 +742,7 @@ function formatUpdatedAt(value: unknown): string {
                           <label class="grid gap-1.5">
                             <span class="text-sm font-medium">Required short tokens</span>
                             <input name="short_tokens_required" type="text" value={formatCsvListValue(selectedInterest.short_tokens_required)} class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                            <span class="text-xs text-muted-foreground">Extracted short-token requirement only. Do not use phrases or broad keyword OR lists here.</span>
                           </label>
                           <label class="grid gap-1.5">
                             <span class="text-sm font-medium">Forbidden short tokens</span>

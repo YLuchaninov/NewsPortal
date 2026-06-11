@@ -223,6 +223,29 @@ export function LiveReindexJobsSection({
                     selection profiles: {job.selectionProfileSummary}
                   </p>
                 )}
+                {job.selectionReplay && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        job.selectionReplay.selectionReplayComplete
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                      }`}
+                    >
+                      selection {job.selectionReplay.selectionReplayedCount}/
+                      {job.selectionReplay.selectionReplayTargetCount}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      enrichment {job.selectionReplay.enrichmentProcessedCount}/
+                      {job.selectionReplay.enrichmentTargetCount}
+                    </span>
+                    {job.selectionReplay.skippedSelectionDueToEnrichmentState > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                        {job.selectionReplay.skippedSelectionDueToEnrichmentState} selection skipped
+                      </span>
+                    )}
+                  </div>
+                )}
                 {hasSelectionProfileSnapshot(job) && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">

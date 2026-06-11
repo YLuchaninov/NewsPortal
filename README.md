@@ -34,6 +34,7 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 - [Documentation Index](docs/product/README.md)
 - [Product Blueprint](docs/product/architecture/product-blueprint.md)
 - [Operator Guide](docs/product/operator/HOW_TO_USE.md)
+- [Hidden-Signal Selection Reference](docs/product/operator/hidden-signal-selection.md)
 - [Manual MVP Runbook](docs/product/operator/manual-mvp-runbook.md)
 - [Local Product Testing](docs/product/operator/local-product-testing.md)
 - [Example Bundles](docs/product/operator/examples/EXAMPLES.md)

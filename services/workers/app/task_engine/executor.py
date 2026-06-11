@@ -5,7 +5,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from .context import ContextManager
-from .exceptions import TaskExecutionError
+from .exceptions import SequenceRunMissingError, TaskExecutionError
 from .models import SequenceDefinition, TaskDefinition
 from .plugins import (
     TaskPlugin,
@@ -42,7 +42,10 @@ class SequenceExecutor:
         self._sleep = sleep or asyncio.sleep
 
     async def execute_run(self, run_id: str) -> dict[str, Any]:
-        run = await self._load_run_with_retry(run_id)
+        try:
+            run = await self._load_run_with_retry(run_id)
+        except SequenceRunMissingError:
+            return self._missing_run_result(run_id)
 
         sequence = await self._repository.get_sequence(run.sequence_id)
         if sequence is None:
@@ -62,7 +65,7 @@ class SequenceExecutor:
         if not claimed:
             existing_run = await self._repository.get_run(run_id)
             if existing_run is None:
-                raise ValueError(f"Sequence run {run_id} was not found.")
+                return self._missing_run_result(run_id)
             return {
                 "runId": run_id,
                 "status": existing_run.status,
@@ -169,8 +172,8 @@ class SequenceExecutor:
                 "stoppedEarly": False,
                 "context": context_manager.snapshot(),
             }
-        except Exception:
-            raise
+        except SequenceRunMissingError:
+            return self._missing_run_result(run_id)
 
     async def _load_run_with_retry(self, run_id: str):
         for attempt in range(RUN_LOOKUP_RETRY_ATTEMPTS):
@@ -179,7 +182,16 @@ class SequenceExecutor:
                 return run
             if attempt < RUN_LOOKUP_RETRY_ATTEMPTS - 1:
                 await self._sleep(RUN_LOOKUP_RETRY_DELAY_SECONDS)
-        raise ValueError(f"Sequence run {run_id} was not found.")
+        raise SequenceRunMissingError(run_id)
+
+    def _missing_run_result(self, run_id: str) -> dict[str, Any]:
+        return {
+            "runId": run_id,
+            "status": "missing_run",
+            "stoppedEarly": True,
+            "skippedStaleJob": True,
+            "context": {},
+        }
 
     def _build_initial_context(
         self,

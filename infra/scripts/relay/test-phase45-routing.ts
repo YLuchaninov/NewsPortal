@@ -235,7 +235,6 @@ async function main(): Promise<void> {
   const redis = createRedisConnection(config);
   const relay = new OutboxRelay(pool, redis, config.outboxBatchSize, {
     sequenceRouting: {
-      enabled: config.enableSequenceRouting,
       repository: new PostgresSequenceRoutingRepository()
     }
   });

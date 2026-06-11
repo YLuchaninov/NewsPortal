@@ -269,6 +269,69 @@ function readCandidateSignalGroupCount(definitionJson: unknown, key: string): nu
   return Array.isArray(groups) ? groups.length : 0;
 }
 
+function isLabelLikeCandidateCue(value: unknown): boolean {
+  const cue = String(value ?? "").trim();
+  return Boolean(cue) && /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/iu.test(cue);
+}
+
+function readCandidateSignalGroupsForWarnings(definitionJson: unknown) {
+  const definition = asRecord(definitionJson);
+  const candidateSignals = asRecord(definition.candidateSignals);
+  const readGroups = (key: "positiveGroups" | "negativeGroups") => {
+    const rawGroups = candidateSignals[key];
+    const groups = Array.isArray(rawGroups) ? rawGroups : [];
+    return groups.map((group, index) => {
+      if (typeof group === "string") {
+        return { name: group, cues: [group], index };
+      }
+      const record = asRecord(group);
+      return {
+        name: String(record.name ?? record.groupName ?? `group_${index + 1}`),
+        cues: [
+          ...asStringList(record.cues),
+          ...asStringList(record.fragments),
+          ...asStringList(record.values),
+        ],
+        index,
+      };
+    });
+  };
+  return {
+    positiveGroups: readGroups("positiveGroups"),
+    negativeGroups: readGroups("negativeGroups"),
+  };
+}
+
+function buildCandidateSignalsQualityWarnings(definitionJson: unknown): string[] {
+  const groups = readCandidateSignalGroupsForWarnings(definitionJson);
+  const warnings: string[] = [];
+  for (const [polarity, entries] of [
+    ["positive", groups.positiveGroups],
+    ["negative", groups.negativeGroups],
+  ] as const) {
+    for (const group of entries) {
+      if (group.cues.length === 0) {
+        warnings.push(
+          `candidateSignals ${polarity} group "${group.name}" has no literal cue fragments.`
+        );
+      }
+      if (group.cues.length === 1) {
+        warnings.push(
+          `candidateSignals ${polarity} group "${group.name}" has one cue; verify evidence diversity with bounded replay.`
+        );
+      }
+      for (const cue of group.cues) {
+        if (isLabelLikeCandidateCue(cue)) {
+          warnings.push(
+            `candidateSignals cue "${cue}" looks like an id/concept label; cues should be literal observable text fragments, while group.name carries the conceptual label.`
+          );
+        }
+      }
+    }
+  }
+  return warnings;
+}
+
 async function buildSystemInterestReadBackVerification(
   pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }> },
   interestTemplateId: string,
@@ -279,6 +342,8 @@ async function buildSystemInterestReadBackVerification(
       select
         it.interest_template_id::text as "interestTemplateId",
         it.allowed_content_kinds as "allowedContentKinds",
+        it.must_have_terms as "mustHaveTerms",
+        it.short_tokens_required as "shortTokensRequired",
         c.criterion_id::text as "criterionId",
         c.compiled as "criterionCompiled",
         c.compile_status as "criterionCompileStatus",
@@ -307,10 +372,14 @@ async function buildSystemInterestReadBackVerification(
 
   const policy = asRecord(row.policyJson);
   const allowedContentKinds = asStringList(row.allowedContentKinds);
+  const mustHaveTerms = asStringList(row.mustHaveTerms);
+  const shortTokensRequired = asStringList(row.shortTokensRequired);
   const actual = {
     status: "verified",
     interestTemplateId: row.interestTemplateId,
     allowedContentKinds,
+    mustHaveTerms,
+    shortTokensRequired,
     criterionId: row.criterionId,
     criterionCompiled: row.criterionCompiled,
     criterionCompileStatus: row.criterionCompileStatus,
@@ -364,8 +433,24 @@ async function buildSystemInterestReadBackVerification(
       "Requested candidate_negative_signals count does not match persisted candidate negative signal groups."
     );
   }
+  const candidateSignalsQualityWarnings = buildCandidateSignalsQualityWarnings(row.definitionJson);
+  warnings.push(...candidateSignalsQualityWarnings);
+  if (mustHaveTerms.length > 0) {
+    warnings.push(
+      "must_have_terms is any-of but still a hard pre-semantic gate; for hidden/unknown signals keep it empty unless mandatory marker proof exists."
+    );
+  }
+  if (shortTokensRequired.length > 0) {
+    warnings.push(
+      "short_tokens_required is an extracted-token requirement, not a broad OR keyword replacement; hidden-signal baseline is empty unless token proof exists."
+    );
+  }
   return {
     ...actual,
+    candidateSignalsQualityWarnings,
+    hardGateSafetyWarnings: warnings.filter((warning) =>
+      /must_have_terms|short_tokens_required|hard pre-semantic|hidden-signal/iu.test(warning)
+    ),
     warnings,
     nextReadBack: [
       {

@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import {
   createHarness,
@@ -9,7 +10,7 @@ import {
 
 const log = createLogger("discovery-vnext-mcp-live-signal");
 
-const SIGNAL_PACKS = [
+export const SIGNAL_PACKS = [
   {
     key: "security_advisories",
     name: "Security advisory signal source discovery",
@@ -23,8 +24,10 @@ const SIGNAL_PACKS = [
     ],
     negativeTexts: ["SEO vulnerability explainer", "generic cybersecurity opinion", "training course promotion"],
     candidatePositiveSignals: [
-      "official_advisory: CVE, severity, affected versions, mitigation, patch",
-      "freshness: published advisory, updated bulletin, emergency release",
+      "official_advisory: security advisory, CVE, vendor advisory",
+      "vulnerability_patch: critical vulnerability, patch, patched versions, update",
+      "affected_versions: affected versions, remote code execution, mitigation",
+      "operator_urgency: emergency release, upgrade immediately, exploit",
     ],
     candidateNegativeSignals: ["commentary_only: news summary without primary advisory link", "sales_page: product pitch"],
     evidenceTerms: ["security", "advisory", "cve", "vulnerability", "patch", "mitigation", "release notes"],
@@ -42,8 +45,10 @@ const SIGNAL_PACKS = [
     ],
     negativeTexts: ["law firm marketing", "generic policy commentary", "event invitation"],
     candidatePositiveSignals: [
-      "regulator_source: agency notice, consultation, guidance, deadline, enforcement date",
-      "implementation_signal: compliance obligation, public comment period, official document",
+      "regulatory_change: regulation, regulatory, reform, act",
+      "compliance_obligation: compliance, comply, obligation, deadline",
+      "implementation_guidance: guidance, prepare, what it means, implementation",
+      "trade_policy_signal: customs, certificate, deforestation, free trade",
     ],
     candidateNegativeSignals: ["secondary_commentary: consultant blog", "event_only: webinar without policy update"],
     evidenceTerms: ["regulator", "regulatory", "consultation", "compliance", "deadline", "guidance", "procurement", "public tender"],
@@ -61,8 +66,10 @@ const SIGNAL_PACKS = [
     ],
     negativeTexts: ["marketing launch blog", "generic tutorial", "third-party roundup"],
     candidatePositiveSignals: [
-      "primary_changelog: release notes, version, breaking change, deprecated API, migration guide",
-      "operator_signal: deadline, removal, upgrade requirement, compatibility impact",
+      "primary_changelog: release notes, changelog, version",
+      "breaking_change: breaking change, deprecated, deprecation, removed API",
+      "migration_signal: migration guide, upgrade guide, upgrade requirement",
+      "developer_operator_signal: language server, CLI, compatibility impact, code intelligence",
     ],
     candidateNegativeSignals: ["marketing_only: feature announcement", "tutorial_only: how-to signal_candidate"],
     evidenceTerms: ["release notes", "changelog", "deprecation", "deprecated", "breaking change", "migration", "upgrade", "api"],
@@ -73,8 +80,10 @@ const REQUIRED_TOOLS = [
   "operator.funnel.audit",
   "operator.funnel.autoplan",
   "operator.funnel.iteration.recommend",
+  "system_interests.list",
   "system_interests.create",
   "system_interests.read",
+  "system_interests.archive",
   "discovery.runs.execute",
   "discovery.runs.read",
   "discovery.artifacts.list",
@@ -206,6 +215,118 @@ function hasSignalEvidence(pack, item, explain) {
   return signalScore(pack, { item, explain }) > 0;
 }
 
+function proofNamespaceForRunId(runId) {
+  return `live-mcp-signal-${String(runId).slice(0, 8)}`;
+}
+
+function activeFlag(row) {
+  if (row?.isActive != null) return row.isActive === true;
+  if (row?.is_active != null) return row.is_active === true;
+  return true;
+}
+
+function liveSignalProofNamespaceFromName(name) {
+  const match = String(name ?? "").match(/\[live-mcp-signal-[a-f0-9]{8}\]/iu);
+  return match ? match[0].slice(1, -1) : null;
+}
+
+export function buildProofInterestArchiveActions(interests, currentNamespace) {
+  return rows(interests)
+    .filter((interest) => activeFlag(interest))
+    .map((interest) => ({
+      interestTemplateId: idFrom(interest, [
+        "interestTemplateId",
+        "interest_template_id",
+        "systemInterestId",
+        "interestId",
+        "id",
+      ]),
+      namespace: liveSignalProofNamespaceFromName(interest?.name),
+    }))
+    .filter((interest) => interest.interestTemplateId && interest.namespace)
+    .filter((interest) => interest.namespace !== currentNamespace)
+    .map((interest) => ({
+      interestTemplateId: interest.interestTemplateId,
+      confirm: true,
+    }));
+}
+
+function wrapperPenalty(item) {
+  const title = String(valueFrom(item, ["title", "name"]) ?? "").toLowerCase();
+  const url = String(valueFrom(item, ["url", "canonical_url", "canonicalUrl"]) ?? "").toLowerCase();
+  let penalty = 0;
+  if (/\bsign[ -]?in\b|\blog[ -]?in\b|\/login\b|\/signin\b/u.test(`${title} ${url}`)) penalty += 100;
+  if (/^about\b|\babout government\b|\bcontact\b|\bprivacy\b|\bterms\b/u.test(title)) penalty += 50;
+  if (/\bbug bounty\b|\breport a vulnerability\b/u.test(title)) penalty += 35;
+  if (/\/(about|contact|privacy|terms)\/?$/u.test(url)) penalty += 35;
+  return penalty;
+}
+
+function proofCandidateScore(pack, item) {
+  const selected =
+    item?.final_selection_selected === true ||
+    String(item?.final_selection_decision ?? "") === "selected";
+  const grayZone = String(item?.final_selection_decision ?? "") === "gray_zone";
+  return (
+    signalScore(pack, item) * 10 +
+    (selected ? 1000 : 0) +
+    (grayZone ? 100 : 0) -
+    wrapperPenalty(item)
+  );
+}
+
+export function rankSignalCandidatesForProof(pack, candidates) {
+  return [...rows(candidates)].sort((left, right) => {
+    const scoreDelta = proofCandidateScore(pack, right) - proofCandidateScore(pack, left);
+    if (scoreDelta !== 0) return scoreDelta;
+    return String(valueFrom(left, ["title", "url"]) ?? "").localeCompare(
+      String(valueFrom(right, ["title", "url"]) ?? "")
+    );
+  });
+}
+
+export function isSelectedSignalAttempt(packReport) {
+  return (
+    (packReport?.signal_candidates ?? []).some(
+      (signal_candidate) => signal_candidate?.final_selection_selected === true
+    ) || (packReport?.contentItems ?? []).length > 0
+  );
+}
+
+export function isFetchedExplainableSignalAttempt(packReport) {
+  return (
+    ((packReport?.webResources ?? []).length > 0 ||
+      (packReport?.signal_candidates ?? []).length > 0 ||
+      (packReport?.contentItems ?? []).length > 0) &&
+    (packReport?.explainableItems ?? []).length > 0
+  );
+}
+
+function captureSignalAttemptEvidence(packReport) {
+  return {
+    routed: packReport.routed,
+    outboxEvents: [...(packReport.outboxEvents ?? [])],
+    fetchRuns: [...(packReport.fetchRuns ?? [])],
+    fetchRunSummaries: [...(packReport.fetchRunSummaries ?? [])],
+    webResources: [...(packReport.webResources ?? [])],
+    signal_candidates: [...(packReport.signal_candidates ?? [])],
+    contentItems: [...(packReport.contentItems ?? [])],
+    explainableItems: [...(packReport.explainableItems ?? [])],
+  };
+}
+
+function restoreSignalAttemptEvidence(packReport, evidence) {
+  if (!evidence) return;
+  packReport.routed = evidence.routed;
+  packReport.outboxEvents = evidence.outboxEvents;
+  packReport.fetchRuns = evidence.fetchRuns;
+  packReport.fetchRunSummaries = evidence.fetchRunSummaries;
+  packReport.webResources = evidence.webResources;
+  packReport.signal_candidates = evidence.signal_candidates;
+  packReport.contentItems = evidence.contentItems;
+  packReport.explainableItems = evidence.explainableItems;
+}
+
 function extractChannelId(handoff) {
   const direct = idFrom(handoff?.sourceInventory, ["registered_channel_id", "registeredChannelId", "channel_id", "channelId"]);
   if (direct) return direct;
@@ -242,7 +363,7 @@ async function readDownstreamEvidence(report, harness, token, channelId) {
   };
 }
 
-function buildInterestPayload(pack, namespace) {
+export function buildInterestPayload(pack, namespace) {
   return {
     name: `${pack.name} [${namespace}]`,
     description: `${pack.description} Live MCP signal funnel proof pack ${pack.key}.`,
@@ -388,8 +509,34 @@ async function readGuidance(harness, token, report) {
   });
 }
 
+async function archivePriorProofInterests(harness, token, report) {
+  const currentNamespace = proofNamespaceForRunId(report.runId);
+  const pageSize = 100;
+  const interests = [];
+  for (let page = 1; page <= 5; page += 1) {
+    const result = await mcp(report, harness, token, "system_interests.list", {
+      page,
+      pageSize,
+    });
+    const pageRows = rows(result);
+    interests.push(...pageRows);
+    if (pageRows.length < pageSize) break;
+  }
+  const actions = buildProofInterestArchiveActions(interests, currentNamespace);
+  report.proofIsolation = {
+    currentNamespace,
+    archivedProofInterestCount: actions.length,
+    archivedProofInterestIds: actions.map((action) => action.interestTemplateId),
+  };
+  for (const action of actions) {
+    await mcp(report, harness, token, "system_interests.archive", action, {
+      gapCategory: "runtime_gap",
+    });
+  }
+}
+
 async function createInterest(harness, token, report, pack) {
-  const namespace = `live-mcp-signal-${report.runId.slice(0, 8)}`;
+  const namespace = proofNamespaceForRunId(report.runId);
   const created = await mcp(report, harness, token, "system_interests.create", {
     payload: buildInterestPayload(pack, namespace),
   });
@@ -586,7 +733,8 @@ async function proveContentTail(harness, token, report, pack, packReport, routed
   packReport.webResources = downstreamEvidence.resources;
   packReport.signal_candidates = downstreamEvidence.signal_candidates;
 
-  const docIds = packReport.signal_candidates.map((signal_candidate) => idFrom(signal_candidate, ["doc_id", "docId"])).filter(Boolean).slice(0, 20);
+  const rankedInitialSignalCandidates = rankSignalCandidatesForProof(pack, packReport.signal_candidates);
+  const docIds = rankedInitialSignalCandidates.map((signal_candidate) => idFrom(signal_candidate, ["doc_id", "docId"])).filter(Boolean).slice(0, 20);
   if (docIds.length > 0) {
     await mcp(report, harness, token, "maintenance.reindex.request", {
       payload: {
@@ -603,8 +751,8 @@ async function proveContentTail(harness, token, report, pack, packReport, routed
   }
 
   const refreshedSignalCandidates = await mcp(report, harness, token, "signal_candidates.list", { channelId, page: 1, pageSize: 20 }, { optional: true });
-  packReport.signal_candidates = rows(refreshedSignalCandidates);
-  for (const signal_candidate of packReport.signal_candidates.slice(0, 5)) {
+  packReport.signal_candidates = rankSignalCandidatesForProof(pack, rows(refreshedSignalCandidates));
+  for (const signal_candidate of packReport.signal_candidates.slice(0, 10)) {
     const docId = idFrom(signal_candidate, ["doc_id", "docId"]);
     if (!docId) continue;
     const explain = await mcp(report, harness, token, "signal_candidates.explain", { docId }, { optional: true });
@@ -654,6 +802,7 @@ async function runPack(harness, token, report, pack) {
     .filter((candidate) => !/google\.com|bing\.com|duckduckgo\.com|search\./i.test(canonicalDomain(candidate)))
     .sort((left, right) => signalScore(pack, right) - signalScore(pack, left))
     .slice(0, 10);
+  let bestFetchedAttempt = null;
   for (const candidate of preferred) {
     const routed = await routeCandidate(harness, token, report, packReport, candidate);
     if (!routed) continue;
@@ -681,12 +830,21 @@ async function runPack(harness, token, report, pack) {
       continue;
     }
     if (
-      (packReport.webResources.length > 0 || packReport.signal_candidates.length > 0 || packReport.contentItems.length > 0) &&
-      packReport.explainableItems.length > 0
+      isFetchedExplainableSignalAttempt(packReport)
     ) {
+      bestFetchedAttempt ??= captureSignalAttemptEvidence(packReport);
+      if (!isSelectedSignalAttempt(packReport)) {
+        packReport.routingAttempts.at(-1).fetchStatus = "fetched_explainable_but_not_selected";
+        continue;
+      }
       packReport.status = "signal_content_fetched";
       return packReport;
     }
+  }
+  if (bestFetchedAttempt) {
+    restoreSignalAttemptEvidence(packReport, bestFetchedAttempt);
+    packReport.status = "signal_content_fetched";
+    return packReport;
   }
   packReport.status = "no_fetchable_probation_signal";
   report.gaps.push({
@@ -704,7 +862,7 @@ function summarizeStatus(report) {
     (count, pack) =>
       count +
       pack.signal_candidates.filter((signal_candidate) => signal_candidate.final_selection_selected === true).length +
-      (pack.status === "signal_content_fetched" ? pack.contentItems.length : 0),
+      pack.contentItems.length,
     0
   );
   report.successCriteria = {
@@ -828,6 +986,7 @@ async function runFlow(harness, token, args, env) {
     packs: [],
     gaps: [],
     providerTelemetry: [],
+    proofIsolation: {},
     mcpCalls: [],
     successCriteria: {},
     artifacts: {},
@@ -840,6 +999,7 @@ async function runFlow(harness, token, args, env) {
     return report;
   }
   await readGuidance(harness, token, report);
+  await archivePriorProofInterests(harness, token, report);
   for (const pack of SIGNAL_PACKS) {
     try {
       await runPack(harness, token, report, pack);
@@ -885,7 +1045,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exit(1);
+  });
+}

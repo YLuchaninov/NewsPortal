@@ -11,6 +11,7 @@ from .final_selection import summarize_final_selection_result
 from .runtime_json import coerce_json_object, make_json_safe
 from .selection_signal_summary import build_candidate_signal_tier_summary
 from .system_feed import summarize_system_feed_result
+from .worker_queues import SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT
 
 AsyncFunc = Callable[..., Awaitable[Any]]
 SyncFunc = Callable[..., Any]
@@ -391,10 +392,9 @@ async def persist_criterion_review_resolution(
             and not historical_backfill
             and not suppress_pipeline_fanout
         ):
-            legacy_main = _legacy_worker_main()
             await insert_outbox_event_func(
                 cursor,
-                legacy_main.SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
+                SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
                 "signal_candidate",
                 signal_candidate["doc_id"],
                 {"docId": str(signal_candidate["doc_id"]), "version": 1},

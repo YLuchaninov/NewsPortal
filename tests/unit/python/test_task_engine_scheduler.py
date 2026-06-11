@@ -8,8 +8,10 @@ from services.workers.app.task_engine import (
     parse_cron_expression,
     SequenceCronScheduler,
     SequenceDefinition,
+    SequenceRunMissingError,
     SequenceRunJobProcessor,
     SequenceRunRecord,
+    SequenceExecutor,
     TaskPlugin,
     TaskPluginRegistry,
 )
@@ -89,9 +91,11 @@ class InMemoryRunRepository:
         *,
         sequences: dict[str, SequenceDefinition],
         runs: dict[str, SequenceRunRecord],
+        delete_run_after_claim: bool = False,
     ) -> None:
         self.sequences = dict(sequences)
         self.runs = dict(runs)
+        self.delete_run_after_claim = delete_run_after_claim
         self.task_runs: list[dict[str, Any]] = []
         self._task_run_ids = count(1)
 
@@ -105,6 +109,9 @@ class InMemoryRunRepository:
         run = self.runs[run_id]
         if run.status != "pending":
             return False
+        if self.delete_run_after_claim:
+            del self.runs[run_id]
+            return True
         self.runs[run_id] = replace(run, status="running", error_text=None)
         return True
 
@@ -143,6 +150,8 @@ class InMemoryRunRepository:
         options_json: dict[str, Any],
         input_json: dict[str, Any],
     ) -> str:
+        if run_id not in self.runs:
+            raise SequenceRunMissingError(run_id)
         task_run_id = f"task-run-{next(self._task_run_ids)}"
         self.task_runs.append(
             {
@@ -168,6 +177,8 @@ class InMemoryRunRepository:
         input_json: dict[str, Any],
         output_json: dict[str, Any],
     ) -> str:
+        if run_id not in self.runs:
+            raise SequenceRunMissingError(run_id)
         task_run_id = f"task-run-{next(self._task_run_ids)}"
         self.task_runs.append(
             {
@@ -339,6 +350,74 @@ class SequenceRunJobProcessorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.runs["run-processor"].status, "completed")
         self.assertEqual(repository.runs["run-processor"].context_json["emitted"], "ok")
 
+    async def test_handle_payload_completes_stale_job_when_run_is_missing(self) -> None:
+        repository = InMemoryRunRepository(sequences={}, runs={})
+        registry = TaskPluginRegistry()
+        executor = SequenceExecutor(
+            repository=repository,
+            registry=registry,
+            sleep=_no_sleep,
+        )
+        processor = SequenceRunJobProcessor(executor=executor)
+
+        result = await processor.handle_payload(
+            {
+                "run_id": "missing-run",
+                "sequence_id": "sequence-processor",
+            }
+        )
+
+        self.assertEqual(result["status"], "missing_run")
+        self.assertTrue(result["skippedStaleJob"])
+        self.assertEqual(result["runId"], "missing-run")
+        self.assertEqual(result["sequenceId"], "sequence-processor")
+        self.assertEqual(repository.task_runs, [])
+
+    async def test_handle_payload_completes_stale_job_when_run_disappears_before_task_row(self) -> None:
+        sequence = SequenceDefinition.from_record(
+            {
+                "sequence_id": "sequence-processor",
+                "title": "Processor",
+                "task_graph": [
+                    {
+                        "key": "emit",
+                        "module": "test.emit",
+                        "options": {"value": "ok"},
+                    }
+                ],
+                "status": "active",
+            }
+        )
+        run = SequenceRunRecord.from_record(
+            {
+                "run_id": "run-processor",
+                "sequence_id": "sequence-processor",
+                "status": "pending",
+                "context_json": {"doc_id": "doc-1"},
+                "trigger_type": "agent",
+                "trigger_meta": {"source": "agent_api"},
+            }
+        )
+        repository = InMemoryRunRepository(
+            sequences={sequence.sequence_id: sequence},
+            runs={run.run_id: run},
+            delete_run_after_claim=True,
+        )
+        registry = TaskPluginRegistry()
+        registry.register(EmitPlugin)
+        processor = SequenceRunJobProcessor(repository=repository, registry=registry)
+
+        result = await processor.handle_payload(
+            {
+                "run_id": "run-processor",
+                "sequence_id": "sequence-processor",
+            }
+        )
+
+        self.assertEqual(result["status"], "missing_run")
+        self.assertTrue(result["skippedStaleJob"])
+        self.assertEqual(repository.task_runs, [])
+
 
 async def _record_dispatch(
     dispatched: list[tuple[str, str]],
@@ -346,6 +425,10 @@ async def _record_dispatch(
     sequence_id: str,
 ) -> None:
     dispatched.append((run_id, sequence_id))
+
+
+async def _no_sleep(_seconds: float) -> None:
+    return None
 
 
 if __name__ == "__main__":

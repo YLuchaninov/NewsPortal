@@ -13,6 +13,6 @@
     "sanitize-html": "2.17.4"
   },
   "devDependencies": {
-    "@types/sanitize-html": "^2.16.0"
+    "@types/sanitize-html": "2.16.1"
   }
 }

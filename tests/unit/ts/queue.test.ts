@@ -45,12 +45,6 @@ test("default outbox queue map keeps only non-sequence relay fanout", () => {
   assert.deepEqual(queueMap, OUTBOX_EVENT_QUEUE_MAP);
 });
 
-test("legacy embed fanout option is a no-op after sequence-first cutover", () => {
-  const queueMap = buildOutboxEventQueueMap({ enableEmbedFanout: true });
-
-  assert.deepEqual(queueMap, OUTBOX_EVENT_QUEUE_MAP);
-});
-
 test("sequence-managed events are explicit after relay cutover", () => {
   assert.deepEqual(SEQUENCE_MANAGED_OUTBOX_EVENTS, [
     SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT,
@@ -63,6 +57,13 @@ test("sequence-managed events are explicit after relay cutover", () => {
   ]);
   assert.equal(isSequenceManagedOutboxEvent(SIGNAL_CANDIDATE_INGEST_REQUESTED_EVENT), true);
   assert.equal(isSequenceManagedOutboxEvent("source.channel.sync.requested"), false);
+  for (const eventType of SEQUENCE_MANAGED_OUTBOX_EVENTS) {
+    assert.equal(
+      OUTBOX_EVENT_QUEUE_MAP[eventType],
+      undefined,
+      `${eventType} must not have a non-sequence fallback fanout`
+    );
+  }
 });
 
 test("event classifiers distinguish signal_candidate, compile, review, feedback and reindex events", () => {

@@ -232,15 +232,9 @@ async def prepare_historical_backfill_snapshot(
     async with await open_connection() as connection:
         async with connection.transaction():
             async with connection.cursor() as cursor:
-                enrichment_clause = ""
-                if include_enrichment:
-                    enrichment_clause = """
-                      and coalesce(signal_candidates.url, '') ~* '^https?://'
-                    """
-                    if not force_enrichment:
-                        enrichment_clause += """
-                          and coalesce(signal_candidates.enrichment_state, 'pending') in ('pending', 'failed', 'skipped')
-                        """
+                # Selection replay targets must not be narrowed by enrichment eligibility.
+                # The enrichment processor can skip already-enriched candidates, but
+                # match_criteria/final selection still need to replay for every chosen doc.
                 if doc_ids:
                     system_feed_clause = ""
                     if system_feed_only:
@@ -283,7 +277,6 @@ async def prepare_historical_backfill_snapshot(
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           and doc_id = any(%s::uuid[])
                           {system_feed_clause}
-                          {enrichment_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id, list(doc_ids)),
@@ -329,7 +322,6 @@ async def prepare_historical_backfill_snapshot(
                         from signal_candidates
                         where processing_state in ('embedded', 'clustered', 'matched', 'notified')
                           {system_feed_clause}
-                          {enrichment_clause}
                         on conflict do nothing
                         """,
                         (reindex_job_id,),

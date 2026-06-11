@@ -55,7 +55,12 @@ class ApiReindexJobsTests(unittest.TestCase):
                                     "compatibilityProfiles": 3,
                                     "templatesWithProfiles": 3,
                                     "maxVersion": 7,
-                                }
+                                },
+                                "selectionReplayTargetCount": 25,
+                                "selectionReplayedCount": 25,
+                                "enrichmentTargetCount": 8,
+                                "enrichmentProcessedCount": 7,
+                                "skippedSelectionDueToEnrichmentState": 0,
                             }
                         },
                     }
@@ -71,6 +76,12 @@ class ApiReindexJobsTests(unittest.TestCase):
             item["selection_profile_summary"],
             "3/4 active | 3 compatibility | 3 template-bound | max v7",
         )
+        self.assertEqual(item["selection_replay"]["selectionReplayTargetCount"], 25)
+        self.assertEqual(item["selection_replay"]["selectionReplayedCount"], 25)
+        self.assertEqual(item["selection_replay"]["enrichmentTargetCount"], 8)
+        self.assertEqual(item["selection_replay"]["enrichmentProcessedCount"], 7)
+        self.assertTrue(item["selection_replay"]["selectionReplayComplete"])
+        self.assertEqual(item["selectionReplay"], item["selection_replay"])
 
 
 if __name__ == "__main__":

@@ -66,6 +66,11 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("lastHeartbeatAt", progress_calls[-1])
         self.assertEqual(result["processedSignalCandidates"], 2)
         self.assertEqual(result["totalSignalCandidates"], 2)
+        self.assertEqual(result["selectionReplayTargetCount"], 2)
+        self.assertEqual(result["selectionReplayedCount"], 2)
+        self.assertEqual(result["enrichmentTargetCount"], 0)
+        self.assertEqual(result["enrichmentProcessedCount"], 0)
+        self.assertEqual(result["skippedSelectionDueToEnrichmentState"], 0)
         self.assertEqual(result["criteriaMatches"], 2)
         self.assertEqual(result["interestMatches"], 4)
         self.assertEqual(result["criterionLlmReviews"], 1)
@@ -141,6 +146,9 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         replay_reviews.assert_not_awaited()
         self.assertEqual(result["processedSignalCandidates"], 0)
         self.assertEqual(result["totalSignalCandidates"], 0)
+        self.assertEqual(result["selectionReplayTargetCount"], 0)
+        self.assertEqual(result["selectionReplayedCount"], 0)
+        self.assertEqual(result["skippedSelectionDueToEnrichmentState"], 0)
         self.assertEqual(result["enrichmentProcessed"], 0)
         self.assertEqual(result["criteriaMatches"], 0)
         self.assertEqual(result["interestMatches"], 0)
@@ -248,6 +256,11 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
             ["extract", "normalize", "dedup", "embed", "criteria", "cluster", "interests"],
         )
         self.assertEqual(result["enrichmentProcessed"], 1)
+        self.assertEqual(result["selectionReplayTargetCount"], 1)
+        self.assertEqual(result["selectionReplayedCount"], 1)
+        self.assertEqual(result["enrichmentTargetCount"], 1)
+        self.assertEqual(result["enrichmentProcessedCount"], 1)
+        self.assertEqual(result["skippedSelectionDueToEnrichmentState"], 0)
         self.assertEqual(result["enrichmentSkipped"], 1)
         self.assertEqual(result["enrichmentEnriched"], 0)
         self.assertEqual(result["enrichmentFailed"], 0)
@@ -292,7 +305,72 @@ class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "cancelled")
         self.assertEqual(result["processedSignalCandidates"], 1)
         self.assertEqual(result["totalSignalCandidates"], 2)
+        self.assertEqual(result["selectionReplayTargetCount"], 2)
+        self.assertEqual(result["selectionReplayedCount"], 1)
+        self.assertEqual(result["skippedSelectionDueToEnrichmentState"], 0)
         self.assertEqual(dependencies.list_target_batch.await_count, 1)
+
+    async def test_prepare_snapshot_does_not_filter_selection_targets_by_enrichment_state(self) -> None:
+        class FakeCursor:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, tuple[object, ...]]] = []
+
+            async def execute(self, sql: str, params: tuple[object, ...]) -> None:
+                self.calls.append((sql, params))
+
+        class AsyncContext:
+            def __init__(self, value: object) -> None:
+                self.value = value
+
+            async def __aenter__(self) -> object:
+                return self.value
+
+            async def __aexit__(self, exc_type, exc, tb) -> None:
+                return None
+
+        class FakeConnection:
+            def __init__(self, cursor: FakeCursor) -> None:
+                self.fake_cursor = cursor
+
+            async def __aenter__(self) -> "FakeConnection":
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> None:
+                return None
+
+            def transaction(self) -> AsyncContext:
+                return AsyncContext(None)
+
+            def cursor(self) -> AsyncContext:
+                return AsyncContext(self.fake_cursor)
+
+        fake_cursor = FakeCursor()
+        fake_connection = FakeConnection(fake_cursor)
+        with (
+            patch.object(
+                reindex_backfill_runtime,
+                "count_historical_backfill_snapshot_targets",
+                AsyncMock(side_effect=[0, 2]),
+            ),
+            patch.object(
+                reindex_backfill_runtime,
+                "open_connection",
+                AsyncMock(return_value=fake_connection),
+            ),
+        ):
+            total = await reindex_backfill_runtime.prepare_historical_backfill_snapshot(
+                reindex_job_id="job-full",
+                doc_ids=None,
+                system_feed_only=False,
+                include_enrichment=True,
+                force_enrichment=False,
+            )
+
+        self.assertEqual(total, 2)
+        executed_sql = "\n".join(sql for sql, _params in fake_cursor.calls)
+        self.assertIn("processing_state in ('embedded', 'clustered', 'matched', 'notified')", executed_sql)
+        self.assertNotIn("enrichment_state", executed_sql)
+        self.assertNotIn("coalesce(signal_candidates.url", executed_sql)
 
     async def test_runtime_replay_gray_zone_review_timeout_is_soft_failure(self) -> None:
         with (

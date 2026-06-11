@@ -984,7 +984,17 @@ async def ensure_llm_cost_review_fixture() -> tuple[str, str, str]:
                       0.01,
                       0.56,
                       'gray_zone',
-                      '{"smoke":"llm-cost-proof"}'::jsonb
+                      '{
+                        "smoke": "llm-cost-proof",
+                        "filterReasons": [],
+                        "candidateSignals": {
+                          "candidateSelectionEligible": true,
+                          "candidateSignalTier": "project_intent",
+                          "positiveSignalCount": 4,
+                          "positiveSignalHitCount": 4,
+                          "noiseSignalCount": 0
+                        }
+                      }'::jsonb
                     )
                     """,
                     (doc_id, criterion_id),
@@ -1524,7 +1534,8 @@ async def fetch_system_feed_result(doc_id: str) -> dict[str, Any] | None:
                   total_criteria_count,
                   relevant_criteria_count,
                   irrelevant_criteria_count,
-                  pending_llm_criteria_count
+                  pending_llm_criteria_count,
+                  explain_json
                 from system_feed_results
                 where doc_id = %s
                 """,
@@ -1694,9 +1705,22 @@ def verify_system_feed_result_consistency(
         irrelevant_criteria_count=irrelevant,
         pending_llm_criteria_count=pending,
     )
-    if decision != str(expected["decision"]):
+    explain_json = system_feed.get("explain_json")
+    if not isinstance(explain_json, dict):
+        explain_json = {}
+    compatibility_projection_override = (
+        explain_json.get("source") == "final_selection_results"
+        and explain_json.get("compatibilityProjection") is True
+        and str(explain_json.get("compatibilityDecisionOverride") or "") == decision
+    )
+    if decision != str(expected["decision"]) and not compatibility_projection_override:
         raise RuntimeError("System feed verification failed: stored decision drifted from criteria counts.")
-    if eligible_for_feed != bool(expected["eligible_for_feed"]):
+    expected_eligible_for_feed = (
+        decision in {"eligible", "pass_through"}
+        if compatibility_projection_override
+        else bool(expected["eligible_for_feed"])
+    )
+    if eligible_for_feed != expected_eligible_for_feed:
         raise RuntimeError("System feed verification failed: eligibility drifted from criteria counts.")
 
 

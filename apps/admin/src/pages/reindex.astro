@@ -107,6 +107,46 @@ function readSelectionProfileSnapshot(
   return Object.values(payload).some((value) => value > 0) ? payload : null;
 }
 
+function readSelectionReplay(
+  job: ReindexRow
+): {
+  selectionReplayTargetCount: number;
+  selectionReplayedCount: number;
+  enrichmentTargetCount: number;
+  enrichmentProcessedCount: number;
+  skippedSelectionDueToEnrichmentState: number;
+  selectionReplayComplete: boolean;
+  summary: string | null;
+} | null {
+  const replay =
+    job.selection_replay && typeof job.selection_replay === "object"
+      ? (job.selection_replay as Record<string, unknown>)
+      : job.selectionReplay && typeof job.selectionReplay === "object"
+        ? (job.selectionReplay as Record<string, unknown>)
+        : null;
+  if (!replay) {
+    return null;
+  }
+
+  const readInt = (value: unknown): number => {
+    const parsed = Number(value ?? NaN);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const summary = String(replay.summary ?? "").trim();
+  return {
+    selectionReplayTargetCount: readInt(replay.selectionReplayTargetCount),
+    selectionReplayedCount: readInt(replay.selectionReplayedCount),
+    enrichmentTargetCount: readInt(replay.enrichmentTargetCount),
+    enrichmentProcessedCount: readInt(replay.enrichmentProcessedCount),
+    skippedSelectionDueToEnrichmentState: readInt(
+      replay.skippedSelectionDueToEnrichmentState
+    ),
+    selectionReplayComplete: replay.selectionReplayComplete === true,
+    summary: summary || null,
+  };
+}
+
 const initialJobs = {
   total: reindexJobs.total,
   page: reindexJobs.page,
@@ -124,6 +164,7 @@ const initialJobs = {
       readProgressLabel(job),
       readSelectionProfileSnapshot(job),
       readSelectionProfileSummary(job),
+      readSelectionReplay(job),
       job.created_at,
     ])
   ),
@@ -152,6 +193,7 @@ const initialJobs = {
       progressLabel: readProgressLabel(job),
       selectionProfileSnapshot: readSelectionProfileSnapshot(job),
       selectionProfileSummary: readSelectionProfileSummary(job),
+      selectionReplay: readSelectionReplay(job),
       revision: JSON.stringify([
         job.reindex_job_id,
         job.status,
@@ -159,6 +201,7 @@ const initialJobs = {
         readProgressLabel(job),
         readSelectionProfileSnapshot(job),
         readSelectionProfileSummary(job),
+        readSelectionReplay(job),
         job.created_at,
       ]),
     };

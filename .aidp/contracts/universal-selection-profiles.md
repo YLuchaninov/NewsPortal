@@ -13,7 +13,8 @@ Selection semantics must be profile-driven instead of hidden inside templates, s
 - Admin system-interest writes sync templates into compatibility `criteria` and additive `selection_profiles`.
 - Profile-backed gray-zone criteria may produce cheap `hold`; LLM review happens only when resolved profile policy allows it.
 - `final_selection_results` and bounded `system_feed_results` distinguish true `llmReviewPending` from cheap `semantic_hold`.
-- Historical backfill/repair records `selectionProfileSnapshot` and exposes profile summaries through maintenance reindex reads.
+- Historical backfill/repair records `selectionProfileSnapshot`, exposes profile summaries through maintenance reindex reads and reports separate selection replay/enrichment counters.
+- Operator/control-plane diagnostics expose advisory `signalVisibility`, `evidenceLaneType` and `hardGatePolicy` fields for selection tuning and report verification.
 
 ## Target decision model
 
@@ -44,6 +45,9 @@ Those concepts may exist only as profile-local definitions, optional facets, ope
 - `selection_profile_policy`: strictness, hold behavior, output mapping, optional LLM escalation and compatibility behavior.
 - Optional facets: operator-declared distinctions that do not become universal engine truth.
 - Profile bindings: connect profiles to acquisition/output/user surfaces without making sources semantic owners.
+- Signal visibility (`explicit_marker`, `hidden_intent`, `mixed`, `unknown`) is advisory/profile-local context, not a domain enum in the generic engine.
+- Hard gate policy is profile-local: hidden/unknown signals default to empty hard lexical gates; explicit-marker gates require mandatory-marker proof; mixed signals require lane-like separation before hard gates.
+- `candidateSignals` group names may be conceptual labels, but cues must be literal observable fragments that can appear in candidate text.
 
 ## Explainability
 
@@ -55,6 +59,8 @@ Every profile decision must explain what matched, what failed, what evidence was
 - Keeping LLM review as hidden mandatory gray-zone stage.
 - Treating source cohorts as semantic truth.
 - Hiding profile policy in worker code or UI heuristics.
+- Treating positive prototypes, `must_have_terms` or `short_tokens_required` as interchangeable keyword piles.
+- Letting a hidden-intent lane inherit a global explicit-marker hard gate.
 - Breaking `final_selection_results` ownership.
 
 ## Proof expectations
@@ -62,7 +68,7 @@ Every profile decision must explain what matched, what failed, what evidence was
 - Profile config/model changes: migration proof, unit/typecheck, admin write/read proof.
 - Runtime policy changes: targeted worker proof for hold vs LLM pending plus final-selection projection proof.
 - Operator/explain changes: targeted API/admin tests for `selectionMode`, summaries, diagnostics and guidance.
-- Backfill/replay changes: proof that `selectionProfileSnapshot` is captured and exposed.
+- Backfill/replay changes: proof that `selectionProfileSnapshot` and selection/enrichment replay counters are captured and exposed.
 
 ## Update triggers
 

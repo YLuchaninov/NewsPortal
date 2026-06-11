@@ -32,6 +32,7 @@
 - PostgreSQL remains authoritative pipeline state.
 - Generic engine cannot regain hidden domain-specific hardcoding.
 - Application/admin tuning belongs in templates, criteria, profiles, prompts and policy config.
+- Signal visibility (`explicit_marker`, `hidden_intent`, `mixed`, `unknown`) is advisory/configuration context; it must not become hardcoded domain vocabulary inside the generic pipeline.
 - Compatibility projections must be visibly compatibility-only and must not become primary write truth.
 - Historical repair/backfill must preserve frozen target snapshots and must not send retro notifications.
 
@@ -45,6 +46,8 @@
 
 - Source-level ranking as primary relevance gate.
 - Blanket `must_have_terms` as baseline recall choke point.
+- OR-style hard lexical gates as a hidden-intent recovery strategy.
+- Global hard gates shared across hidden and explicit evidence lanes in a mixed signal.
 - Hardcoded domain vocabulary inside generic engine.
 - Direct writes to compatibility-only selected truth.
 - Re-reviewing duplicates independently when canonical verdict exists.

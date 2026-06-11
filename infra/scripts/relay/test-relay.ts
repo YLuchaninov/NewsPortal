@@ -5,12 +5,17 @@ import { loadRelayConfig } from "../../../services/relay/src/config";
 import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";
 import { OutboxRelay } from "../../../services/relay/src/relay";
 import { insertFoundationSmokeEvent, waitForPublishedEvent } from "../../../services/relay/src/outbox";
+import { PostgresSequenceRoutingRepository } from "../../../services/relay/src/sequence-routing";
 
 async function main(): Promise<void> {
   const config = loadRelayConfig();
   const pool = createPgPool(config);
   const redis = createRedisConnection(config);
-  const relay = new OutboxRelay(pool, redis, config.outboxBatchSize);
+  const relay = new OutboxRelay(pool, redis, config.outboxBatchSize, {
+    sequenceRouting: {
+      repository: new PostgresSequenceRoutingRepository()
+    }
+  });
   const queue = new Queue(FOUNDATION_SMOKE_QUEUE, {
     connection: redis
   });

@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@signalops/contracts": "workspace:*",
-    "pg": "^8.16.3"
+    "pg": "8.20.0"
   }
 }

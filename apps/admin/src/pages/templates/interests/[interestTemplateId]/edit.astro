@@ -82,6 +82,34 @@ function candidateGroupsToLines(groups: Array<{ name: string; cues: string[] }>)
   return groups.map((group) => `${group.name}: ${group.cues.join(" | ")}`).join("\n");
 }
 
+function asWarningText(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function asWarningEntries(value: unknown): Array<{
+  kind?: string;
+  path?: string;
+  cue?: string;
+  message?: string;
+  guidance?: string;
+}> {
+  return Array.isArray(value)
+    ? value
+        .filter(
+          (entry): entry is Record<string, unknown> =>
+            Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)
+        )
+        .map((entry) => ({
+          kind: asWarningText(entry.kind),
+          path: asWarningText(entry.path),
+          cue: asWarningText(entry.cue),
+          message: asWarningText(entry.message),
+          guidance: asWarningText(entry.guidance),
+        }))
+    : [];
+}
+
 const isActive = template.is_active === true;
 const selectionProfilePolicy = asPolicyRecord(template.selection_profile_policy_json);
 const selectionProfileDefinition = asPolicyRecord(template.selection_profile_definition_json);
@@ -171,6 +199,8 @@ const candidateSignalSummary =
         candidateSignalSource: String(candidateSignalSummary.source ?? "generic_fallback"),
         candidatePositiveSignalGroupCount: String(candidateSignalSummary.positiveGroupCount ?? candidatePositiveGroups.length),
         candidateNegativeSignalGroupCount: String(candidateSignalSummary.negativeGroupCount ?? candidateNegativeGroups.length),
+        candidateSignalsQualityWarnings: asWarningEntries(template.candidate_signals_quality_warnings),
+        hardGateSafetyWarnings: asWarningEntries(template.hard_gate_safety_warnings),
       }}
     />
 

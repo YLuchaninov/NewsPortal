@@ -26,7 +26,7 @@ from .discovery_runtime import (
     get_discovery_runtime,
     reset_discovery_runtime,
 )
-from .exceptions import TaskExecutionError, TaskValidationError
+from .exceptions import SequenceRunMissingError, TaskExecutionError, TaskValidationError
 from .executor import SequenceExecutor
 from .models import (
     DEFAULT_RETRY_ATTEMPTS,
@@ -119,6 +119,7 @@ __all__ = [
     "SequenceExecutor",
     "SequenceJobPayloadError",
     "SequenceQueueDispatchError",
+    "SequenceRunMissingError",
     "SequenceRepository",
     "SequenceRunJobProcessor",
     "SequenceRunRecord",

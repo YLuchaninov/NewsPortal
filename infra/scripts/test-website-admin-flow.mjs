@@ -42,6 +42,10 @@ function log(message) {
   console.log(`[website-admin] ${message}`);
 }
 
+function apiUrl(pathname) {
+  return `http://127.0.0.1:8080/api${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
 function buildStaleStackError(label, url) {
   const error = new Error(
     `Compose stack is missing ${label} at ${url}. Rebuild the local stack with pnpm dev:mvp:internal before running pnpm test:website:admin:compose.`
@@ -102,7 +106,7 @@ async function waitForFetchersHealth() {
 
 async function ensureComposeStack() {
   log("Ensuring compose stack is available for website-admin acceptance.");
-  runCompose("up", "-d", ...STACK_SERVICES);
+  runCompose("up", "-d", "--build", ...STACK_SERVICES);
   await Promise.all([
     waitForHttpHealth("api", "http://127.0.0.1:8000/health"),
     waitForFetchersHealth(),
@@ -519,7 +523,7 @@ async function main() {
     log("Preflighting website resources surfaces.");
     await assertRouteAvailable(
       "maintenance web-resources API",
-      "http://127.0.0.1:8000/maintenance/web-resources?page=1&pageSize=1"
+      apiUrl("/maintenance/web-resources?page=1&pageSize=1")
     );
     await assertRouteAvailable("admin resources page", "http://127.0.0.1:4322/resources", {
       cookie: adminCookie,
@@ -637,7 +641,7 @@ async function main() {
     await waitFor(
       "website bulk update reflection",
       async () =>
-        fetchJson(`http://127.0.0.1:8000/channels/${encodeURIComponent(channelId)}`),
+        fetchJson(apiUrl(`/channels/${encodeURIComponent(channelId)}`)),
       (payload) =>
         String(payload?.name ?? "") === bulkUpdatedChannelName &&
         Number(payload?.poll_interval_seconds ?? 0) === 1200 &&
@@ -667,7 +671,7 @@ async function main() {
       "website resources in maintenance API",
       async () =>
         fetchJson(
-          `http://127.0.0.1:8000/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`
+          apiUrl(`/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`)
         ),
       (payload) =>
         Array.isArray(payload?.items) &&
@@ -714,7 +718,7 @@ async function main() {
       }
     );
     const latestResourcesPayload = await fetchJson(
-      `http://127.0.0.1:8000/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`
+      apiUrl(`/maintenance/web-resources?channelId=${encodeURIComponent(channelId)}&page=1&pageSize=20`)
     );
 
     const entityResource = latestResourcesPayload.items.find(
@@ -767,7 +771,7 @@ async function main() {
       "projected editorial signal_candidate detail",
       async () =>
         fetchJson(
-          `http://127.0.0.1:8000/maintenance/signal-candidates/${encodeURIComponent(String(projectedEditorial.projected_signal_candidate_id ?? ""))}`
+          apiUrl(`/maintenance/signal-candidates/${encodeURIComponent(String(projectedEditorial.projected_signal_candidate_id ?? ""))}`)
         ),
       (payload) => String(payload?.doc_id ?? "") === String(projectedEditorial.projected_signal_candidate_id ?? "")
     );

@@ -9,6 +9,7 @@ import {
   SEQUENCE_QUEUE
 } from "../../../packages/contracts/src/queue.ts";
 import { OutboxRelay } from "../../../services/relay/src/relay.ts";
+import { loadRelayConfig } from "../../../services/relay/src/config.ts";
 import type {
   RelaySqlClient,
   SequenceRoutingRepository
@@ -138,7 +139,6 @@ function createRelayHarness(sequenceIds: readonly string[]) {
       return queue;
     },
     sequenceRouting: {
-      enabled: true,
       repository
     }
   });
@@ -172,6 +172,30 @@ function createPriorityRepairPool(runIds: readonly string[]) {
     }
   };
 }
+
+test("relay config ignores removed sequence fallback environment flags", () => {
+  const previousSequenceRouting = process.env.RELAY_ENABLE_SEQUENCE_ROUTING;
+  const previousEmbedFanout = process.env.RELAY_ENABLE_EMBED_FANOUT;
+  try {
+    process.env.RELAY_ENABLE_SEQUENCE_ROUTING = "definitely-not-a-boolean";
+    process.env.RELAY_ENABLE_EMBED_FANOUT = "also-not-a-boolean";
+
+    const config = loadRelayConfig();
+
+    assert.equal("enableSequenceRouting" in config, false);
+  } finally {
+    if (previousSequenceRouting === undefined) {
+      delete process.env.RELAY_ENABLE_SEQUENCE_ROUTING;
+    } else {
+      process.env.RELAY_ENABLE_SEQUENCE_ROUTING = previousSequenceRouting;
+    }
+    if (previousEmbedFanout === undefined) {
+      delete process.env.RELAY_ENABLE_EMBED_FANOUT;
+    } else {
+      process.env.RELAY_ENABLE_EMBED_FANOUT = previousEmbedFanout;
+    }
+  }
+});
 
 test("relay routes active sequence triggers into q.sequence without legacy queue fanout", async () => {
   const { relay, repository, queues } = createRelayHarness(["sequence-a", "sequence-b"]);
@@ -284,7 +308,6 @@ test("relay repairs already enqueued signal_candidate-ingest sequence jobs into 
       return queue;
     },
     sequenceRouting: {
-      enabled: true,
       repository: new FakeSequenceRoutingRepository([])
     }
   });

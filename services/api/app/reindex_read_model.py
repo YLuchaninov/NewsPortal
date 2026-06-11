@@ -44,11 +44,63 @@ def build_reindex_selection_profile_payload(
     }
 
 
+def build_reindex_selection_replay_payload(
+    job_like: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    backfill = as_json_object(
+        as_json_object(job_like.get("result_json")).get("backfill")
+    )
+    expected_keys = {
+        "selectionReplayTargetCount",
+        "selectionReplayedCount",
+        "enrichmentTargetCount",
+        "enrichmentProcessedCount",
+        "skippedSelectionDueToEnrichmentState",
+    }
+    if not any(key in backfill for key in expected_keys):
+        return None
+
+    selection_replay_target_count = as_json_int(
+        backfill.get("selectionReplayTargetCount")
+    )
+    selection_replayed_count = as_json_int(backfill.get("selectionReplayedCount"))
+    enrichment_target_count = as_json_int(backfill.get("enrichmentTargetCount"))
+    enrichment_processed_count = as_json_int(backfill.get("enrichmentProcessedCount"))
+    skipped_selection_due_to_enrichment_state = as_json_int(
+        backfill.get("skippedSelectionDueToEnrichmentState")
+    )
+    selection_replay_complete = (
+        selection_replay_target_count <= selection_replayed_count
+        and skipped_selection_due_to_enrichment_state == 0
+    )
+
+    parts = [
+        f"selection {selection_replayed_count}/{selection_replay_target_count}",
+        f"enrichment {enrichment_processed_count}/{enrichment_target_count}",
+    ]
+    if skipped_selection_due_to_enrichment_state:
+        parts.append(
+            f"{skipped_selection_due_to_enrichment_state} selection skipped by "
+            "enrichment state"
+        )
+
+    return {
+        "selectionReplayTargetCount": selection_replay_target_count,
+        "selectionReplayedCount": selection_replayed_count,
+        "enrichmentTargetCount": enrichment_target_count,
+        "enrichmentProcessedCount": enrichment_processed_count,
+        "skippedSelectionDueToEnrichmentState": skipped_selection_due_to_enrichment_state,
+        "selectionReplayComplete": selection_replay_complete,
+        "summary": " | ".join(parts),
+    }
+
+
 def apply_reindex_selection_profile_payload(
     job_like: Mapping[str, Any],
 ) -> dict[str, Any]:
     payload = dict(job_like)
     selection_profile_snapshot = build_reindex_selection_profile_payload(job_like)
+    selection_replay = build_reindex_selection_replay_payload(job_like)
     progress = as_json_object(job_like.get("options_json")).get("progress")
     progress_payload = as_json_object(progress)
     status = as_json_str(job_like.get("status")) or "queued"
@@ -77,6 +129,8 @@ def apply_reindex_selection_profile_payload(
         if isinstance(selection_profile_snapshot, dict)
         else None
     )
+    payload["selection_replay"] = selection_replay
+    payload["selectionReplay"] = selection_replay
     payload["progress"] = progress_payload or None
     payload["derived_state"] = derived_state
     payload["derivedState"] = derived_state

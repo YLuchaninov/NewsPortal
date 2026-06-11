@@ -1,5 +1,8 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   ensureFirebasePasswordUser,
@@ -16,6 +19,7 @@ import {
   createWaitFor,
   sqlLiteral,
 } from "./lib/compose-proof-testkit.mjs";
+import { repoRoot } from "./lib/mcp-http-testkit.mjs";
 
 const SUCCESS_STATES = ["deduped", "embedded", "clustered", "matched", "notified"];
 const PROFILE_SEQUENCE = [
@@ -70,6 +74,41 @@ function fetchComposeJson(service, url) {
   } catch {
     return { raw: text };
   }
+}
+
+async function runComposeAsync(...args) {
+  const composeArgs = [
+    "compose",
+    "--env-file",
+    process.env.SIGNALOPS_COMPOSE_ENV_FILE ?? ".env.dev",
+    "-f",
+    "infra/docker/compose.yml",
+    "-f",
+    "infra/docker/compose.dev.yml"
+  ];
+  if (process.env.SIGNALOPS_COMPOSE_EXTRA_FILE) {
+    composeArgs.push("-f", process.env.SIGNALOPS_COMPOSE_EXTRA_FILE);
+  }
+
+  await new Promise((resolve, reject) => {
+    const child = spawn("docker", [...composeArgs, ...args], {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit"
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `Command failed (docker ${[...composeArgs, ...args].join(" ")}): exit code ${code ?? "unknown"}`
+        )
+      );
+    });
+  });
 }
 
 function parseArgs(argv) {
@@ -290,6 +329,116 @@ function verifyFixtureServerState(fixtures) {
   }
 }
 
+function loadChannelIdsByName(env, runId) {
+  return new Map(
+    queryPostgresRows(
+      env,
+      `
+        select
+          name,
+          channel_id::text
+        from source_channels
+        where name like ${sqlLiteral(`RSS multi ${runId}%`)}
+        order by name
+      `
+    ).map(([name, channelId]) => [name, channelId])
+  );
+}
+
+async function pause(ms) {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function runTargetedFetchCycle(env, runId, fixtures, profileSet) {
+  const channelIdsByName = loadChannelIdsByName(env, runId);
+  for (const fixture of fixtures.filter((item) => profileSet.has(item.profile))) {
+    const channelId = channelIdsByName.get(fixture.name);
+    if (!channelId) {
+      throw new Error(`Could not find channel_id for fixture ${fixture.name}.`);
+    }
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await runComposeAsync(
+          "exec",
+          "-T",
+          "fetchers",
+          "pnpm",
+          "--filter",
+          "@signalops/fetchers",
+          "run:once",
+          channelId
+        );
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          await pause(1000);
+        }
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
+  }
+}
+
+function withAliasAdminAllowlist(entries) {
+  const domains = entries
+    .filter((entry) => !entry.startsWith("@") && entry.includes("@"))
+    .map((entry) => `@${entry.slice(entry.lastIndexOf("@") + 1)}`);
+  return [...new Set([...entries, ...domains])].join(",");
+}
+
+function withFixtureHostAllowlist(value) {
+  const entries = String(value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return [...new Set([...entries, "host.docker.internal"])].join(",");
+}
+
+async function writeComposeOverrides(runId, adminAllowlist) {
+  const sourcePath = path.join(repoRoot, ".env.dev");
+  const envPath = `/tmp/signalops-rss-multi-${runId}.env`;
+  const composePath = `/tmp/signalops-rss-multi-${runId}.compose.yml`;
+  const source = await readFile(sourcePath, "utf8");
+  const lines = source.split(/\r?\n/u);
+  let replaced = false;
+  const nextLines = lines.map((line) => {
+    if (!line.startsWith("ADMIN_ALLOWLIST_EMAILS=")) {
+      return line;
+    }
+    replaced = true;
+    return `ADMIN_ALLOWLIST_EMAILS=${adminAllowlist}`;
+  });
+  if (!replaced) {
+    nextLines.push(`ADMIN_ALLOWLIST_EMAILS=${adminAllowlist}`);
+  }
+  const fetchersAllowlist = withFixtureHostAllowlist(
+    process.env.FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST
+  );
+  await writeFile(envPath, nextLines.join("\n"), "utf8");
+  await writeFile(
+    composePath,
+    [
+      "services:",
+      "  admin:",
+      "    environment:",
+      `      ADMIN_ALLOWLIST_EMAILS: "${adminAllowlist.replaceAll('"', '\\"')}"`,
+      "  fetchers:",
+      "    environment:",
+      `      FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST: "${fetchersAllowlist.replaceAll('"', '\\"')}"`,
+      "",
+    ].join("\n"),
+    "utf8"
+  );
+  return { envPath, composePath };
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const env = await readEnvFile(".env.dev");
@@ -298,6 +447,13 @@ async function main() {
   });
   const allowlistEntries = readAllowlistEntries(env);
   const runId = randomUUID().slice(0, 8);
+  const composeOverrides = await writeComposeOverrides(
+    runId,
+    withAliasAdminAllowlist(allowlistEntries)
+  );
+  process.env.SIGNALOPS_COMPOSE_ENV_FILE = composeOverrides.envPath;
+  process.env.SIGNALOPS_COMPOSE_EXTRA_FILE = composeOverrides.composePath;
+  process.env.ADMIN_ALLOWLIST_EMAILS = withAliasAdminAllowlist(allowlistEntries);
   const adminEmail = selectAdminEmail(allowlistEntries, runId, {
     prefix: "rss-admin",
   });
@@ -392,7 +548,7 @@ async function main() {
     }
 
     log("Running the first fetch cycle across all due channels.");
-    runCompose(
+    await runComposeAsync(
       "exec",
       "-T",
       "fetchers",
@@ -602,7 +758,7 @@ async function main() {
     );
 
     log("Running the second fetch cycle for idempotency and 304 coverage.");
-    runCompose(
+    await runComposeAsync(
       "exec",
       "-T",
       "fetchers",
@@ -611,6 +767,9 @@ async function main() {
       "@signalops/fetchers",
       "run:once"
     );
+
+    log("Running targeted re-fetches for duplicate and not-modified fixture coverage.");
+    await runTargetedFetchCycle(env, runId, fixtures, new Set(["duplicate", "not_modified"]));
 
     await waitFor(
       "stable signal_candidate and outbox counts after second fetch",
@@ -671,6 +830,8 @@ async function main() {
       log("Stopping compose.dev stack.");
       runCompose("down", "-v", "--remove-orphans");
     }
+    await rm(composeOverrides.envPath, { force: true });
+    await rm(composeOverrides.composePath, { force: true });
   }
 }
 

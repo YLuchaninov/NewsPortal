@@ -68,6 +68,15 @@ export interface AdminReindexJobSnapshot {
     maxVersion: number;
   } | null;
   selectionProfileSummary: string | null;
+  selectionReplay: {
+    selectionReplayTargetCount: number;
+    selectionReplayedCount: number;
+    enrichmentTargetCount: number;
+    enrichmentProcessedCount: number;
+    skippedSelectionDueToEnrichmentState: number;
+    selectionReplayComplete: boolean;
+    summary: string | null;
+  } | null;
   revision: string;
 }
 

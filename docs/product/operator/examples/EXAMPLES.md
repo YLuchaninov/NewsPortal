@@ -111,20 +111,38 @@
 
 Если вы используете поля вроде `must_have_terms`, `must_not_have_terms` и `short_tokens_required`, важно помнить их текущую семантику:
 
-- `must_have_terms` работают как `OR`: статья проходит этот фильтр, если в `title + lead + body` встретился хотя бы один из указанных термов.
+- `must_have_terms` работают как any-of (`OR`) по тексту: статья проходит этот фильтр, если в `title + lead + body` встретился хотя бы один из указанных термов. Но это всё равно hard pre-semantic gate: item без терма не дойдет до semantic scoring, candidate recovery, gray-zone or LLM review.
 - `must_not_have_terms` работают как блокирующий список: достаточно одного совпадения, чтобы статья была отфильтрована.
-- `short_tokens_required` работают жёстче и ближе к `AND`: требуемые short tokens должны присутствовать в извлечённых признаках статьи.
+- `short_tokens_required` работают жёстче и ближе к extracted-token requirement: требуемые short tokens должны присутствовать в извлечённых short-token признаках статьи. Это не безопасная замена OR keyword list и не место для phrases.
 - `time_window_hours` тоже является hard gate: всё, что старше окна, не дойдёт до semantic/LLM stage.
 
-Практический вывод:
+### Три типа сигналов и что с ними делать
+
+Перед настройкой system interest или replay классифицируйте сигнал:
+
+| Тип | Когда использовать | Baseline | Hard gates |
+|---|---|---|---|
+| `explicit_marker` | Есть явный обязательный маркер, без которого сигнал теряет смысл | representative prototypes + marker proof | `must_have_terms` допустимы только после sample proof и bounded replay |
+| `hidden_intent` | Нужный intent проявляется через требования, проблемы, контекст, source shape or workflow, но не через один стабильный термин | `must_have_terms=[]`, `short_tokens_required=[]`, literal `candidateSignals`, near-miss negatives, allowed content kinds | запрещены by default; добавляйте только если доказан mandatory marker |
+| `mixed` | В одном бизнес-смысле есть явные и скрытые evidence paths | split into lane-like interests/config entries | не ставьте общий global hard gate; hidden lane не должна наследовать explicit-marker gate |
+
+Ключевые правила для hidden/mixed сигналов:
+
+- OR hard gate не делает `must_have_terms` безопасным для hidden intent;
+- `positive_texts` нужны как representative semantic prototypes, а не как piles of positive keywords;
+- `candidateSignals.group.name` может быть concept label, но `group.cues` должны быть literal observable fragments из candidate text;
+- если cue group не дает hits, сначала смотрите 10-20 representative rejected docs и переписывайте cues, а не добавляйте hard terms, broad strictness, LLM budget или новые RSS.
+
+Практический вывод по hard constraints:
 
 - для большинства recall-first сценариев первый baseline лучше запускать с пустыми `must_have_terms` и пустым `time_window_hours`, чтобы не убить редкие формулировки до semantic/LLM stage;
 - `must_have_terms` стоит включать только для действительно обязательных идентификаторов, без которых interest теряет смысл;
 - не перегружайте `must_have_terms` длинными списками общих слов вроде `partner`, `migration`, `transformation`, иначе вы получите массовый early drop вместо полезного recall;
+- `short_tokens_required` не используйте как OR keyword replacement; оставляйте его пустым, если token не доказан как extracted-token marker;
 - `must_not_have_terms` и negative candidate cues обычно безопаснее, чем `must_have_terms`, потому что они режут явный шум, а не весь поток;
 - duplicate signal_candidate rows одного и того же canonical документа не должны считаться отдельными победителями: operator/user surfaces должны показывать один canonical-selected сигнал, а повторные signal_candidate rows нужны для provenance, а не для надувания `selected` и `LLM review` метрик;
 - если видите повторный review/selected по одной и той же canonical семье, сначала проверяйте canonical reuse и negative cues, а не расширяйте `must_have_terms`;
-- для recall-first baseline generic candidate cues должны оставаться структурными (`request`, `replacement`, `procurement`, `implementation pressure`); listicle/ranking wording вроде `top`, `best`, `our picks`, `worth your time` лучше подавлять через negative cues и prompt semantics конкретного application bundle, а не считать достаточным позитивным сигналом.
+- для recall-first baseline generic candidate cues должны оставаться структурными (`request`, `replacement`, `procurement`, `implementation pressure`); listicle/ranking wording вроде `top`, `best`, `our picks`, `worth your time` лучше подавлять через negative cues и prompt semantics конкретного application bundle, а не считать достаточным позитивным сигналом;
 - если нужен более точный контроль, держите broad тему в прототипах и candidate cues, а hard constraints добавляйте только после наблюдений по живому потоку.
 
 ### Что теперь обязательно заполнять для каждого system interest
@@ -2580,6 +2598,7 @@ community_noise: community discussion | forum thread | reddit | thought leadersh
 | **Количество шаблонов интересов** | 8 | 8 | 5 |
 | **Фокус LLM-промптов** | «Есть ли конкретная вакансия?» | «Полезно ли это разработчику?» | «Есть ли здесь правдоподобный внешний спрос на услуги?» |
 | **Runtime profile policy** | `balanced` / `hold` / `always` | `balanced` / `hold` / `always` | mixed `broad`/`balanced` + `hold` / `always` |
+| **Signal visibility** | чаще `explicit_marker` или `mixed` | чаще `explicit_marker`/topic-semantic | чаще `hidden_intent`/`mixed` |
 | **Типичные content kinds** | `listing`, `editorial` | `editorial`, `document`, иногда `api_payload` | `editorial`, `listing`, `document`, иногда `api_payload` / `data_file` |
 | **Стратегия hard filters** | baseline обычно без `must_have_terms` и без `time_window`; включать позже, если шум уже понятен | baseline обычно без `must_have_terms` и без `time_window`; акцент на prototypes и negative cues | baseline без `must_have_terms` и без `time_window`; precision добирается через negative cues, candidate uplift и LLM |
 | **Главный тип positive candidate cues** | hiring + role + job-detail signals | release + technical-impact + platform-change signals | buyer-request + procurement + implementation-pressure signals |

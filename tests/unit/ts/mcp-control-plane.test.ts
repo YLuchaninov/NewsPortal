@@ -22,6 +22,11 @@ import {
   readOptionalArgumentsObject,
 } from "../../../services/mcp/src/protocol.ts";
 import { MCP_SERVER_INSTRUCTIONS } from "../../../services/mcp/src/context.ts";
+import {
+  getDiagnosticsGuide,
+  getOperatingModelGuide,
+  getTuningGuide,
+} from "../../../services/mcp/src/operating-intelligence.ts";
 import { listMcpPrompts, resolveMcpPrompt } from "../../../services/mcp/src/prompts.ts";
 import { listMcpResources, resolveMcpResource } from "../../../services/mcp/src/resources.ts";
 import { executeMcpTool, listMcpTools } from "../../../services/mcp/src/tools.ts";
@@ -906,7 +911,7 @@ function createFakeSelectionPrecisionPool() {
       if (/technicalFilterRows/i.test(sql)) {
         return { rows: [{ technicalFilterRows: 0, semanticEvaluatedRows: 2, semanticNotEvaluatedRows: 0 }] };
       }
-      if (/"filterRows"/i.test(sql) && /"distinctCandidateCount"/i.test(sql)) {
+      if (/"filterRows"/i.test(sql) && /"affectedCriteriaCount"/i.test(sql)) {
         return { rows: [] };
       }
       if (/select reason,\s*count\(\*\)::int as count/i.test(sql)) {
@@ -942,6 +947,52 @@ function createFakeSelectionPrecisionPool() {
       }
       if (/sourceClass/i.test(sql) && /from source_channels sc/i.test(sql)) {
         return { rows: [] };
+      }
+      if (/sp\.definition_json as "definitionJson"/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/candidateSignalsRecoveryRows/i.test(sql)) {
+        return {
+          rows: [
+            {
+              candidateSignalsRecoveryRows: 0,
+              positiveCueGroupHitCount: 0,
+              negativeCueGroupHitCount: 0,
+              positiveCueFragmentHitRows: 0,
+              evaluatedRows: 2,
+            },
+          ],
+        };
+      }
+      if (/activeSelectionProfileVersion/i.test(sql) && /filterResultProfileVersion/i.test(sql)) {
+        return { rows: [] };
+      }
+      if (/minSFinal/i.test(sql) && /maxSFinal/i.test(sql)) {
+        return {
+          rows: [
+            {
+              minSFinal: 0.2,
+              medianSFinal: 0.4,
+              maxSFinal: 0.61,
+              medianSPos: 0.3,
+              maxSPos: 0.6,
+              medianSLex: 0.1,
+              maxSLex: 0.2,
+              medianSMeta: 0.1,
+              maxSMeta: 0.3,
+              nearGrayThresholdRows: 1,
+              grayZoneScoreRows: 1,
+            },
+          ],
+        };
+      }
+      if (/from final_selection_results\s+group by coalesce\(final_decision/i.test(sql)) {
+        return { rows: [{ finalDecision: "selected", reason: "semantic_match", count: 2 }] };
+      }
+      if (/criteriaWithPositiveEmbeddings/i.test(sql)) {
+        return {
+          rows: [{ criteriaWithPositiveEmbeddings: 1, rowsWithPositiveScore: 2, evaluatedRows: 2 }],
+        };
       }
       if (/from final_selection_results fsr\s+join signal_candidates a/i.test(sql) && /selectionEvidence/i.test(sql)) {
         return {
@@ -1020,7 +1071,7 @@ function createFakeSelectionDashboardPool() {
           ],
         };
       }
-      if (/"filterRows"/i.test(sql) && /"distinctCandidateCount"/i.test(sql)) {
+      if (/"filterRows"/i.test(sql) && /"affectedCriteriaCount"/i.test(sql)) {
         return {
           rows: [
             {
@@ -1114,6 +1165,87 @@ function createFakeSelectionDashboardPool() {
             { sourceClass: "test_or_audit_like", count: 2, activeFailures: 2 },
             { sourceClass: "operator_like", count: 5, activeFailures: 1 },
           ],
+        };
+      }
+      if (/sp\.definition_json as "definitionJson"/i.test(sql)) {
+        return {
+          rows: [
+            {
+              interestTemplateId: "11111111-1111-4111-8111-111111111111",
+              name: "Hidden signal",
+              definitionJson: {
+                candidateSignals: {
+                  positiveGroups: [
+                    { name: "buyer_ask", cues: ["vendor_search"] },
+                    { name: "project_object", cues: ["implementation partner"] },
+                  ],
+                  negativeGroups: [{ name: "noise", cues: ["generic_advice"] }],
+                },
+              },
+            },
+          ],
+        };
+      }
+      if (/candidateSignalsRecoveryRows/i.test(sql)) {
+        return {
+          rows: [
+            {
+              candidateSignalsRecoveryRows: 0,
+              positiveCueGroupHitCount: 0,
+              negativeCueGroupHitCount: 0,
+              positiveCueFragmentHitRows: 0,
+              evaluatedRows: 1620,
+            },
+          ],
+        };
+      }
+      if (/activeSelectionProfileVersion/i.test(sql) && /filterResultProfileVersion/i.test(sql)) {
+        return {
+          rows: [
+            {
+              activeSelectionProfileVersion: 5,
+              filterResultProfileVersion: 3,
+              filterRows: 74,
+              distinctCandidateCount: 25,
+              staleFilterResultRows: 74,
+              reason: "unknown",
+            },
+            {
+              activeSelectionProfileVersion: 5,
+              filterResultProfileVersion: 5,
+              filterRows: 1546,
+              distinctCandidateCount: 155,
+              staleFilterResultRows: 0,
+              reason: "wrapper_directory_noise",
+            },
+          ],
+        };
+      }
+      if (/minSFinal/i.test(sql) && /maxSFinal/i.test(sql)) {
+        return {
+          rows: [
+            {
+              minSFinal: 0,
+              medianSFinal: 0.12,
+              maxSFinal: 0.3373,
+              medianSPos: 0.18,
+              maxSPos: 0.41,
+              medianSLex: 0.02,
+              maxSLex: 0.08,
+              medianSMeta: 0.04,
+              maxSMeta: 0.12,
+              nearGrayThresholdRows: 0,
+              grayZoneScoreRows: 0,
+            },
+          ],
+        };
+      }
+      if (/from final_selection_results\s+group by coalesce\(final_decision/i.test(sql)) {
+        return { rows: [{ finalDecision: "rejected", reason: "below_threshold", count: 185 }] };
+      }
+      if (/criteriaWithPositiveEmbeddings/i.test(sql)) {
+        return {
+          rows: [{ criteriaWithPositiveEmbeddings: 9, rowsWithPositiveScore: 120, evaluatedRows: 1620 }],
         };
       }
       if (/group by coalesce\(final_decision/i.test(sql)) {
@@ -1526,6 +1658,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(toolNames.includes("operator.funnel.audit"));
   assert.ok(toolNames.includes("operator.funnel.autoplan"));
   assert.ok(toolNames.includes("operator.funnel.iteration.recommend"));
+  assert.ok(toolNames.includes("operator.flow.route"));
   assert.ok(toolNames.includes("operator.selection.dashboard"));
   assert.ok(toolNames.includes("operator.selection.reindex_plan"));
   assert.ok(toolNames.includes("discovery.source_families.coverage"));
@@ -1545,6 +1678,8 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.ok(resourceUris.includes("signalops://guide/scenarios/selection-calibration"));
   assert.ok(resourceUris.includes("signalops://guide/scenarios/discovery-live-gap-hunting"));
   assert.ok(resourceUris.includes("signalops://guide/reference/selection-evidence-semantics"));
+  assert.ok(resourceUris.includes("signalops://guide/reference/hidden-signal-evidence-lanes"));
+  assert.ok(resourceUris.includes("signalops://guide/playbooks/flow-routing"));
   assert.ok(resourceUris.includes("signalops://guide/playbooks/operator-flow-modes"));
   assert.ok(resourceUris.includes("signalops://guide/playbooks/change-intents"));
   assert.ok(resourceUris.includes("signalops://signal-candidates/residuals-summary"));
@@ -1583,6 +1718,7 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     /signalops:\/\/guide\/server-overview/i
   );
   assert.match(orientationRendered.messages[0]?.content.text ?? "", /flowMode/);
+  assert.match(orientationRendered.messages[0]?.content.text ?? "", /operator\.flow\.route/);
   const discoverySessionPrompt = resolveMcpPrompt("discovery.session.plan");
   const discoverySessionRendered = discoverySessionPrompt.render({
     objective: "promote a high-signal discovery endpoint",
@@ -1610,10 +1746,16 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
     "signalops://guide/reference/selection-evidence-semantics"
   );
   assert.equal(selectionEvidenceGuide.name, "guide.reference.selection-evidence-semantics");
+  const hiddenSignalGuide = resolveMcpResource(
+    "signalops://guide/reference/hidden-signal-evidence-lanes"
+  );
+  assert.equal(hiddenSignalGuide.name, "guide.reference.hidden-signal-evidence-lanes");
   const strictNextStepsGuide = resolveMcpResource(
     "signalops://guide/playbooks/strict-next-steps"
   );
   assert.equal(strictNextStepsGuide.name, "guide.playbooks.strict-next-steps");
+  const flowRoutingGuide = resolveMcpResource("signalops://guide/playbooks/flow-routing");
+  assert.equal(flowRoutingGuide.name, "guide.playbooks.flow-routing");
   const operatorFlowModesGuide = resolveMcpResource(
     "signalops://guide/playbooks/operator-flow-modes"
   );
@@ -1658,22 +1800,251 @@ test("JSON-RPC parsing, prompt/resource registries, and tool list expose MCP fou
   assert.equal(MCP_SCOPE_OPTIONS.includes("write.discovery"), true);
 });
 
+test("MCP resource registry preserves complete metadata and representative reads", async () => {
+  const resources = listMcpResources();
+
+  assert.deepEqual(
+    resources.map(({ uri, name, title }) => `${uri}|${name}|${title}`),
+    [
+      "signalops://guide/operating-model|guide.operating.model|Operating Model",
+      "signalops://guide/playbooks/flow-routing|guide.playbooks.flow-routing|Flow Routing",
+      "signalops://guide/playbooks/strict-next-steps|guide.playbooks.strict-next-steps|Strict Next Steps",
+      "signalops://guide/playbooks/operator-flow-modes|guide.playbooks.operator-flow-modes|Operator Flow Modes",
+      "signalops://guide/playbooks/change-intents|guide.playbooks.change-intents|Change Intents",
+      "signalops://guide/diagnostics/channels|guide.diagnostics.channels|Diagnostics channels",
+      "signalops://guide/tuning/channels|guide.tuning.channels|Tuning channels",
+      "signalops://guide/diagnostics/website_pipeline|guide.diagnostics.website_pipeline|Diagnostics website_pipeline",
+      "signalops://guide/tuning/website_pipeline|guide.tuning.website_pipeline|Tuning website_pipeline",
+      "signalops://guide/diagnostics/selection|guide.diagnostics.selection|Diagnostics selection",
+      "signalops://guide/tuning/selection|guide.tuning.selection|Tuning selection",
+      "signalops://guide/diagnostics/content_analysis|guide.diagnostics.content_analysis|Diagnostics content_analysis",
+      "signalops://guide/tuning/content_analysis|guide.tuning.content_analysis|Tuning content_analysis",
+      "signalops://guide/diagnostics/llm_budget|guide.diagnostics.llm_budget|Diagnostics llm_budget",
+      "signalops://guide/tuning/llm_budget|guide.tuning.llm_budget|Tuning llm_budget",
+      "signalops://guide/diagnostics/discovery|guide.diagnostics.discovery|Diagnostics discovery",
+      "signalops://guide/tuning/discovery|guide.tuning.discovery|Tuning discovery",
+      "signalops://guide/diagnostics/sequences|guide.diagnostics.sequences|Diagnostics sequences",
+      "signalops://guide/tuning/sequences|guide.tuning.sequences|Tuning sequences",
+      "signalops://guide/diagnostics/cleanup|guide.diagnostics.cleanup|Diagnostics cleanup",
+      "signalops://guide/tuning/cleanup|guide.tuning.cleanup|Tuning cleanup",
+      "signalops://ops/health|ops.health|Operational Health",
+      "signalops://ops/issues|ops.issues|Operational Issues",
+      "signalops://ops/tuning-backlog|ops.tuning.backlog|Tuning Backlog",
+      "signalops://ops/recent-changes|ops.recent.changes|Recent MCP Changes",
+      "signalops://guide/server-overview|guide.server.overview|Guide Server Overview",
+      "signalops://guide/client-contract|guide.client.contract|MCP Client Contract",
+      "signalops://guide/reference/selection-evidence-semantics|guide.reference.selection-evidence-semantics|Selection Evidence Semantics",
+      "signalops://guide/reference/hidden-signal-evidence-lanes|guide.reference.hidden-signal-evidence-lanes|Hidden Signal Evidence Lanes",
+      "signalops://guide/operator-playbooks|guide.operator.playbooks|Guide Operator Playbooks",
+      "signalops://guide/scenarios/sequences|guide.scenarios.sequences|Guide Scenarios Sequences",
+      "signalops://guide/scenarios/discovery|guide.scenarios.discovery|Guide Scenarios Discovery",
+      "signalops://guide/scenarios/discovery-live-gap-hunting|guide.scenarios.discovery-live-gap-hunting|Guide Scenarios Discovery Live Gap Hunting",
+      "signalops://guide/scenarios/funnel-calibration|guide.scenarios.funnel-calibration|Guide Scenarios Funnel Calibration",
+      "signalops://guide/scenarios/selection-calibration|guide.scenarios.selection-calibration|Guide Scenarios Selection Calibration",
+      "signalops://guide/scenarios/system-interests|guide.scenarios.system-interests|Guide Scenarios System Interests",
+      "signalops://guide/scenarios/llm-templates|guide.scenarios.llm-templates|Guide Scenarios LLM Templates",
+      "signalops://guide/scenarios/channels|guide.scenarios.channels|Guide Scenarios Channels",
+      "signalops://guide/scenarios/signal_candidate-diagnostics|guide.scenarios.signal_candidate-diagnostics|Guide Scenarios Signal Candidate Diagnostics",
+      "signalops://guide/scenarios/observability|guide.scenarios.observability|Guide Scenarios Observability",
+      "signalops://guide/scenarios/cleanup|guide.scenarios.cleanup|Guide Scenarios Cleanup",
+      "signalops://admin/summary|admin.summary|Admin Summary",
+      "signalops://llm/budget-summary|llm.budget.summary|LLM Budget Summary",
+      "signalops://discovery/runs|discovery.runs|Discovery Runs",
+      "signalops://discovery/artifacts|discovery.artifacts|Discovery Artifacts",
+      "signalops://discovery/candidates|discovery.candidates|Discovery Candidates",
+      "signalops://discovery/source-inventory|discovery.source_inventory|Discovery Source Inventory",
+      "signalops://discovery/policies|discovery.policies|Discovery Policies",
+      "signalops://discovery/adapter-backlog|discovery.adapter_backlog|Discovery Adapter Backlog",
+      "signalops://discovery/feedback|discovery.feedback|Discovery Feedback",
+      "signalops://discovery/replay-runs|discovery.replay_runs|Discovery Replay Runs",
+      "signalops://discovery/rollback-groups|discovery.rollback_groups|Discovery Rollback Groups",
+      "signalops://discovery/eval-runs|discovery.eval_runs|Discovery Eval Runs",
+      "signalops://system-interests|system.interests|System Interests",
+      "signalops://templates/llm|llm.templates|LLM Templates",
+      "signalops://channels|channels|Channels",
+      "signalops://sequences|sequences|Sequences",
+      "signalops://web-resources|web.resources|Web Resources",
+      "signalops://fetch-runs|fetch.runs|Fetch Runs",
+      "signalops://signal-candidates/residuals-summary|signal_candidates.residuals.summary|Signal Candidates Residuals Summary",
+    ]
+  );
+  assert.equal(new Set(resources.map((entry) => entry.uri)).size, resources.length);
+  assert.equal(resources.every((entry) => entry.mimeType === "application/json"), true);
+
+  assert.equal(resolveMcpResource("signalops://admin/summary").name, "admin.summary");
+  assert.throws(
+    () => resolveMcpResource("signalops://resource/does-not-exist"),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+
+  const serverOverview = await resolveMcpResource("signalops://guide/server-overview").read({} as any);
+  assert.match(JSON.stringify(serverOverview), /bounded remote operator control plane/);
+  assert.match(JSON.stringify(serverOverview), /admin\.summary\.get/);
+
+  const clientContract = await resolveMcpResource("signalops://guide/client-contract").read({} as any);
+  assert.match(JSON.stringify(clientContract), /Write payloads must be JSON objects/);
+  assert.match(JSON.stringify(clientContract), /read-back/);
+
+  const flowRouting = await resolveMcpResource("signalops://guide/playbooks/flow-routing").read({} as any);
+  assert.equal((flowRouting as Record<string, unknown>).canonicalTool, "operator.flow.route");
+  assert.match(JSON.stringify(flowRouting), /signalops:\/\/guide\/reference\/hidden-signal-evidence-lanes/);
+
+  const referenceGuide = await resolveMcpResource(
+    "signalops://guide/reference/selection-evidence-semantics"
+  ).read({} as any);
+  assert.match(JSON.stringify(referenceGuide), /final_selection_results/);
+  assert.match(JSON.stringify(referenceGuide), /candidateSignals/);
+
+  const scenarioGuide = await resolveMcpResource("signalops://guide/scenarios/discovery").read({} as any);
+  assert.match(JSON.stringify(scenarioGuide), /Discovery vNext/);
+  assert.match(JSON.stringify(scenarioGuide), /source inventory/);
+
+  const operatorPlaybooks = await resolveMcpResource("signalops://guide/operator-playbooks").read({} as any);
+  assert.match(JSON.stringify(operatorPlaybooks), /selection-calibration-zero-selected/);
+
+  const opsContext = {
+    sdk: {
+      async getDashboardSummary() {
+        return { ok: true };
+      },
+      async listDiscoveryVNextRecords() {
+        return { items: [] };
+      },
+      async getLlmBudgetSummary() {
+        return { budget: "empty" };
+      },
+      async getSignalCandidateResidualSummary() {
+        return { buckets: [] };
+      },
+    },
+    pool: {
+      async query() {
+        return { rows: [] };
+      },
+    },
+  };
+  const opsHealth = await resolveMcpResource("signalops://ops/health").read(opsContext as any);
+  assert.match(JSON.stringify(opsHealth), /PostgreSQL source_channels/);
+  assert.match(JSON.stringify(opsHealth), /API-backed dashboard/);
+  const recentChanges = await resolveMcpResource("signalops://ops/recent-changes").read(opsContext as any);
+  assert.deepEqual((recentChanges as Record<string, unknown>).recentMcpRequests, []);
+});
+
+test("MCP prompt registry preserves complete metadata and critical renders", () => {
+  const prompts = listMcpPrompts();
+
+  assert.deepEqual(
+    prompts.map(
+      ({ name, description, arguments: promptArgs }) =>
+        `${name}|${description}|${promptArgs.map((arg) => arg.name).join(",")}`
+    ),
+    [
+      "diagnose.mcp_error|Diagnose an MCP client/tool error and choose the next safe read or schema correction.|error,objective",
+      "operator.session.start|Starter guidance for understanding and safely using the SignalOps MCP server.|objective,domain",
+      "sequences.session.plan|Starter guidance for safe sequence creation, execution, and recovery work through MCP.|objective",
+      "discovery.session.plan|Starter guidance for safe discovery and source-onboarding work through MCP.|objective",
+      "operator.funnel.calibrate|Compare a prior working manual/reference bundle with current MCP state before discovery or template tuning.|objective,referenceEvidence,currentGap",
+      "discovery.live_gap_hunting.plan|Plan a domain-neutral live Discovery vNext gap-hunting run that uses MCP-only operator actions.|objective,scenarioPacks,budget",
+      "discovery.source_understanding.review|Review SourceUnderstanding, RoutingDecision, or probation source evidence.|contract",
+      "system_interests.session.plan|Starter guidance for system-interest maintenance through MCP.|topic",
+      "llm_templates.session.plan|Starter guidance for LLM template maintenance through MCP.|templateIntent",
+      "channels.session.plan|Starter guidance for channel onboarding and maintenance through MCP.|source",
+      "observability.session.plan|Starter guidance for read-only diagnosis and evidence gathering through MCP.|question",
+      "operations.daily_review|Run a daily read-only operational review of SignalOps after setup.|focus",
+      "operations.issue_triage|Triage a concrete production/operator symptom through read-only MCP diagnostics.|symptom,domain",
+      "selection.tuning.plan|Plan a safe selection fine-tuning session from residual/signal_candidate evidence.|objective,residualBucket",
+      "channel.health.review|Review channel fetch health and source onboarding state.|channelId",
+      "website.pipeline.review|Explain website resources, projection, and downstream signal_candidate selection outcomes.|channelId",
+      "llm_budget.review|Review LLM budget pressure, review behavior, and gray-zone/hold outcomes.|question",
+      "discovery.yield.review|Review Discovery vNext run, artifact, source inventory, and routing quality.|runId,sourceInventoryId",
+      "system_interest.create|Draft a bounded system-interest payload before calling MCP write tools.|topic,audience",
+      "system_interest.polish|Turn signal_candidate residual evidence into a bounded system-interest tuning recommendation.|interestName,residualPattern",
+      "llm_template.tune|Turn signal_candidate residual evidence into a bounded LLM template tuning recommendation.|templateName,residualPattern",
+      "discovery.policy.tune|Turn signal_candidate residual evidence into a bounded Discovery vNext policy/artifact tuning recommendation.|targetTitle,residualPattern",
+      "discovery.artifact.review|Review a Discovery vNext artifact or run before route/register/replay.|targetTitle,goal",
+      "sequence.draft|Draft a sequence definition for the automation control plane.|objective",
+      "cleanup.guidance|Prompt for safe MCP cleanup planning after experiments or tests.|scope",
+    ]
+  );
+  assert.equal(new Set(prompts.map((entry) => entry.name)).size, prompts.length);
+  assert.equal(resolveMcpPrompt("sequence.draft").name, "sequence.draft");
+  assert.throws(
+    () => resolveMcpPrompt("prompt.does.not.exist"),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+
+  const operatorSessionText =
+    resolveMcpPrompt("operator.session.start").render({
+      objective: "repair selected-signal recall",
+      domain: "selection",
+    }).messages[0]?.content.text ?? "";
+  assert.match(operatorSessionText, /operator\.flow\.route/);
+  assert.match(operatorSessionText, /signalops:\/\/guide\/server-overview/);
+  assert.match(operatorSessionText, /flowMode/);
+
+  const discoverySessionText =
+    resolveMcpPrompt("discovery.session.plan").render({
+      objective: "onboard high-signal public sources",
+    }).messages[0]?.content.text ?? "";
+  assert.match(discoverySessionText, /Discovery vNext/);
+  assert.match(discoverySessionText, /passed_with_quality_gap/);
+  assert.match(discoverySessionText, /source inventory/i);
+
+  const selectionTuningText =
+    resolveMcpPrompt("selection.tuning.plan").render({
+      objective: "increase_recall",
+      residualBucket: "semantic_rejected/no_system_match",
+    }).messages[0]?.content.text ?? "";
+  assert.match(selectionTuningText, /candidate_positive_signals/);
+  assert.match(selectionTuningText, /must_have_terms=\[\]/);
+  assert.match(selectionTuningText, /operator\.report\.verify/);
+
+  const channelReviewText =
+    resolveMcpPrompt("channel.health.review").render({
+      channelId: "rss-channel",
+    }).messages[0]?.content.text ?? "";
+  assert.match(channelReviewText, /channels\.alternatives\.plan/);
+  assert.match(channelReviewText, /website_fallback/);
+
+  const llmReviewText =
+    resolveMcpPrompt("llm_budget.review").render({
+      question: "why is LLM spend zero",
+    }).messages[0]?.content.text ?? "";
+  assert.match(llmReviewText, /provider_endpoint_error/);
+  assert.match(llmReviewText, /no reviewable candidate path/);
+
+  const cleanupText =
+    resolveMcpPrompt("cleanup.guidance").render({
+      scope: "test artifacts and stale tokens",
+    }).messages[0]?.content.text ?? "";
+  assert.match(cleanupText, /admin\.mcp_tokens\.list\/revoke\/delete_revoked/);
+  assert.match(cleanupText, /migration-owned default\/adaptive\/system sequences/);
+});
+
 test("MCP selection calibration guidance explains zero-selected diagnostics", async () => {
   const guide = resolveMcpResource("signalops://guide/scenarios/selection-calibration");
   const guideText = JSON.stringify(await guide.read({} as any));
   const strictGuide = resolveMcpResource("signalops://guide/playbooks/strict-next-steps");
   const strictGuideText = JSON.stringify(await strictGuide.read({} as any));
+  const flowRoutingGuide = resolveMcpResource("signalops://guide/playbooks/flow-routing");
+  const flowRoutingGuideText = JSON.stringify(await flowRoutingGuide.read({} as any));
   const flowModesGuide = resolveMcpResource("signalops://guide/playbooks/operator-flow-modes");
   const flowModesGuideText = JSON.stringify(await flowModesGuide.read({} as any));
   const changeIntentsGuide = resolveMcpResource("signalops://guide/playbooks/change-intents");
   const changeIntentsGuideText = JSON.stringify(await changeIntentsGuide.read({} as any));
   const evidenceGuide = resolveMcpResource("signalops://guide/reference/selection-evidence-semantics");
   const evidenceGuideText = JSON.stringify(await evidenceGuide.read({} as any));
+  const hiddenSignalGuide = resolveMcpResource(
+    "signalops://guide/reference/hidden-signal-evidence-lanes"
+  );
+  const hiddenSignalGuideText = JSON.stringify(await hiddenSignalGuide.read({} as any));
   const tuningGuide = resolveMcpResource("signalops://guide/tuning/selection");
   const tuningGuideText = JSON.stringify(await tuningGuide.read({} as any));
 
   assert.match(evidenceGuideText, /must_have_terms/);
   assert.match(evidenceGuideText, /any-of/);
+  assert.match(evidenceGuideText, /hard pre-semantic gate/);
+  assert.match(evidenceGuideText, /unsafe for hidden intent/i);
   assert.match(evidenceGuideText, /short_tokens_required/);
   assert.match(evidenceGuideText, /extracted short-token/);
   assert.match(evidenceGuideText, /positive_texts/);
@@ -1687,6 +2058,18 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(evidenceGuideText, /distinct candidates/i);
   assert.match(evidenceGuideText, /filterReasonBreakdown\.distinctCandidateCount/);
   assert.match(evidenceGuideText, /gray_zone/);
+  assert.match(evidenceGuideText, /hidden-signal-evidence-lanes/);
+  assert.match(hiddenSignalGuideText, /explicit_marker/);
+  assert.match(hiddenSignalGuideText, /hidden_intent/);
+  assert.match(hiddenSignalGuideText, /mixed/);
+  assert.match(hiddenSignalGuideText, /unknown/);
+  assert.match(hiddenSignalGuideText, /must_have_terms=\[\]/);
+  assert.match(hiddenSignalGuideText, /short_tokens_required=\[\]/);
+  assert.match(hiddenSignalGuideText, /OR hard gate is not hidden-signal safe/);
+  assert.match(hiddenSignalGuideText, /mandatory marker/i);
+  assert.match(hiddenSignalGuideText, /group\.name/);
+  assert.match(hiddenSignalGuideText, /group\.cues/);
+  assert.match(hiddenSignalGuideText, /literal observable text fragments/);
   assert.match(guideText, /semantic_rejected\/no_system_match/);
   assert.match(guideText, /llmReviewMode=always/);
   assert.match(guideText, /candidateSignals/);
@@ -1698,6 +2081,10 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(guideText, /distinctCandidateCount/);
   assert.match(guideText, /Globally removing wrapper/);
   assert.match(guideText, /gray[- ]zone collapse/i);
+  assert.match(guideText, /signalVisibility/);
+  assert.match(guideText, /hidden_intent/);
+  assert.match(guideText, /must_have_terms=\[\]/);
+  assert.match(guideText, /literal observable fragments/);
   assert.match(guideText, /strict-next-steps/);
   assert.match(strictGuideText, /must_do_next/);
   assert.match(strictGuideText, /read-back -> classify -> bounded write -> bounded replay -> verify/);
@@ -1707,7 +2094,16 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(strictGuideText, /mandatory for autonomous\/default MCP client recommendations/i);
   assert.match(strictGuideText, /not a ban on expert operator action/i);
   assert.match(strictGuideText, /planned_change_flow/i);
+  assert.match(strictGuideText, /hidden_intent/);
+  assert.match(strictGuideText, /OR must_have_terms remains a hard pre-semantic gate/);
+  assert.match(flowRoutingGuideText, /operator\.flow\.route/);
+  assert.match(flowRoutingGuideText, /mustRead/);
+  assert.match(flowRoutingGuideText, /mustDoNext/);
+  assert.match(flowRoutingGuideText, /doNotDoYet/);
+  assert.match(flowRoutingGuideText, /A route block is not proof of effect/);
+  assert.match(flowRoutingGuideText, /Source acquisition proof is not selection proof/);
   assert.match(flowModesGuideText, /diagnostic_flow/);
+  assert.match(flowModesGuideText, /operator\.flow\.route/);
   assert.match(flowModesGuideText, /planned_change_flow/);
   assert.match(flowModesGuideText, /expert_override_flow/);
   assert.match(flowModesGuideText, /source_onboarding_flow/);
@@ -1719,6 +2115,8 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(flowModesGuideText, /changeIntent/);
   assert.match(flowModesGuideText, /cleanupIntent/);
   assert.match(flowModesGuideText, /tuningLayer/);
+  assert.match(flowModesGuideText, /signalVisibility/);
+  assert.match(flowModesGuideText, /hardGatePolicy/);
   assert.match(changeIntentsGuideText, /system_update/);
   assert.match(changeIntentsGuideText, /selection_tuning/);
   assert.match(changeIntentsGuideText, /llm_tuning/);
@@ -1726,6 +2124,8 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(changeIntentsGuideText, /cleanupIntent/);
   assert.match(changeIntentsGuideText, /Mutation response is not verified effect/);
   assert.match(changeIntentsGuideText, /Source acquisition proof is not selection proof/);
+  assert.match(changeIntentsGuideText, /signalVisibility=explicit_marker/);
+  assert.match(changeIntentsGuideText, /hardGatePolicy=forbidden_by_default/);
   assert.match(tuningGuideText, /semantic_rejected\/no_system_match/);
   assert.match(tuningGuideText, /candidateSignals/);
   assert.match(tuningGuideText, /docIds/);
@@ -1734,12 +2134,16 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(MCP_SERVER_INSTRUCTIONS, /semantic_rejected\/no_system_match/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /no_pending_gray_zone/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /runtime_credentials_missing/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /operator\.flow\.route/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/strict-next-steps/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/operator-flow-modes/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /signalops:\/\/guide\/playbooks\/change-intents/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /flowMode/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /changeIntent/);
   assert.match(MCP_SERVER_INSTRUCTIONS, /candidate_positive_signals/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /signalVisibility/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /must_have_terms=\[\]/);
+  assert.match(MCP_SERVER_INSTRUCTIONS, /Snake_case\/id-like cues/);
 
   const selectionPrompt = resolveMcpPrompt("selection.tuning.plan").render({
     objective: "increase_recall",
@@ -1751,11 +2155,17 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(selectionText, /filter rows are not distinct candidates/);
   assert.match(selectionText, /docIds/);
   assert.match(selectionText, /operator\.report\.verify/);
+  assert.match(selectionText, /operator\.flow\.route/);
+  assert.match(selectionText, /route block/);
   assert.match(selectionText, /candidate_positive_signals/);
   assert.match(selectionText, /planned_change/);
   assert.match(selectionText, /expert_override/);
   assert.match(selectionText, /changeIntent=selection_tuning/);
   assert.match(selectionText, /tuningLayer/);
+  assert.match(selectionText, /signalVisibility/);
+  assert.match(selectionText, /candidateSignalsHitRate/);
+  assert.match(selectionText, /labelLikeCueWarnings/);
+  assert.match(selectionText, /hard lexical gates/);
   assert.doesNotMatch(selectionText, /positive-term expansion.*main|broaden positive signals/i);
 
   const llmPrompt = resolveMcpPrompt("llm_budget.review").render({
@@ -1800,6 +2210,9 @@ test("MCP selection calibration guidance explains zero-selected diagnostics", as
   assert.match(systemInterestText, /real item-level evidence/i);
   assert.match(systemInterestText, /candidate cue groups/i);
   assert.match(systemInterestText, /Hidden\/operational signals/i);
+  assert.match(systemInterestText, /group\.name/);
+  assert.match(systemInterestText, /group\.cues/);
+  assert.match(systemInterestText, /must_have_terms=\[\]/);
 
   const channelPrompt = resolveMcpPrompt("channel.health.review").render({
     channelId: "rss-channel",
@@ -2165,6 +2578,12 @@ test("MCP selection precision audit buckets selected rows without a public gate 
   assert.match(JSON.stringify(report), /readBackVerification/);
   assert.equal(report.flowMode, "diagnostic");
   assert.equal(report.proofStatus, "partial");
+  assert.equal(report.signalVisibility, "unknown");
+  assert.equal(report.hardGatePolicy, "forbidden_by_default");
+  assert.match(JSON.stringify(report), /scoreThresholdDiagnostics/);
+  assert.match(JSON.stringify(report), /candidateSignalsHitRate/);
+  assert.match(JSON.stringify(report), /staleness/);
+  assert.equal((report.scoreThresholds as Record<string, unknown>).irrelevantMaxThreshold, 0.45);
   assert.match(JSON.stringify(report), /missingProof/);
   assert.match(JSON.stringify(report), /processor counters alone are not sufficient/);
 
@@ -2292,6 +2711,28 @@ test("MCP selection dashboard explains raw signal_candidate totals versus select
   assert.equal((dashboard.diagnosticHints as Record<string, unknown>).llmProviderEndpointError, true);
   assert.equal((dashboard.diagnosticHints as Record<string, unknown>).activeTestChannelNoise, true);
   assert.equal((dashboard.diagnosticHints as Record<string, unknown>).filterRowsNotCandidateRows, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).belowGrayThreshold, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).zeroCandidateSignalHits, true);
+  assert.equal((dashboard.diagnosticHints as Record<string, unknown>).mixedProfileVersions, true);
+  assert.equal(
+    (dashboard.diagnosticHints as Record<string, unknown>).semanticEmbeddingsPresentButBelowThreshold,
+    true
+  );
+  assert.equal(dashboard.candidateSignalsConfigured, true);
+  assert.equal(dashboard.candidateSignalsHitRate, 0);
+  assert.equal((dashboard.scoreThresholds as Record<string, unknown>).irrelevantMaxThreshold, 0.45);
+  assert.equal((dashboard.scoreThresholds as Record<string, unknown>).relevantMinThreshold, 0.72);
+  assert.equal((dashboard.scoreDistribution as Record<string, unknown>).maxSFinal, 0.3373);
+  assert.match(JSON.stringify(dashboard.labelLikeCueWarnings), /vendor_search/);
+  assert.match(JSON.stringify(dashboard.zeroHitCueGroups), /No configured candidateSignals cue groups/);
+  assert.equal(
+    ((dashboard.staleProfileDiagnostics as Record<string, unknown>).staleFilterResultRows),
+    74
+  );
+  assert.match(
+    String((dashboard.diagnosticHints as Record<string, unknown>).interestCentroidsNotSelectionRootCause),
+    /criteria_compiled embeddings/
+  );
   assert.match(JSON.stringify(dashboard), /raw editorial observations/i);
   assert.match(JSON.stringify(dashboard), /current active source count/i);
   assert.match(JSON.stringify(dashboard), /strict selection currently exposes zero/i);
@@ -2335,19 +2776,32 @@ test("MCP operator tuning recommend avoids positive-term expansion for semantic 
       domain: "selection",
       objective: "increase_recall",
       residualBucket: "semantic_rejected/no_system_match",
+      signalVisibility: "hidden_intent",
+      evidenceLaneType: "hidden_intent_lane",
     }
   )) as Record<string, unknown>;
 
   const serialized = JSON.stringify(recommendation);
   assert.equal(recommendation.flowMode, "diagnostic");
+  assert.match(serialized, /"flowRoute"/);
+  assert.match(serialized, /"mustRead"/);
+  assert.match(serialized, /"nextToolCalls"/);
   assert.equal(recommendation.changeIntent, "selection_tuning");
   assert.equal(recommendation.tuningLayer, "semantic_match");
+  assert.equal(recommendation.signalVisibility, "hidden_intent");
+  assert.equal(recommendation.evidenceLaneType, "hidden_intent_lane");
+  assert.equal(recommendation.hardGatePolicy, "forbidden_by_default");
+  assert.equal(recommendation.mandatoryMarkerProofRequired, true);
   assert.match(serialized, /intentProofRequired/);
+  assert.match(serialized, /evidenceLaneGuidance/);
   assert.match(serialized, /candidateSignals/);
+  assert.match(serialized, /candidateSignalsHitRate/);
   assert.match(serialized, /must_do_next/);
   assert.match(serialized, /allowed_after/);
   assert.match(serialized, /do_not_do_yet/);
   assert.match(serialized, /blocked_until/);
+  assert.match(serialized, /Do not add broad must-have terms/);
+  assert.match(serialized, /short_tokens_required as an OR keyword gate/);
   assert.match(serialized, /candidate_positive_signals/);
   assert.match(serialized, /candidate_negative_signals/);
   assert.match(serialized, /near-miss negative/);
@@ -2597,6 +3051,254 @@ test("MCP operator intent fields reject unsupported enum values", async () => {
       ),
     (error) => error instanceof JsonRpcError && error.code === -32602
   );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: sdk as never,
+          pool,
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "operator.tuning.recommend",
+        {
+          domain: "selection",
+          signalVisibility: "domain_specific_visibility",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: sdk as never,
+          pool,
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "operator.report.verify",
+        {
+          reportKind: "selection",
+          entityIds: {},
+          hardGatePolicy: "always_allow_keywords",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+});
+
+test("MCP operator flow route returns strict routes without backend queries", async () => {
+  const pool = {
+    async query() {
+      throw new Error("operator.flow.route should not query the backend");
+    },
+  };
+  const context = {
+    sdk: {} as never,
+    pool,
+    token: WRITE_TEMPLATES_TOKEN,
+  };
+
+  const selectionRoute = (await executeMcpTool(context, "operator.flow.route", {
+    sessionGoal: "diagnose 0 selected hidden signals",
+    domain: "selection",
+    objective: "increase_recall",
+    symptoms: ["zero_selected", "semantic_rejected"],
+    residualBucket: "semantic_rejected/no_system_match",
+    signalVisibility: "hidden_intent",
+    evidenceLaneType: "hidden_intent_lane",
+  })) as Record<string, unknown>;
+  const selectionSerialized = JSON.stringify(selectionRoute);
+  assert.equal(selectionRoute.flowMode, "diagnostic");
+  assert.equal(selectionRoute.changeIntent, "selection_tuning");
+  assert.equal(selectionRoute.tuningLayer, "semantic_match");
+  assert.equal(selectionRoute.signalVisibility, "hidden_intent");
+  assert.equal(selectionRoute.hardGatePolicy, "forbidden_by_default");
+  assert.equal(selectionRoute.mandatoryMarkerProofRequired, true);
+  assert.equal(selectionRoute.mutationPolicy, "read-only advisory route; writes require existing scoped MCP/admin tools and read-back proof");
+  assert.match(selectionSerialized, /operator\.selection\.dashboard/);
+  assert.match(selectionSerialized, /signal_candidates\.residuals\.summary/);
+  assert.match(selectionSerialized, /system_interests\.compile_status\.list/);
+  assert.match(selectionSerialized, /maintenance\.reindex\.request/);
+  assert.match(selectionSerialized, /operator\.report\.verify/);
+  assert.match(selectionSerialized, /Do not add broad must-have terms/);
+  assert.match(selectionSerialized, /short_tokens_required as an OR keyword gate/);
+  assert.match(selectionSerialized, /Do not rewrite LLM templates/);
+  assert.match(selectionSerialized, /Do not add more RSS\/source volume/);
+
+  const mixedSelectionRoute = (await executeMcpTool(context, "operator.flow.route", {
+    sessionGoal: "recover mixed signal recall without unsafe hard gates",
+    domain: "selection",
+    objective: "increase_recall",
+    symptoms: ["zero_selected", "technical_filter_rejected"],
+    residualBucket: "0 selected technical_filter_rejected must_have hard_gate",
+    signalVisibility: "mixed",
+  })) as Record<string, unknown>;
+  const mixedSerialized = JSON.stringify(mixedSelectionRoute);
+  assert.equal(mixedSelectionRoute.flowMode, "diagnostic");
+  assert.equal(mixedSelectionRoute.signalVisibility, "mixed");
+  assert.equal(mixedSelectionRoute.hardGatePolicy, "forbidden_by_default");
+  assert.equal(mixedSelectionRoute.mandatoryMarkerProofRequired, true);
+  assert.match(mixedSerialized, /mandatory-marker proof/i);
+  assert.match(mixedSerialized, /Do not add broad must-have terms/);
+
+  const llmRoute = (await executeMcpTool(context, "operator.flow.route", {
+    sessionGoal: "0 LLM reviews after replay",
+    symptoms: ["zero_llm_reviews"],
+  })) as Record<string, unknown>;
+  const llmSerialized = JSON.stringify(llmRoute);
+  assert.equal(llmRoute.domain, "llm_budget");
+  assert.equal(llmRoute.flowMode, "diagnostic");
+  assert.equal(llmRoute.changeIntent, "llm_tuning");
+  assert.equal(llmRoute.tuningLayer, "llm_provider");
+  assert.match(llmSerialized, /no_reviewable_path/);
+  assert.match(llmSerialized, /provider_endpoint_error/);
+  assert.match(llmSerialized, /Do not call LLM broken/);
+  assert.match(llmSerialized, /llm_budget\.summary/);
+
+  const sourceRoute = (await executeMcpTool(context, "operator.flow.route", {
+    sessionGoal: "repair invalid RSS source",
+    symptoms: ["source_failure"],
+  })) as Record<string, unknown>;
+  const sourceSerialized = JSON.stringify(sourceRoute);
+  assert.equal(sourceRoute.domain, "channels");
+  assert.equal(sourceRoute.flowMode, "source_onboarding");
+  assert.equal(sourceRoute.changeIntent, "source_tuning");
+  assert.equal(sourceRoute.tuningLayer, "acquisition");
+  assert.match(sourceSerialized, /channels\.bottlenecks\.summary/);
+  assert.match(sourceSerialized, /channels\.alternatives\.plan/);
+  assert.match(sourceSerialized, /Source acquisition proof is not selected-signal proof/);
+
+  const plannedRoute = (await executeMcpTool(context, "operator.flow.route", {
+    sessionGoal: "planned system interest update",
+    domain: "selection",
+    symptoms: ["planned_update", "config_write"],
+    operationMode: "planned_change",
+    changeIntent: "config_update",
+    affectedScope: ["interest:known"],
+  })) as Record<string, unknown>;
+  const plannedSerialized = JSON.stringify(plannedRoute);
+  assert.equal(plannedRoute.flowMode, "planned_change");
+  assert.equal(plannedRoute.changeIntent, "config_update");
+  assert.match(plannedSerialized, /one scoped staged write/i);
+  assert.match(plannedSerialized, /Mutation responses are not verified effect/);
+  assert.match(plannedSerialized, /Do not run emergency zero-selected diagnosis/);
+
+  const cleanupRoute = (await executeMcpTool(context, "operator.flow.route", {
+    symptoms: ["cleanup"],
+    cleanupIntent: "test_artifacts",
+  })) as Record<string, unknown>;
+  const cleanupSerialized = JSON.stringify(cleanupRoute);
+  assert.equal(cleanupRoute.flowMode, "cleanup");
+  assert.equal(cleanupRoute.cleanupIntent, "test_artifacts");
+  assert.match(cleanupSerialized, /archive\/deactivate/);
+  assert.match(cleanupSerialized, /confirm=true/);
+
+  const blockedOverride = (await executeMcpTool(context, "operator.flow.route", {
+    operationMode: "expert_override",
+    changeIntent: "config_update",
+    affectedScope: ["interest:known"],
+  })) as Record<string, unknown>;
+  assert.equal(blockedOverride.flowMode, "expert_override");
+  assert.equal(blockedOverride.operator_override_allowed, false);
+  assert.equal(blockedOverride.proofStatus, "blocked");
+  assert.match(JSON.stringify(blockedOverride), /operatorOverrideReason/);
+
+  const allowedOverride = (await executeMcpTool(context, "operator.flow.route", {
+    operationMode: "expert_override",
+    operatorOverrideReason: "operator has fresh external evidence and chooses one bounded config update",
+    affectedScope: ["interest:known"],
+    changeIntent: "config_update",
+  })) as Record<string, unknown>;
+  assert.equal(allowedOverride.operator_override_allowed, true);
+  assert.match(JSON.stringify(allowedOverride), /cannot skip MCP read-back or report verification/);
+});
+
+test("MCP operator flow route rejects unsupported enum values at schema boundary", async () => {
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: {} as never,
+          pool: {},
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "operator.flow.route",
+        {
+          symptoms: ["domain_specific_shortcut"],
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+});
+
+test("MCP operating intelligence facade preserves guide shapes and tuning route block", async () => {
+  const operatingModel = getOperatingModelGuide();
+  assert.equal(operatingModel.model, "observe -> diagnose -> recommend -> guarded change -> verify effect -> monitor");
+  assert.equal(operatingModel.domains.selection.domain, "selection");
+  assert.match(JSON.stringify(operatingModel.operatingRules), /Tuning recommendations/);
+
+  const operatingResource = resolveMcpResource("signalops://guide/operating-model");
+  assert.deepEqual(await operatingResource.read({} as any), operatingModel);
+
+  const selectionDiagnostics = getDiagnosticsGuide("selection") as Record<string, unknown>;
+  assert.equal(selectionDiagnostics.domain, "selection");
+  assert.match(JSON.stringify(selectionDiagnostics), /operator\.system\.health/);
+  assert.match(JSON.stringify(selectionDiagnostics), /operator\.tuning\.recommend/);
+
+  const unknownDiagnostics = getDiagnosticsGuide("unknown-domain") as Record<string, unknown>;
+  assert.equal(unknownDiagnostics.domain, "unknown-domain");
+  assert.equal(unknownDiagnostics.error, "Unknown operating domain.");
+  assert.ok(Array.isArray(unknownDiagnostics.knownDomains));
+
+  const selectionTuning = getTuningGuide("selection") as Record<string, unknown>;
+  assert.equal(selectionTuning.domain, "selection");
+  assert.match(JSON.stringify(selectionTuning), /zeroSelectedCalibration/);
+  assert.match(JSON.stringify(selectionTuning), /semantic_rejected\/no_system_match/);
+
+  const sdk = {
+    async getDashboardSummary() {
+      return {};
+    },
+    async listDiscoveryVNextRecords() {
+      return { items: [] };
+    },
+    async getLlmBudgetSummary() {
+      return {};
+    },
+    async getSignalCandidateResidualSummary() {
+      return {};
+    },
+  };
+  const pool = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+  const recommendation = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "operator.tuning.recommend",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+      residualBucket: "semantic_rejected/no_system_match",
+      signalVisibility: "hidden_intent",
+      evidenceLaneType: "hidden_intent_lane",
+    }
+  )) as Record<string, unknown>;
+
+  const flowRoute = recommendation.flowRoute as Record<string, unknown>;
+  assert.equal(flowRoute.domain, "selection");
+  assert.equal(flowRoute.flowMode, "diagnostic");
+  assert.equal(flowRoute.changeIntent, "selection_tuning");
+  assert.equal(flowRoute.tuningLayer, "semantic_match");
+  assert.equal(flowRoute.mandatoryMarkerProofRequired, true);
+  assert.match(JSON.stringify(flowRoute), /operator\.report\.verify/);
 });
 
 test("MCP operator tuning recommend prioritizes technical-filter repair before semantic tuning", async () => {
@@ -3328,7 +4030,8 @@ test("MCP system interest writes return persisted profile read-back verification
   assert.equal(verification.candidatePositiveSignalGroupCount, 1);
   assert.equal(verification.candidateNegativeSignalGroupCount, 1);
   assert.deepEqual(verification.allowedContentKinds, ["editorial", "listing"]);
-  assert.deepEqual(verification.warnings, []);
+  assert.match(JSON.stringify(verification.warnings), /one cue/);
+  assert.match(JSON.stringify(verification.candidateSignalsQualityWarnings), /buyer_need/);
   assert.match(JSON.stringify(result), /system_interests\.compile_status\.list/);
   assert.equal(pool.state.released, true);
 });

@@ -24,7 +24,6 @@ def build_worker_runtime_deps_from_namespace(namespace: Mapping[str, Any]) -> di
         "SequenceRunJobProcessor": namespace["SequenceRunJobProcessor"],
         "build_redis_connection_options": namespace["build_redis_connection_options"],
         "enqueue_sequence_run_job_async": namespace["enqueue_sequence_run_job_async"],
-        "legacy_queue_consumers_enabled": namespace["legacy_queue_consumers_enabled"],
         "process_cluster": namespace["process_cluster"],
         "process_criterion_compile": namespace["process_criterion_compile"],
         "process_dedup": namespace["process_dedup"],

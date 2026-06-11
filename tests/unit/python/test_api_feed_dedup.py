@@ -124,6 +124,38 @@ class ApiFeedDedupTests(unittest.TestCase):
         )
         self.assertEqual(items_params, ("%AI policy%", 20, 0))
 
+    def test_system_selected_signal_candidates_are_visible_final_selected_search_items(self) -> None:
+        with (
+            patch.object(api_main, "query_one", return_value={"total": 1}) as query_one,
+            patch.object(api_main, "query_all", return_value=[]) as query_all,
+        ):
+            api_main.list_system_selected_content_items_page(
+                page=1,
+                page_size=100,
+                q="Deterministic selected title",
+            )
+
+        count_sql, count_params = query_one.call_args.args
+        self.assertIn("'signal_candidate:' || a.doc_id::text as content_item_id", count_sql)
+        self.assertIn("from signal_candidates a", count_sql)
+        self.assertIn("join source_channels sc on sc.channel_id = a.channel_id", count_sql)
+        self.assertIn("left join final_selection_results fsr on fsr.doc_id = a.doc_id", count_sql)
+        self.assertIn("a.visibility_state = 'visible'", count_sql)
+        self.assertIn("when fsr.doc_id is not null then coalesce(fsr.is_selected, false)", count_sql)
+        self.assertIn("= true", count_sql)
+        self.assertIn(
+            "where coalesce(content_items._search_text, '') ilike %s escape '\\'",
+            count_sql,
+        )
+        self.assertEqual(count_params, ("%Deterministic selected title%",))
+
+        items_sql, items_params = query_all.call_args.args
+        self.assertIn("'signal_candidate:' || a.doc_id::text as content_item_id", items_sql)
+        self.assertIn("a.visibility_state = 'visible'", items_sql)
+        self.assertIn("when fsr.doc_id is not null then coalesce(fsr.is_selected, false)", items_sql)
+        self.assertIn("= true", items_sql)
+        self.assertEqual(items_params, ("%Deterministic selected title%", 100, 0))
+
     def test_list_system_selected_content_items_supports_channel_filter(self) -> None:
         channel_id = "00000000-0000-4000-8000-000000000002"
         with (

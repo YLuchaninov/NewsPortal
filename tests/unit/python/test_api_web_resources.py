@@ -10,10 +10,12 @@ from services.api.app import main as api_main
 
 class ApiWebResourcesTests(unittest.TestCase):
     def test_web_resource_routes_are_registered(self) -> None:
-        paths = {route.path for route in api_main.app.routes}
+        routes_by_path = {route.path: set(getattr(route, "methods", ())) for route in api_main.app.routes}
 
-        self.assertIn("/maintenance/web-resources", paths)
-        self.assertIn("/maintenance/web-resources/{resource_id}", paths)
+        self.assertIn("/maintenance/web-resources", routes_by_path)
+        self.assertIn("/maintenance/web-resources/{resource_id}", routes_by_path)
+        self.assertIn("GET", routes_by_path["/maintenance/web-resources"])
+        self.assertIn("GET", routes_by_path["/maintenance/web-resources/{resource_id}"])
 
     def test_list_web_resources_page_uses_filters_and_projection_truth(self) -> None:
         items = [

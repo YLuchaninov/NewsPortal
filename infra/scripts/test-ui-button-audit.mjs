@@ -55,6 +55,10 @@ function log(message) {
   console.log(`[ui-button-audit] ${message}`);
 }
 
+function apiUrl(pathname) {
+  return `http://127.0.0.1:8080/api${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+}
+
 const waitFor = createWaitFor({ timeoutMs: 120000, intervalMs: 1500 });
 
 async function ensureComposeStack() {
@@ -412,6 +416,11 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
       update signal_candidates a
       set
         processing_state = 'matched',
+        visibility_state = 'visible',
+        canonical_doc_id = null,
+        family_id = signal_candidate_cluster.doc_id,
+        is_exact_duplicate = false,
+        is_near_duplicate = false,
         event_cluster_id = signal_candidate_cluster.cluster_id,
         published_at = now(),
         ingested_at = now(),
@@ -501,7 +510,7 @@ async function seedWebScenario(env, adminCookie, webCookie, userId, runId) {
     "system-selected collection availability",
     async () => {
       const payload = await fetchJson(
-        `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(primarySignalCandidate.title)}`
+        apiUrl(`/collections/system-selected?page=1&pageSize=100&q=${encodeURIComponent(primarySignalCandidate.title)}`)
       );
       const items = Array.isArray(payload?.items) ? payload.items : [];
       return items.some((item) => String(item?.content_item_id ?? "") === primaryContentItemId);

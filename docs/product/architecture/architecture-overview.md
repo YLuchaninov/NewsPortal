@@ -10,6 +10,8 @@ sources -> fetchers -> PostgreSQL -> outbox -> relay -> BullMQ -> workers -> Pos
 
 PostgreSQL хранит бизнес-истину. Redis, BullMQ, HNSW-индексы, snapshots и cache — рабочие и пересобираемые слои.
 
+Audience truth split: MCP resources are operator truth for MCP sessions, product docs are developer/operator documentation truth, and `.aidp/*` is agent-runtime truth. These layers may speak to different audiences, but their shared invariants must match.
+
 ## Что входит в систему
 
 - `apps/web` — пользовательское Astro SSR приложение.
@@ -28,7 +30,7 @@ PostgreSQL хранит бизнес-истину. Redis, BullMQ, HNSW-инде�
 1. Оператор создает source channel в админке или через control-plane.
 2. Fetchers опрашивают due channels и сохраняют наблюдения, статьи или website resources в PostgreSQL.
 3. Fetchers пишут тонкое событие в `outbox_events`.
-4. Relay публикует job в BullMQ, чаще всего через sequence-managed путь `q.sequence`.
+4. Relay публикует sequence-managed события только через `q.sequence`, а non-sequence service events через их прямые очереди.
 5. Workers читают job, снова загружают нужные данные из PostgreSQL, выполняют шаги обработки и пишут результат обратно.
 6. API, admin, web и MCP читают уже материализованную правду из PostgreSQL.
 

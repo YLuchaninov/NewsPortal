@@ -51,7 +51,7 @@ type RelayOutboxRow = PendingOutboxRow;
 interface OutboxRelayOptions {
   queueMap?: Record<string, readonly string[]>;
   queueFactory?: (queueName: string, connection: IORedis) => QueueLike;
-  sequenceRouting?: SequenceRoutingOptions;
+  sequenceRouting: SequenceRoutingOptions;
 }
 
 interface QueueLike {
@@ -78,7 +78,6 @@ interface QueueJobLike {
 }
 
 interface SequenceRoutingOptions {
-  enabled: boolean;
   repository: SequenceRoutingRepository;
   queueName?: string;
   jobName?: string;
@@ -98,7 +97,7 @@ export class OutboxRelay {
   private readonly queues = new Map<string, QueueLike>();
   private readonly queueMap: Record<string, readonly string[]>;
   private readonly queueFactory: (queueName: string, connection: IORedis) => QueueLike;
-  private readonly sequenceRouting?: SequenceRoutingOptions;
+  private readonly sequenceRouting: SequenceRoutingOptions;
   private readonly state: RelayState = {
     isPolling: false,
     lastPollStartedAt: null,
@@ -113,7 +112,7 @@ export class OutboxRelay {
     private readonly pool: Pool,
     connection: IORedis,
     private readonly batchSize: number,
-    options: OutboxRelayOptions = {}
+    options: OutboxRelayOptions
   ) {
     this.queueMap = options.queueMap ?? OUTBOX_EVENT_QUEUE_MAP;
     this.queueFactory =
@@ -127,9 +126,7 @@ export class OutboxRelay {
     const queueNames = new Set(
       Object.values(this.queueMap).flatMap((queueNameList) => queueNameList)
     );
-    if (this.sequenceRouting?.enabled) {
-      queueNames.add(this.sequenceRouting.queueName ?? SEQUENCE_QUEUE);
-    }
+    queueNames.add(this.sequenceRouting.queueName ?? SEQUENCE_QUEUE);
 
     for (const queueName of queueNames) {
       this.queues.set(queueName, this.queueFactory(queueName, connection));
@@ -259,10 +256,6 @@ export class OutboxRelay {
       missingJobs: 0
     };
 
-    if (!this.sequenceRouting?.enabled) {
-      return summary;
-    }
-
     const sequenceQueueName = this.sequenceRouting.queueName ?? SEQUENCE_QUEUE;
     const sequenceQueue = this.queues.get(sequenceQueueName);
 
@@ -357,10 +350,7 @@ export class OutboxRelay {
       return;
     }
 
-    if (
-      this.sequenceRouting?.enabled &&
-      isSequenceManagedOutboxEvent(row.event_type)
-    ) {
+    if (isSequenceManagedOutboxEvent(row.event_type)) {
       throw new Error(
         `No active sequence routing found for sequence-managed event type ${row.event_type}.`
       );
@@ -373,10 +363,6 @@ export class OutboxRelay {
     client: RelaySqlClient,
     row: PendingOutboxRow
   ): Promise<boolean> {
-    if (!this.sequenceRouting?.enabled) {
-      return false;
-    }
-
     const sequenceRoutes =
       await this.sequenceRouting.repository.listActiveSequencesByTrigger(
         client,

@@ -27,7 +27,7 @@ class WorkerEntrypointRuntimeDepsTests(unittest.TestCase):
         self.assertIs(deps["process_match_criteria"], worker_main.process_match_criteria)
         self.assertIs(deps["process_reindex"], worker_main.process_reindex)
         self.assertIs(deps["build_redis_connection_options"], worker_main.build_redis_connection_options)
-        self.assertIs(deps["legacy_queue_consumers_enabled"], worker_main.legacy_queue_consumers_enabled)
+        self.assertNotIn("legacy_queue_consumers_enabled", deps)
 
 
 if __name__ == "__main__":

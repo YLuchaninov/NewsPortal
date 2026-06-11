@@ -1,71 +1,2195 @@
 # AIDP Work State
 
-## Active Item
+## Completed Delivery With Staging Residual: SIGNALOPS-LIVE-PROOF-CONSOLIDATION-1
 
-- id: `SIGNALOPS-MCP-CHANGE-INTENTS-1`
+- id: `SIGNALOPS-LIVE-PROOF-CONSOLIDATION-1`
 - lifecycle: `normal`
-- route: `capability` with `docs-operator/bugfix` scope for MCP/control-plane advisory UX hardening.
-- route phase: `operator-flow-change-intents`
-- route-specific next step: implement advisory change/cleanup/tuning intent fields on MCP recommendations and report verification, update flow guidance/prompts, and add unit proof.
-- route-specific proof: targeted MCP control-plane unit test, prompt/resource coverage, schema validation coverage, unit TS gate, lint, typecheck, domain-neutrality guard and diff check.
-- status: `done`
-- risk: `medium`
-- approval: approved by operator request on 2026-06-07 to implement the MCP Change Intents For Operator Flow Modes plan.
-- planning required: yes, because this changes MCP/control-plane guidance, public advisory schemas, operating-intelligence outputs and client-facing prompts.
-- planning source: `tool-native`
+- route: `delivery` for final verification/consolidation after live-signal proof passed.
+- route phase: `completed-release-verified-with-staging-residual`
+- route-specific next step: remote/disposable staging write/read-back lanes remain blocked until explicit staging URL/token/run namespace/cleanup policy/budget environment is provided; no product/source changes are open under this delivery item.
+- route-specific proof: targeted live-signal proof passed; final consolidation ran static/unit/operator checks, selected compose smoke gates touched by recent fixes, full `pnpm release:verify`, `git diff --check`, cleanup/down, and `docker ps` empty proof.
+- status: `completed-with-staging-residual`
+- risk: `medium-high`
+- approval: explicit operator request "давай делай все что надо"; no production/staging writes without explicit disposable staging configuration.
+- planning required: yes for complex delivery consolidation.
+- planning source: `AIDP-native`
 - planning status: `accepted-for-this-item`
-- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin and selection/discovery boundaries; `.aidp/engineering.md` observable diagnostics, MCP trust boundary and no hidden domain logic rules; `.aidp/verification.md` and `.aidp/contracts/mcp-control-plane.md` MCP proof expectations.
-- cleanup status: no runtime state mutation expected; proof limited to local tests/static checks.
+- blueprint context checked: `.aidp/blueprint.md` runtime/delivery boundary, PostgreSQL business truth, `final_selection_results` primary selection truth; `.aidp/verification.md` live/external-provider proof residual policy.
+- allowed paths: `.aidp/**` for proof state; no product/source writes unless a failing gate opens a separate narrow bugfix item.
+- cleanup status: completed; targeted cleanup wrote `/tmp/signalops-product-local-cleanup-55345f62.json` and `.md`; release cleanup wrote `/tmp/signalops-product-local-cleanup-f0268f61.json` and `.md`; `pnpm dev:mvp:internal:down` stopped/removed compose services and network, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers after targeted and release proof.
 
 ## Scope
 
-Add advisory intent/subtype fields under existing MCP flow modes so clients can distinguish system updates, config updates, tuning and cleanup without adding new top-level flow modes or domain-specific runtime logic.
+Consolidate the live-proof outcome after the live-signal lane was fixed and passed.
 
 In scope:
 
-- optional advisory fields on `operator.tuning.recommend` and `operator.report.verify`: `changeIntent`, `cleanupIntent`, `tuningLayer`, `updateRisk`;
-- intent-aware recommendation/report output fields: `intentSequence`, `intentGuardrails`, `intentProofRequired`, `intentBlockedUntil`, `intentWarnings`;
-- `signalops://guide/playbooks/change-intents` or equivalent flow-mode guidance;
-- server initialize instructions and prompts for `flowMode` plus relevant intent;
-- unit tests for resources, prompts, schemas, recommendations and reports.
+- run available local/static/unit/operator/compose gates;
+- classify unavailable staging lanes based on environment preflight;
+- record exact artifacts and residuals;
+- leave dirty worktree changes intact.
 
 Out of scope:
 
-- new top-level flow modes;
-- selection/runtime algorithm changes;
-- Discovery/fetcher/LLM/source runtime algorithm changes;
-- domain-specific RFP, outsourcing or procurement runtime defaults;
-- automatic source/channel/config writes;
-- requiring intent fields on existing write tools.
+- production writes;
+- staging writes without explicit disposable credentials/policy;
+- new behavior changes under this delivery item.
+
+## Current Proof Status
+
+- Staging preflight:
+  - `SIGNALOPS_MCP_URL`, `SIGNALOPS_MCP_TOKEN`, `SIGNALOPS_STAGING_MCP_URL`, `SIGNALOPS_STAGING_API_URL`, `SIGNALOPS_STAGING_MCP_TOKEN`, `SIGNALOPS_STAGING_RUN_NAMESPACE`, `SIGNALOPS_STAGING_DISPOSABLE`, `SIGNALOPS_STAGING_CLEANUP_POLICY`, and `SIGNALOPS_STAGING_MAX_BUDGET_CENTS` were absent in the local environment.
+  - Remote/disposable staging write/read-back proof was therefore blocked, not counted as pass.
+- Static/operator/policy proof passed:
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:dependency-compliance`;
+  - `pnpm check:env-sync`;
+  - `pnpm check:secret-leaks`.
+- Build/release proof passed:
+  - `pnpm check:compliance`;
+  - `pnpm build`;
+  - `pnpm build:node-runtime`;
+  - `pnpm release:verify`;
+  - release artifact directory `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-98b300be`;
+  - release summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-98b300be/release-verify-summary.json`;
+  - production image content and runtime image-size checks passed for web, admin, relay, migrate, fetchers, mcp, api, and worker images.
+- Unit proof passed:
+  - `pnpm unit_tests:ts` (`469` tests);
+  - `pnpm unit_tests:py` (`399` tests; suite OK, with a non-fatal historical replay LLM review timeout log).
+- Compose/UI/operator proof passed:
+  - `pnpm test:mcp:compose`;
+  - artifacts `/tmp/signalops-mcp-http-deterministic-920d1627-986d-42b3-8d14-fa5aa1b3c465.json` and `.md`;
+  - `pnpm test:web:viewports`, including seeded `/collections/system-selected` item `signal_candidate:e57a7c72-253a-48fc-b926-7f0d00f5a4bd` across desktop/tablet/mobile;
+  - `pnpm test:web:ui-audit`, status `ui-button-audit-ok`, run id `4e2aa9d1`; Web Push connect was skipped because the test browser had no active Service Worker, while the broader UI audit passed;
+  - `pnpm test:website:admin:compose`, status `website-admin-ok`, with website resources projection and admin bulk update proof.
+- Product-local release proof passed:
+  - product local core artifacts `/tmp/signalops-product-local-core-2c65b966.json` and `.md`;
+  - product local full artifacts `/tmp/signalops-product-local-full-2e40bc7c.json` and `.md`;
+  - local core/full covered migrations smoke, relay, RSS ingest, normalize/dedup, interest compile, cluster/match/notify, browser web/admin auth, BFF/system-selected/digest/moderation/admin interests, historical backfill, signal candidate detail/enrichment retry, provider universality, website/admin, automation-admin, MCP compose, web viewports, and web UI audit lanes.
+- External/live provider proof passed where local disposable credentials were available:
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-79dd66ad-ccd6-4f55-bb77-054e7f8c21fb.json`;
+  - status `passed`, gaps `[]`, `packsWithContent=3`, `explainableItems=18`, `selectedOrContentItems=2`;
+  - release discovery-enabled smoke used provider-backed local proof (`searchProvider=ddgs`, `llmModel=gemini-3.5-flash`, monthly budget `500` cents, deterministic fallback `false`);
+  - release live website matrix artifact `/tmp/signalops-live-website-matrix-baseline-8eb745b8-2151-4d82-8acb-5400da607f99.json` covered 16 external sites; product proof passed with expected-shape observations and truthful unsupported/blocked classifications for captcha/403/unsupported external surfaces.
+- Cleanup proof passed:
+  - `git diff --check`;
+  - `pnpm test:product:local:cleanup`;
+  - `pnpm dev:mvp:internal:down`;
+  - `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Completed Bugfix: SIGNALOPS-LIVE-SIGNAL-PROOF-ISOLATION-FIX-1
+
+- id: `SIGNALOPS-LIVE-SIGNAL-PROOF-ISOLATION-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live Discovery vNext signal proof isolation/calibration after `SIGNALOPS-LIVE-SIGNAL-SELECTION-CONVERSION-FIX-1` showed fetched/explainable evidence but no selected/content proof.
+- route phase: `done-live-signal-proof-isolation`
+- route-specific next step: live Discovery vNext signal lane is now validated locally under the approved external-provider budget; remaining staging proof still requires explicit disposable staging URL/token/run namespace/cleanup policy.
+- route-specific proof: targeted TS unit test for harness logic, syntax check, `git diff --check`; rerun the live signal lane only after deterministic proof is green and within the already approved $5/500 cent envelope if remaining budget/credentials allow; always run cleanup/down proof after compose use.
+- status: `done`
+- risk: `medium-high`
+- approval: explicit operator request "надо делай"; live-provider spend remains bounded by the prior `$5`/`500` cents approval, with no production/staging writes.
+- planning required: conditional for bugfix; accepted from `SIGNALOPS-LIVE-SIGNAL-SELECTION-CONVERSION-FIX-1` residual.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` `final_selection_results` primary truth, system-selected/personalization separation, Discovery vNext operator truth; `.aidp/contracts/zero-shot-interest-filtering.md` forbids weakening selected gates and recoupling Discovery quality to selected outcomes.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`; product runtime/API/worker paths only if deterministic proof shows a product bug rather than proof harness calibration.
+- cleanup status: completed after successful live rerun; `pnpm test:product:local:cleanup` wrote `/tmp/signalops-product-local-cleanup-1ada217a.json` and `.md`, `pnpm dev:mvp:internal:down` stopped/removed compose services and network, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Scope
+
+Fix the live-signal proof harness so it can fairly prove or reject selected-signal conversion without weakening product selection.
+
+In scope:
+
+- archive/delete or otherwise isolate old `live-mcp-signal-*` proof interests before a new signal proof run, using existing MCP/operator-safe tools where available;
+- rank fetched downstream `signal_candidates`/`web_resources` by pack evidence before choosing docIds to reindex/explain;
+- preserve strict success: at least one `final_selection_results.is_selected=true` or `content_items.list` item is still required;
+- add regression tests for harness-only logic.
+
+Out of scope:
+
+- changing selection thresholds or `final_selection_results` semantics;
+- counting wrapper/login/about pages as selected proof;
+- auth/session changes;
+- staging writes without explicit disposable staging credentials/policy.
+
+## Current Proof Status
+
+- Tests-first regression added/extended in `tests/unit/ts/discovery-live-signal-flow.test.ts`:
+  - old active `live-mcp-signal-*` proof interests are selected for archive while the current run namespace and normal production interests are left alone;
+  - signal-like candidates are ranked ahead of wrapper/login/about pages before reindex/explain proof.
+- Harness implementation:
+  - `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs` now exports pure proof helpers for unit coverage;
+  - before running packs, the harness reads `system_interests.list` and archives old active `live-mcp-signal-*` interests through `system_interests.archive(confirm=true)`;
+  - downstream signal candidates are ranked by pack evidence/selected state and wrapper-page penalty before bounded `docIds` replay and explain sampling;
+  - `system_interests.list` pagination respects the MCP page-size contract (`<=100`).
+- Targeted proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/discovery-live-signal-flow.test.ts`;
+  - `node --check infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`;
+  - `git diff --check -- infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs tests/unit/ts/discovery-live-signal-flow.test.ts .aidp/work.md`.
+- Live proof:
+  - first rerun after isolation implementation failed fast on harness page-size contract (`system_interests.list` requested `pageSize=200`, API requires `<=100`); fixed with paginated `pageSize=100`;
+  - successful command: `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`;
+  - successful artifact: `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-79dd66ad-ccd6-4f55-bb77-054e7f8c21fb.json`;
+  - status `passed`, gaps `[]`;
+  - success criteria: `packsWithContent=3`, `explainableItems=18`, `selectedOrContentItems=2`;
+  - proof isolation archived 9 old active proof interests and used current namespace `live-mcp-signal-79dd66ad`;
+  - selected/content proof came through `content_items.list` for the security advisory pack while policy and software packs still supplied fetched/explainable live evidence.
+- Cleanup proof passed:
+  - `pnpm test:product:local:cleanup`;
+  - `pnpm dev:mvp:internal:down`;
+  - `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Completed Bugfix With Residuals: SIGNALOPS-LIVE-SIGNAL-SELECTION-CONVERSION-FIX-1
+
+- id: `SIGNALOPS-LIVE-SIGNAL-SELECTION-CONVERSION-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for the live Discovery vNext signal lane failing to convert fetched/explainable live evidence into selected/content items.
+- route phase: `completed-harness-diagnostics-with-selection-proof-residual`
+- route-specific next step: open a separate narrow item for live signal proof isolation/selection calibration before rerunning external signal lanes; do not spend more live-provider budget on blind retries.
+- route-specific proof: targeted regression/unit proof for the classified root cause, rerun `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`, cleanup/down proof, and `git diff --check`.
+- status: `completed-with-residuals`
+- risk: `medium-high`
+- approval: explicit operator continuation after live proof exposed `downstream_selection_gap`; live-provider spend remains capped at the previously approved `$5`/`500` cents unless operator gives a new budget.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL business truth, `final_selection_results` primary selection truth, Discovery vNext operator truth, and no domain-specific runtime hardcode invariants; `.aidp/verification.md` live proof and tests-first bugfix policy.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `services/api/app/**`, `services/workers/app/**`, `services/mcp/**`, `packages/**`, `tests/unit/python/**`, `tests/unit/ts/**`.
+- cleanup status: completed after reruns; `pnpm test:product:local:cleanup` wrote `/tmp/signalops-product-local-cleanup-a283da7f.json` and `.md`, `pnpm dev:mvp:internal:down` stopped and removed compose services/network, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Scope
+
+Fix or classify the live-signal downstream selection gap without weakening selected-content truth.
+
+In scope:
+
+- inspect failed live artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-3208e214-9ced-4409-baed-8dbd881b80f4.json`;
+- inspect persisted rows if the local proof database still has them, otherwise use artifact evidence;
+- determine whether fetched/explainable live items failed because of selection predicates, final-selection write path, item kind/classification, source quality, or harness expectation drift;
+- add deterministic regression tests before source changes;
+- preserve `final_selection_results` as primary selection truth.
+
+Out of scope:
+
+- auth/session changes;
+- lowering public selected-content quality gates;
+- counting wrapper/source/category pages as selected signals;
+- restoring legacy queue/fallback behavior;
+- staging writes without explicit disposable staging configuration.
+
+## Current Proof Status
+
+- Started on 2026-06-11 after `SIGNALOPS-LIVE-STAGING-PROOF-3`.
+- Live signal artifact summary:
+  - status `failed`;
+  - gap `downstream_selection_gap`;
+  - message `No item reached final_selection_results.selected or content_items.list.`;
+  - `packsWithContent=2`;
+  - `explainableItems=6`;
+  - `selectedOrContentItems=0`;
+  - pack statuses: `security_advisories=signal_content_fetched`, `policy_regulatory=signal_content_fetched`, `software_changelogs=no_fetchable_probation_signal`.
+- Tests-first harness fix:
+  - added `tests/unit/ts/discovery-live-signal-flow.test.ts`;
+  - exported/import-guarded `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs` helpers so unit tests do not start compose on import;
+  - fixed the live harness to continue through bounded routing attempts when an attempt is fetched/explainable but not selected, preserving the best fetched attempt for diagnostics;
+  - strengthened proof-pack candidate signal groups from broad label lines to multiple named cue groups.
+- Targeted proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/discovery-live-signal-flow.test.ts`;
+  - `node --check infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`;
+  - `git diff --check -- infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs tests/unit/ts/discovery-live-signal-flow.test.ts .aidp/work.md`.
+- First rerun after continuation fix:
+  - command: `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-16da7ad1-352a-4d02-9469-502dd37f249b.json`;
+  - status `failed`, gap `downstream_selection_gap`;
+  - `packsWithContent=3`, `explainableItems=15`, `selectedOrContentItems=0`;
+  - all three packs reached fetched/explainable content after 10 routing attempts each, which ruled out the earlier first-candidate stop as the sole failure.
+- Second rerun after candidate-signal group calibration:
+  - command: `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow`;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-fba93249-58c0-417a-90d0-fee853601216.json`;
+  - status `failed`, gap `downstream_selection_gap`;
+  - `packsWithContent=3`, `explainableItems=12`, `selectedOrContentItems=0`;
+  - security pack routed to a website source (`https://security.paloaltonetworks.com/`) with mixed wrapper/detail pages; policy pack routed to a broad Canada regulatory guide; software pack routed to GitHub blog RSS rather than a strict changelog feed.
+- DB/artifact diagnosis:
+  - final-selection write/read path is working: rejected rows are present in `final_selection_results` and exposed through `signal_candidates.explain`;
+  - created proof interests and criteria were compiled/readable during the run;
+  - residual is not MCP/fetch/runtime absence: channels, outbox events, fetch runs, web resources or signal candidates, reindex jobs and explain outputs were all readable;
+  - residual is selection/proof calibration and isolation: live discovery sources often fetch wrapper/about/login/category pages or broad feeds, while the proof expects at least one item to satisfy strict selected/content gates; accumulated active proof interests from prior reruns also add noisy global criteria unless isolated or cleaned before replay.
+- Acceptance interpretation:
+  - current item improved live-signal diagnostics and harness behavior;
+  - live-signal lane is still not accepted as pass;
+  - next work should isolate proof interests/run namespace and/or use a deterministic disposable selected-signal fixture/source path without weakening `final_selection_results` quality gates.
+
+## Completed Delivery With Residuals: SIGNALOPS-LIVE-STAGING-PROOF-3
+
+- id: `SIGNALOPS-LIVE-STAGING-PROOF-3`
+- lifecycle: `normal`
+- route: `delivery` for previously blocked external Discovery vNext live/staging lanes.
+- route phase: `completed-live-discovery-with-signal-selection-residual`
+- route-specific next step: open a narrow capability/bugfix item for the live-signal downstream selection gap before trying to count the signal lane as pass; provide explicit disposable staging URL/token/run namespace/cleanup policy before staging write/read-back proof can run.
+- route-specific proof: Discovery vNext live gap/signal preflight and full lanes, staging MCP/API write/read-back if disposable staging URL/token/run namespace/cleanup policy are configured, cleanup/down proof, and residual classification.
+- status: `completed-with-residuals`
+- risk: `high`
+- approval: explicit operator request on 2026-06-11: "бюджет 5 долларов"; high-risk boundary is capped live-provider spend and disposable staging/test state only.
+- planning required: `yes`
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` runtime/delivery boundaries and `.aidp/verification.md` live/external-provider proof policy were checked during the preceding live-proof item and remain applicable.
+- allowed paths: `.aidp/**` for proof state only; `/tmp/signalops-live-proof-*` and harness-owned `/tmp/signalops-*` artifacts. No product/source/test writes unless a separate narrow bugfix/capability item is opened after a concrete failure.
+- cleanup status: completed for local runtime; `pnpm test:product:local:cleanup` wrote `/tmp/signalops-product-local-cleanup-3261f38b.json` and `.md`, `pnpm dev:mvp:internal:down` stopped/removed compose services and network, `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and `git diff --check` passed.
+
+## Scope
+
+Run the previously blocked live-provider and disposable staging proof lanes with a $5 maximum provider budget.
+
+In scope:
+
+- use a 500 cent live budget for `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS`;
+- run Discovery vNext MCP live gap/signal preflights and full lanes when credentials are present;
+- run remote/disposable staging MCP/API read/write/read-back only when explicit staging target, token, namespace and cleanup policy are configured;
+- classify missing staging prerequisites as blocked, not pass;
+- clean up local runtime and disposable proof artifacts/state where supported.
+
+Out of scope:
+
+- production writes;
+- auth/session design changes;
+- permanent new proof commands;
+- DB migrations;
+- weakening selected signal_candidate acceptance.
+
+## Current Proof Status
+
+- Started on 2026-06-11 after `SIGNALOPS-LIVE-STAGING-PROOF-2` completed local live proof with external/staging residuals.
+- Operator supplied live-provider budget: `$5` / `500` cents.
+- Environment preflight without secret disclosure:
+  - `DISCOVERY_ENABLED=1`;
+  - `DISCOVERY_SEARCH_PROVIDER=ddgs`;
+  - Gemini-compatible key/base URL/model were configured;
+  - `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS` was supplied per command as `500`;
+  - `SIGNALOPS_MCP_URL`, `SIGNALOPS_MCP_TOKEN`, `SIGNALOPS_STAGING_MCP_URL`, `SIGNALOPS_STAGING_API_URL`, `SIGNALOPS_STAGING_MCP_TOKEN`, `SIGNALOPS_STAGING_RUN_NAMESPACE`, `SIGNALOPS_STAGING_DISPOSABLE`, `SIGNALOPS_STAGING_CLEANUP_POLICY`, and `SIGNALOPS_STAGING_MAX_BUDGET_CENTS` were missing.
+- Discovery vNext live preflights passed:
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-gap-flow:preflight`;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-eb34a0f4-371e-4a70-966d-0fb462f222a0.json`, status `passed`, gaps `[]`;
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=500 pnpm test:discovery:vnext-mcp-live-signal-flow:preflight`;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-4e4c3f93-49be-4c2a-9fac-1ab5822a6fd7.json`, status `preflight_passed`, gaps `[]`.
+- Discovery vNext live gap full lane:
+  - first full run artifact `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-7aa96969-c80a-4d59-b563-c700d24b5b38.json` failed with a local MCP timeout during `policy_regulatory` probe: `Timed out waiting for http://127.0.0.1:8080/mcp`;
+  - classified as transient local MCP/runtime timeout and retried once under the same 500-cent envelope;
+  - retry command passed;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-1be580aa-9fd9-4578-98e6-d10b58e0a237.json`, status `passed`, gaps `[]`;
+  - pack summary: `public_procurement`, `security_advisories`, `policy_regulatory`, `research_grants`, and `software_changelogs` all reached `candidates_found`; query attempts were 20 per pack, candidates were 100/100/100/99/100, and artifacts were 33 per pack.
+- Discovery vNext live signal full lane:
+  - command failed with one explicit gap;
+  - artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-3208e214-9ced-4409-baed-8dbd881b80f4.json`;
+  - status `failed`;
+  - gap category `downstream_selection_gap`: `No item reached final_selection_results.selected or content_items.list.`;
+  - success criteria readback: `packsWithContent=2`, `explainableItems=6`, `selectedOrContentItems=0`;
+  - pack statuses: `security_advisories=signal_content_fetched`, `policy_regulatory=signal_content_fetched`, `software_changelogs=no_fetchable_probation_signal`;
+  - provider/routing residual: `software_changelogs` did not produce a probation channel with fetched content; routing attempts included adapter backlog, blocked, inventory_context and one auto_register_probation decision.
+- Staging write/read-back proof:
+  - not run;
+  - blocked because explicit disposable staging target/token/run namespace/cleanup policy are not configured.
+- Cleanup proof passed:
+  - `pnpm test:product:local:cleanup`;
+  - `pnpm dev:mvp:internal:down`;
+  - `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers;
+  - `git diff --check` passed.
+- Current acceptance interpretation:
+  - live Discovery gap-hunting lane is validated under the $5 budget envelope;
+  - live signal lane is not validated because fetched/explainable evidence did not convert into selected/content items;
+  - staging is still not validated because disposable staging credentials/policy are absent.
+
+## Completed Bugfix: SIGNALOPS-RSS-MULTI-FIRST-FETCH-STATE-FIX-1
+
+- id: `SIGNALOPS-RSS-MULTI-FIRST-FETCH-STATE-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for RSS multi compose proof first-fetch state timeout surfaced after admin bulk action-token proof was fixed.
+- route phase: `done-rss-multi-first-fetch-state-fix`
+- route-specific next step: done; resume `SIGNALOPS-LIVE-STAGING-PROOF-2` with ingest soak.
+- route-specific proof: keep-stack SQL diagnostics, `node --check infra/scripts/test-rss-multi-flow.mjs`, `pnpm test:ingest:multi:compose`.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` ingest/proof boundary; auth/session behavior unchanged.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`; product/runtime paths only if direct evidence shows product behavior bug.
+- cleanup status: `pnpm test:ingest:multi:compose` stopped compose stack and removed volumes after pass.
+
+## Scope
+
+Fix or classify the RSS multi compose proof timeout after the first fetch cycle.
+
+In scope:
+
+- inspect first-fetch readback counts for imported RSS channels;
+- distinguish harness expectation drift from product fetch/runtime failure;
+- preserve strict successful/failed/not-modified/duplicate expectations;
+- keep admin/auth fixes separate from ingest state assertions.
+
+Out of scope:
+
+- auth/session design changes;
+- weakening RSS multi acceptance criteria without evidence;
+- runtime queue/sequence fallback restoration.
+
+## Current Proof Status
+
+- Diagnosis:
+  - admin JSON action-token issue was already fixed, so bulk import created channels;
+  - first fetch initially failed because `host.docker.internal` fixture URLs were blocked by fetchers private-host guard;
+  - after allowlisting the fixture host, second-cycle 304 coverage was still flaky because the proof used synchronous compose exec while the fixture HTTP server ran in the same Node event loop and because global due polling is capped by per-host polite budget.
+- Fix implemented:
+  - RSS multi temporary compose override now sets `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST=host.docker.internal` for fetchers;
+  - RSS multi fetch cycles now use async compose exec so the fixture server remains responsive;
+  - duplicate/not-modified coverage uses deterministic targeted `run:once <channelId>` calls with bounded retry while keeping strict fixture assertions.
+- Proof passed:
+  - `node --check infra/scripts/test-rss-multi-flow.mjs`;
+  - `git diff --check -- infra/scripts/test-rss-multi-flow.mjs infra/scripts/lib/mcp-http-testkit.mjs .aidp/work.md`;
+  - `pnpm test:ingest:multi:compose`.
+
+## Completed Bugfix: SIGNALOPS-COMPOSE-POSTJSON-ACTION-TOKEN-RETRY-FIX-1
+
+- id: `SIGNALOPS-COMPOSE-POSTJSON-ACTION-TOKEN-RETRY-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for compose proof admin JSON POST failures surfaced during full live-proof ingest multi repro.
+- route phase: `done-compose-postjson-action-token-retry-fix`
+- route-specific next step: done; RSS multi now reaches first fetch state assertions.
+- route-specific proof: targeted TS helper test, direct compose admin bulk POST reached business validation, `pnpm test:ingest:multi:compose` advanced past admin bulk creation.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` admin/API/test boundary; production auth/session behavior unchanged.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: keep-stack repro left partial compose services running; final cleanup required.
+
+## Scope
+
+Fix compose proof helper behavior when an admin JSON POST receives the explicit `Invalid or expired admin action token` response.
+
+In scope:
+
+- characterize retryable action-token expiry for JSON requests;
+- clear cached action tokens and retry `postJson()` once, matching the existing `postForm()` behavior;
+- preserve direct status assertions and production token enforcement.
+
+Out of scope:
+
+- auth/session design changes;
+- weakening admin route protections;
+- changing product API routes.
+
+## Current Proof Status
+
+- Reproduced during `SIGNALOPS-LIVE-STAGING-PROOF-2` ingest multi keep-stack diagnosis:
+  - `pnpm test:ingest:multi:compose -- --keep-stack` reached admin bulk channel creation;
+  - `POST http://127.0.0.1:4322/bff/admin/channels/bulk` returned 403 with body `{"error":"Invalid or expired admin action token."}`;
+  - previous action-token freshness fix covered `postForm()`, but this path uses `postJson()`.
+
+## Completed Bugfix: SIGNALOPS-ENRICHMENT-SMOKE-CONTAINER-FIXTURE-URL-FIX-1
+
+- id: `SIGNALOPS-ENRICHMENT-SMOKE-CONTAINER-FIXTURE-URL-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for `test:enrichment:compose` failure surfaced during full live-proof.
+- route phase: `tests-first-enrichment-smoke-container-fixture-url-fix`
+- route-specific next step: done; enrichment smoke now makes fixture item/media URLs container-reachable and ensures the fetchers compose service has the required fixture host allowlist.
+- route-specific proof: targeted TS helper test, `node --check --experimental-strip-types infra/scripts/fetchers/test-enrichment-smoke.ts`, `pnpm test:enrichment:compose`, then resume `SIGNALOPS-LIVE-STAGING-PROOF-2`.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` provider/runtime/test boundary; auth/session and product behavior unchanged.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: local compose stack remains up for resumed delivery proof and final cleanup.
+
+## Scope
+
+Fix enrichment compose smoke fixture reachability when feed polling runs on the host but sequence-driven extraction runs inside the fetchers container.
+
+In scope:
+
+- characterize container-reachable fixture URL conversion;
+- keep the RSS feed URL host-readable as `127.0.0.1`;
+- make item links/media URLs in the feed use `host.docker.internal` so container-side enrichment can fetch the fixture server;
+- preserve enrichment behavior and assertions.
+
+Out of scope:
+
+- production enrichment runtime changes;
+- auth/session changes;
+- weakening short/long/failed enrichment assertions.
+
+## Current Proof Status
+
+- Reproduced during `SIGNALOPS-LIVE-STAGING-PROOF-2`:
+  - `pnpm test:enrichment:compose` failed with `Timed out waiting for enrichment smoke assertions`;
+  - DB readback for channel `1874bcb9-49a0-420d-83ce-a72070159b5e` showed 3 rows, but the short signal_candidate had `enrichment_state=failed`, `has_media=false`;
+  - fetchers logs showed container-side `/internal/enrichment/signal-candidates/...` calls and extraction failures.
+- Diagnosis:
+  - the fixture feed is fetched by the host smoke process from `127.0.0.1`;
+  - enrichment extraction is triggered through the worker/fetchers containers, where `127.0.0.1` does not point at the host fixture server.
+- Fix implemented:
+  - added `containerReachableFixtureUrl()` coverage and fixture URL rewrite for item/media URLs;
+  - bound the fixture server to `0.0.0.0` while preserving host-readable `127.0.0.1` feed URL;
+  - added compose preflight to recreate `fetchers` with `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST=host.docker.internal` for this smoke lane.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/enrichment-smoke-fixture.test.ts`;
+  - `node --check --experimental-strip-types infra/scripts/fetchers/test-enrichment-smoke.ts`;
+  - `pnpm test:enrichment:compose`.
+
+## Completed Bugfix Triage: SIGNALOPS-PRODUCT-MEGA-FLOW-VNEXT-LIVE-PROOF-FIX-1
+
+- id: `SIGNALOPS-PRODUCT-MEGA-FLOW-VNEXT-LIVE-PROOF-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for `test:product:total-live:compose` strict mega-flow failure surfaced during full live-proof.
+- route phase: `tests-first-product-mega-flow-vnext-live-proof-fix`
+- route-specific next step: done; no product/source code change applied because old A/B/C discovery proof cannot be truthfully mapped to current vNext signal packs. Resume delivery proof by running explicit vNext MCP live lanes and keep `product:total-live` failure classified.
+- route-specific proof: artifact inspection of `/tmp/signalops-product-mega-flow-735a2c06.json` and source inspection of `infra/scripts/test-product-mega-flow.mjs`.
+- status: `done-classified-no-code`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` delivery/proof boundary and Discovery vNext truth; `.aidp/verification.md` live proof policy.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: local compose state may be up from failed total-live; verify after resumed delivery proof and final cleanup.
+
+## Scope
+
+Classify the product total-live strict mega-flow proof after Discovery vNext cutover.
+
+In scope:
+
+- characterize that retired discovery artifacts are not accepted as a passing strict mega-flow;
+- keep strict product-total-live failure visible;
+- resume current Discovery vNext live proof through the dedicated vNext MCP live lanes;
+- preserve strict selected `signal_candidate` acceptance semantics.
+
+Out of scope:
+
+- product/runtime behavior changes;
+- relaxing live selected signal_candidate requirements;
+- auth/session changes;
+- adding a permanent new live-proof command.
+
+## Current Proof Status
+
+- Reproduced during `SIGNALOPS-LIVE-STAGING-PROOF-2`:
+  - `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose` failed;
+  - artifact `/tmp/signalops-product-total-live-cffbd288.json` has `finalVerdict=fail`;
+  - strict child artifact `/tmp/signalops-product-mega-flow-735a2c06.json` has `discoveryFinalVerdict=not_applicable_after_discovery_vnext_cutover` and all A/B/C live discovery scenarios failed with `live_discovery_not_passing`.
+- Initial diagnosis:
+  - `infra/scripts/test-product-mega-flow.mjs` currently returns a hardcoded retired-discovery `not_applicable_after_discovery_vnext_cutover` report;
+  - therefore product total-live cannot pass its strict layer after Discovery vNext cutover even when deterministic provider/runtime/UI lanes pass.
+- Decision:
+  - do not invent a lossy A/B/C-to-vNext-signal-pack mapping;
+  - do not relax selected signal_candidate acceptance;
+  - classify this as a proof-surface blocker and run `test:discovery:vnext-mcp-live-*` lanes explicitly under `SIGNALOPS-LIVE-STAGING-PROOF-2`.
+
+## Completed Bugfix: SIGNALOPS-WEBSITE-MATRIX-PUBLIC-API-READBACK-FIX-1
+
+- id: `SIGNALOPS-WEBSITE-MATRIX-PUBLIC-API-READBACK-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for `test:website:matrix:compose` fetch-run/web-resource readback failures surfaced during full live-proof.
+- route phase: `tests-first-website-matrix-public-api-readback-fix`
+- route-specific next step: done; matrix fetch-run/resource readbacks now use the public nginx `/api` helper.
+- route-specific proof: targeted TS public API URL helper test already present, `pnpm test:website:matrix:compose`, resume `pnpm release:verify`, then resume `SIGNALOPS-LIVE-STAGING-PROOF-2`.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/runtime/test boundary.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: local stack is up from targeted website matrix proof; stop/down after proof or before close.
+
+## Scope
+
+Fix website live matrix readback failures where fetch-run and web-resource API reads use direct API port paths and return `Not Found` in compose proof.
+
+In scope:
+
+- use `publicApiUrl()` for website matrix API readbacks that should go through nginx `/api`;
+- keep direct service health checks unchanged;
+- preserve live matrix verdict policy.
+
+Out of scope:
+
+- provider behavior changes;
+- auth/session design changes;
+- weakening expected live matrix verdicts.
+
+## Current Proof Status
+
+- Reproduced after `SIGNALOPS-WEBSITE-MATRIX-ACTION-TOKEN-FRESHNESS-FIX-1` removed token expiry failures:
+  - `pnpm test:website:matrix:compose` still failed;
+  - `/tmp/signalops-website-matrix-token-fix.log` shows `unexpected_failure` for static editorial candidates with `Timed out waiting for fetch run ... Last error: Not Found`;
+  - source inspection showed `listFetchRuns()` and `listResources()` using direct `http://127.0.0.1:8000/...` paths.
+- Fix implemented:
+  - changed matrix fetch-run, web-resource list and web-resource detail readbacks to `publicApiUrl()`.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/compose-proof-testkit.test.ts tests/unit/ts/mcp-http-live-diagnostics.test.ts`;
+  - `pnpm test:website:matrix:compose`.
+
+## Completed Bugfix: SIGNALOPS-WEBSITE-MATRIX-ACTION-TOKEN-FRESHNESS-FIX-1
+
+- id: `SIGNALOPS-WEBSITE-MATRIX-ACTION-TOKEN-FRESHNESS-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for `product-local-full` / `test:website:matrix:compose` failure surfaced during full live-proof.
+- route phase: `tests-first-website-matrix-token-freshness-fix`
+- route-specific next step: done; compose proof HTTP helper now refreshes cached action tokens and retries once on explicit admin action token expiry.
+- route-specific proof: targeted TS helper/harness test, `pnpm test:website:matrix:compose`, resume `pnpm release:verify`, then resume `SIGNALOPS-LIVE-STAGING-PROOF-2`.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit full live-proof request and accepted failure loop.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` admin/API/auth boundary; auth design unchanged, proof harness refreshes token/session around existing enforcement.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: `release:verify` already ran product-local cleanup and stack down after failure; verify again after targeted proof.
+
+## Scope
+
+Fix website live matrix harness failures where long-running site iteration causes admin mutations/cleanup to fail with `Invalid or expired admin action token`, producing unexpected failures and fetch-run readback `Not Found`.
+
+In scope:
+
+- characterize retryable admin action token expiry detection;
+- refresh admin sign-in/cookie and retry affected matrix mutations once;
+- preserve production admin action token enforcement.
+
+Out of scope:
+
+- auth/session design changes;
+- production source changes;
+- weakening expected website matrix verdicts.
+
+## Current Proof Status
+
+- Reproduced during `SIGNALOPS-LIVE-STAGING-PROOF-2` after `product-local-core` was fixed:
+  - `pnpm release:verify` rerun passed `product-local-core`;
+  - `product-local-full` failed at `website-matrix-compose`;
+  - `/tmp/signalops-product-local-full-296c13f6.json` shows `website-matrix-compose` failed;
+  - release log shows many matrix candidates with `verdict: unexpected_failure`, `error: Invalid or expired admin action token`, and fetch-run readback `Not Found`.
+- Fix implemented:
+  - added retryable admin action token expiry detector;
+  - changed `postForm()` to clear cached action tokens and retry once for the same cookie/origin when the server explicitly returns `Invalid or expired admin action token.`
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-http-live-diagnostics.test.ts`;
+  - downstream `pnpm test:website:matrix:compose` passed after the readback surface fix.
+
+## Completed Bugfix: SIGNALOPS-MVP-INTERNAL-SYSTEM-SELECTED-SURFACE-FIX-1
+
+- id: `SIGNALOPS-MVP-INTERNAL-SYSTEM-SELECTED-SURFACE-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for `integration_tests` / `test:mvp:internal` product-local-core failure surfaced during full live-proof.
+- route phase: `tests-first-mvp-internal-api-surface-fix`
+- route-specific next step: done; deterministic public API URL helper coverage added and MVP internal readbacks now use nginx `/api`.
+- route-specific proof: targeted TS helper test, `pnpm integration_tests`, resume `pnpm release:verify`, then resume `SIGNALOPS-LIVE-STAGING-PROOF-2`.
+- status: `done`
+- risk: `medium`
+- approval: implicit within explicit operator request for full live-proof and the accepted failure loop: concrete proof failure must be fixed in a narrow bugfix item before continuing.
+- planning required: conditional for bugfix; accepted from observed live-proof failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/runtime/test boundary and `.aidp/verification.md` product-local/release proof policy.
+- allowed paths: `.aidp/**`, `infra/scripts/**`, `tests/unit/ts/**`.
+- cleanup status: `release:verify` already ran product-local cleanup and stack down after failure; verify again after targeted proof.
+
+## Scope
+
+Fix the deterministic `product-local-core` failure where `pnpm integration_tests` reaches the system-selected collection readback and receives `Not Found` from direct API port path `/collections/system-selected`.
+
+In scope:
+
+- characterize the public nginx `/api` URL builder for compose proof scripts;
+- update `test-mvp-internal.mjs` readback URLs that should use the public API surface;
+- keep product API, auth and read-model behavior unchanged.
+
+Out of scope:
+
+- product source/API changes;
+- auth/session changes;
+- broad proof harness refactor beyond the failing surface.
+
+## Current Proof Status
+
+- Reproduced during `SIGNALOPS-LIVE-STAGING-PROOF-2`:
+  - `pnpm release:verify` failed at `product-local-core`;
+  - artifact `/tmp/signalops-product-local-core-9a8d263c.json` shows `integration_tests` failed and later product-local lanes passed;
+  - log points to `infra/scripts/test-mvp-internal.mjs:1623`, direct fetch of `http://127.0.0.1:8000/collections/system-selected?page=1&pageSize=100`, with `Error: Not Found`.
+- Fix implemented:
+  - added shared `publicApiUrl()` helper for compose proof scripts;
+  - added TS regression coverage proving public API proof URLs use nginx `/api`;
+  - changed MVP internal system-selected and maintenance signal-candidate readbacks to use `publicApiUrl()`.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/compose-proof-testkit.test.ts`;
+  - `pnpm integration_tests`.
+
+## Completed Delivery With Residuals: SIGNALOPS-LIVE-STAGING-PROOF-2
+
+- id: `SIGNALOPS-LIVE-STAGING-PROOF-2`
+- lifecycle: `normal`
+- route: `delivery` for full local/live/staging validation proof.
+- route phase: `completed-local-live-proof-with-external-staging-residuals`
+- route-specific next step: do not count this as full external/staging validation until a positive `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS` and disposable staging URL/token/run namespace/cleanup policy are provided; then rerun the blocked vNext live/staging lanes.
+- route-specific proof: static/release baseline, full local total-live compose proof, external Discovery/MCP live lanes if credentials/budget are present, provider/runtime/UI/index/staging lanes, cleanup proof, and residual classification.
+- status: `completed-with-residuals`
+- risk: `high`
+- approval: explicit operator request: "давай full live-proof и все по полной".
+- planning required: `yes`
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` runtime/delivery baseline, PostgreSQL truth, discovery/live-provider risk, API/MCP/admin/runtime boundaries; `.aidp/verification.md` live/external-provider gates and delivery proof policy.
+- allowed paths: `.aidp/**` for proof state only; `/tmp/signalops-live-proof-*` for temporary logs/artifacts. No product/source/test writes unless a separate narrow bugfix/capability item is opened after a concrete failure.
+- cleanup status: completed; `pnpm test:product:local:cleanup` wrote `/tmp/signalops-product-local-cleanup-7a205854.json` and `.md`, `pnpm dev:mvp:internal:down` stopped/removed compose services and network, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Scope
+
+Run the strictest feasible full proof across local runtime, live-provider discovery lanes, MCP/operator flows, provider/runtime/UI/index lanes and staging/external gaps.
+
+In scope:
+
+- preflight current environment and scripts;
+- run deterministic static/release/local proof gates;
+- run compose/runtime/provider/UI/index lanes sequentially;
+- run live Discovery/MCP/staging lanes only when explicit credentials, disposable target and positive budget are present;
+- classify every failure as environment/credential, provider transient, staging data, product/runtime bug, test harness gap or unsupported surface;
+- stop and open a narrow bugfix/capability item before source/test fixes if a product bug is found.
+
+Out of scope:
+
+- permanent new live-proof commands;
+- auth/session design changes;
+- production writes;
+- DB migrations;
+- silent acceptance of skipped live/staging provider lanes.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after targeted MCP/UI/website-admin residuals were fixed and their final lanes passed.
+- Full local/static/provider/runtime/UI proof resumed and completed on 2026-06-11 up to the external/staging prerequisites boundary.
+- Static/release baseline passed before targeted bugfix loop:
+  - `pnpm check:compliance`;
+  - `pnpm check:dependency-compliance`;
+  - `pnpm check:env-sync`;
+  - `pnpm check:secret-leaks`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm unit_tests`;
+  - `pnpm build`;
+  - `pnpm build:node-runtime`;
+  - `pnpm release:verify`;
+  - `git diff --check`.
+- `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose` remains a classified proof-surface blocker, not a product pass:
+  - product total-live artifact `/tmp/signalops-product-total-live-cffbd288.json` had `finalVerdict=fail`;
+  - strict child artifact `/tmp/signalops-product-mega-flow-735a2c06.json` reported `discoveryFinalVerdict=not_applicable_after_discovery_vnext_cutover`;
+  - decision preserved: no lossy A/B/C-to-vNext mapping and no relaxation of selected signal_candidate acceptance.
+- Live-provider/staging preflight residuals:
+  - `DISCOVERY_ENABLED=1`, live provider `ddgs`, and Gemini key were present;
+  - positive `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS` was missing;
+  - disposable staging URL/token/run namespace/cleanup policy were missing;
+  - vNext live gap/signal lanes are therefore blocked rather than accepted as pass.
+- Bugfixes opened and completed during this delivery proof:
+  - `SIGNALOPS-ENRICHMENT-SMOKE-CONTAINER-FIXTURE-URL-FIX-1`;
+  - `SIGNALOPS-COMPOSE-POSTJSON-ACTION-TOKEN-RETRY-FIX-1`;
+  - `SIGNALOPS-RSS-MULTI-FIRST-FETCH-STATE-FIX-1`;
+  - earlier classified/proof-surface fixes listed below remain part of this same resumed live-proof chain.
+- Provider/runtime/UI lanes passed after fixes:
+  - `pnpm test:mcp:http:matrix`, artifact `/tmp/signalops-mcp-http-deterministic-8d9407f7-e887-441e-936c-8dd3fd6d7fd2.json`;
+  - `pnpm test:mcp:compose`, artifacts `/tmp/signalops-mcp-http-deterministic-1d08b923-843f-4814-9d20-413589b6ec08.json` and `.md`;
+  - `pnpm test:mcp:http:auth`, artifacts `/tmp/signalops-mcp-http-deterministic-d28e70ce-2c9f-4139-8a71-421ebc1dbe68.json` and `.md`;
+  - `pnpm test:providers:compose`;
+  - `pnpm test:channel-auth:compose`;
+  - `pnpm test:website:compose`;
+  - `pnpm test:website:admin:compose`;
+  - `pnpm test:website:matrix:compose`, artifact `/tmp/signalops-live-website-matrix-baseline-71176827-47e9-446a-8248-a98b92b447b5.json`, exit 0 with 7 expected-shape sites, 8 truthful upstream blocked/unsupported sites, 1 partial/empty shape, and no cleanup residuals;
+  - `pnpm test:hard-sites:compose`;
+  - `pnpm test:enrichment:compose`;
+  - `pnpm test:ingest:multi:compose`;
+  - `pnpm test:ingest:soak:compose`;
+  - `pnpm test:relay:compose`;
+  - `pnpm test:relay:phase3:compose`;
+  - `pnpm test:relay:phase45:compose`;
+  - `pnpm test:web:viewports`;
+  - `pnpm test:web:ui-audit`.
+- Index invariants passed inside the worker container after rebuilding the missing event-cluster centroid registry row:
+  - `python -m services.indexer.app.main rebuild-event-cluster-centroids`;
+  - `check-derived-vectors`;
+  - `check-interest-centroids`;
+  - `check-event-cluster-centroids`.
+- Post-fix full gates passed:
+  - `pnpm unit_tests:ts` passed 464/464;
+  - `pnpm unit_tests:py` passed 399/399;
+  - `pnpm lint`;
+  - `pnpm typecheck` completed with existing Astro hints only, no errors;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `pnpm check:dependency-compliance`;
+  - `git diff --check`.
+- Current acceptance interpretation:
+  - local runtime, MCP/operator, provider fixtures/live matrix, relay/sequence, UI/admin/web, ingest, enrichment and index lanes are green;
+  - full external Discovery vNext and staging write/read-back cannot be claimed until the missing positive live budget and disposable staging credentials/policy are supplied;
+  - strict `product:total-live` remains a known proof command mismatch after Discovery vNext cutover and is not counted as pass.
+- Cleanup proof passed:
+  - `pnpm test:product:local:cleanup`;
+  - `pnpm dev:mvp:internal:down`;
+  - `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+
+## Completed Bugfix: SIGNALOPS-WEBSITE-ADMIN-STACK-FRESHNESS-FIX-1
+
+- id: `SIGNALOPS-WEBSITE-ADMIN-STACK-FRESHNESS-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for website-admin compose preflight route freshness failure.
+- route phase: `tests-first-website-admin-stack-freshness-fix`
+- route-specific next step: done; route inventory characterized, website-admin compose proof rebuilds code-bearing services before preflight, and maintenance API reads use the public nginx `/api` surface.
+- route-specific proof: `pnpm test:website:admin:compose`, `pnpm test:website:compose` if shared helpers are touched, `pnpm unit_tests:ts` if TS harness unit tests are added, `git diff --check`.
+- status: `done`
+- risk: `low-medium`
+- approval: explicit operator request to implement the planned three-item bugfix sequence.
+- planning required: conditional for bugfix; accepted from the user-provided plan.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` website/admin/API proof boundaries and read-model route boundaries.
+- cleanup status: final cleanup completed with `pnpm dev:mvp:internal:down`; `docker ps` returned no running containers.
+
+## Scope
+
+Fix the targeted website-admin compose proof failure where preflight reported missing `/maintenance/web-resources` despite the route being registered in source.
+
+In scope:
+
+- characterize route registration for `/maintenance/web-resources` and `/maintenance/web-resources/{resource_id}`;
+- make website-admin proof rebuild or refresh code-bearing services before preflight;
+- keep stale-stack diagnostics, but only after rebuild/readiness has been attempted.
 
 Allowed paths:
 
 - `.aidp/**`
-- `services/mcp/**`
+- `infra/scripts/**`
+- `tests/unit/ts/**`
+- `tests/unit/python/**` for route inventory characterization
+- `services/api/app/**` only if route registration is proven broken
+
+Protected boundaries:
+
+- No auth/session changes.
+- No DB migrations.
+- No API route behavior changes unless direct route inventory proof fails.
+- Existing dirty worktree content is treated as prior work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after `SIGNALOPS-UI-SYSTEM-SELECTED-PROJECTION-FIX-1` passed targeted read-model, viewport and UI-audit proof.
+- Known diagnosis target from prior live proof: `test:website:admin:compose` preflight reported missing `/maintenance/web-resources`.
+- Diagnosis:
+  - route inventory confirmed `/maintenance/web-resources` and `/maintenance/web-resources/{resource_id}` are registered as GET routes;
+  - website-admin harness was only doing `compose up -d` before preflight and had multiple direct `127.0.0.1:8000` maintenance reads that could observe the wrong/non-public surface in compose proof.
+- Fix implemented:
+  - strengthened route inventory test with GET method assertions;
+  - changed `ensureComposeStack()` to `docker compose up -d --build ...` through the existing helper;
+  - routed website-admin maintenance/channel readbacks through nginx `/api`, while keeping direct API health as a service readiness check.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_api_web_resources`;
+  - `pnpm test:website:admin:compose`.
+
+## Final Three-Item Verification
+
+- Completed on 2026-06-10 after the three requested bugfix items.
+- Final proof passed:
+  - `pnpm test:mcp:compose`;
+  - `pnpm test:web:viewports`;
+  - `pnpm test:web:ui-audit`;
+  - `pnpm test:website:admin:compose`;
+  - `pnpm unit_tests:py`;
+  - `pnpm unit_tests:ts`;
+  - `git diff --check`.
+- Cleanup proof passed:
+  - `pnpm dev:mvp:internal:down`;
+  - `docker ps` returned no running project containers.
+- Remaining live-proof residuals from these three items: none observed in targeted/final lanes.
+
+## Completed Bugfix: SIGNALOPS-UI-SYSTEM-SELECTED-PROJECTION-FIX-1
+
+- id: `SIGNALOPS-UI-SYSTEM-SELECTED-PROJECTION-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for UI/system-selected projection proof timeouts.
+- route phase: `tests-first-system-selected-projection-fix`
+- route-specific next step: done; distinguished route surface failure from projection predicates, characterized selected visible signal-candidate read-model behavior, and fixed proof harness seed/public API reads without changing auth.
+- route-specific proof: targeted API/read-model tests, `pnpm test:web:viewports`, `pnpm test:web:ui-audit`, `pnpm unit_tests:py` if API code changes, `git diff --check`.
+- status: `done`
+- risk: `medium`
+- approval: explicit operator request to implement the planned three-item bugfix sequence.
+- planning required: conditional for bugfix; accepted from the user-provided plan.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/UI/read-model boundaries and selection truth; `.aidp/contracts/signal-candidate-pipeline-core.md` and `.aidp/contracts/universal-selection-profiles.md` remain relevant because `final_selection_results` must remain the primary selection truth.
+- cleanup status: compose stack is already up from MCP proof and may be reused by targeted UI lanes; run `pnpm dev:mvp:internal:down` after the three-item sequence.
+
+## Scope
+
+Fix the targeted UI proof failure where `test:web:viewports` and `test:web:ui-audit` time out waiting for `/collections/system-selected` to include the seeded `content_item_id`.
+
+In scope:
+
+- characterize `/collections/system-selected` for visible, final-selected signal candidates;
+- cover title search with expected `content_item_id = signal_candidate:<doc_id>`;
+- preserve required predicates: visible candidate, final selection selected, active source channel;
+- add a negative case for non-visible or non-selected candidates;
+- inspect harness failure status/body before changing implementation.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/api/app/**`
+- `infra/scripts/**`
+- `tests/unit/python/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- No auth/session changes.
+- No DB migrations.
+- `final_selection_results` remains primary selection truth.
+- Existing dirty worktree content is treated as prior work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after `SIGNALOPS-MCP-CONFIRM-SCOPE-CONTRACT-FIX-1` passed targeted unit proof and `pnpm test:mcp:compose`.
+- Known diagnosis target from prior live proof: viewport/UI audit waits for `/collections/system-selected?page=1&pageSize=100&q=...` to contain seeded selected content.
+- Diagnosis:
+  - production read-model already required `visibility_state = 'visible'` and `final_selection_results.is_selected = true`;
+  - `test:web:viewports` failure was `Last error: Not Found`, caused by proof harness reading the wrong direct API surface instead of nginx `/api`;
+  - `test:web:ui-audit` seed did not explicitly make its selected primary candidate visible/family-primary before waiting on `/collections/system-selected`.
+- Fix implemented:
+  - added read-model characterization for searched `signal_candidate:<doc_id>` system-selected items backed by visible candidates and `final_selection_results`;
+  - changed both UI harnesses to read `/collections/system-selected` through `http://127.0.0.1:8080/api/...`;
+  - completed the UI audit deterministic seed by setting visible/family-primary duplicate flags before final selection readback.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_api_feed_dedup`;
+  - `pnpm test:web:viewports`;
+  - `pnpm test:web:ui-audit`.
+
+## Completed Bugfix: SIGNALOPS-MCP-CONFIRM-SCOPE-CONTRACT-FIX-1
+
+- id: `SIGNALOPS-MCP-CONFIRM-SCOPE-CONTRACT-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for deterministic MCP/source-inventory confirmation proof failure.
+- route phase: `tests-first-confirm-scope-contract-fix`
+- route-specific next step: done; deterministic coverage added for readable `confirm_scope` response confirmation and public API surface routing.
+- route-specific proof: targeted TS/Python unit coverage, `pnpm test:mcp:compose`, `git diff --check`.
+- status: `done`
+- risk: `medium`
+- approval: explicit operator request to implement the planned three-item bugfix sequence.
+- planning required: conditional for bugfix; accepted from the user-provided plan.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/control-plane/admin writes and test/runtime boundaries; `.aidp/contracts/mcp-control-plane.md` is relevant if MCP tool behavior changes, but this item targets deterministic proof/API response readback.
+- cleanup status: compose stack intentionally remains up for the next targeted bugfix lanes; run `pnpm dev:mvp:internal:down` after the three-item sequence.
+
+## Scope
+
+Fix the deterministic MCP compose failure where `confirm_scope` persists `scopeStatus = confirmed` in PostgreSQL but the immediate API/harness response assertion fails.
+
+In scope:
+
+- characterize `apply_source_inventory_action(confirm_scope)` response shape;
+- characterize MCP HTTP harness extraction of source inventory scope confirmation from snake_case and camelCase response shapes;
+- keep both immediate response assertion and DB readback assertion strict;
+- preserve discovery routing and source inventory semantics.
+
+Allowed paths:
+
+- `.aidp/**`
+- `infra/scripts/**`
+- `services/api/app/**`
+- `tests/unit/python/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- No auth/session changes.
+- No DB migrations.
+- No Discovery algorithm changes.
+- No weakening of destructive rollback safety.
+- Existing dirty worktree content is treated as prior work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after the prior live-proof residual list identified MCP `confirm_scope` as the next deterministic blocker.
+- Reproduced evidence from latest MCP compose artifact:
+  - `/tmp/signalops-mcp-http-deterministic-98d4606d-2e90-49c8-b6df-ba833af68ba2.json`
+  - scenario `discovery-operator-flows` included DB-backed evidence `scopeStatus: confirmed`;
+  - command failed at immediate assertion: `confirm_scope action must confirm scope without destructive rollback.`
+- Initial diagnosis: likely response-shape mismatch in deterministic harness or API serialization, not a DB write failure.
+- Fix implemented:
+  - added TS harness coverage for snake_case, camelCase and JSON-encoded scope confirmation payloads;
+  - added Python unit coverage proving `apply_source_inventory_action(confirm_scope)` returns readable `sourceInventory.scope_confirmation_json.scopeStatus = confirmed` and `destructiveConfirmationRequired = false`;
+  - fixed the deterministic harness to call the public nginx `/api` surface for the admin action and require HTTP 200, while keeping the DB readback assertion strict.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-http-scenarios.test.ts`;
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_discovery_vnext_foundation`;
+  - `pnpm test:mcp:compose`.
+
+## Completed Bugfix: SIGNALOPS-MCP-HTTP-DOC-PARITY-COVERAGE-FIX-1
+
+- id: `SIGNALOPS-MCP-HTTP-DOC-PARITY-COVERAGE-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live-proof failure in MCP HTTP doc-parity coverage.
+- route phase: `minimal-coverage-fix`
+- route-specific next step: add real deterministic HTTP MCP coverage for shipped `operator.flow.route` instead of weakening the doc-parity matrix.
+- route-specific proof: `pnpm test:mcp:compose`, TS doc-parity unit coverage if touched, and resume the paused live-proof failed lane.
+- status: `done`
+- risk: `medium`
+- approval: implicit operator approval from "запускай и тестируй"; this is the next narrow bugfix surfaced by the same live-proof MCP compose lane.
+- planning required: conditional for bugfix; accepted inline from the observed live failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` and `.aidp/contracts/mcp-control-plane.md` MCP operator proof boundaries; change is limited to deterministic HTTP proof harness coverage.
+- cleanup status: failed MCP compose run may have left local compose state; cleanup will be verified after rerun.
+
+## Scope
+
+Fix the live-proof failure where `pnpm test:mcp:compose` reaches the `doc-parity-matrix` scenario and reports shipped HTTP surface `tool:operator.flow.route` without coverage.
+
+In scope:
+
+- add a real read-only MCP HTTP call for `operator.flow.route` in existing deterministic operator/read scenario;
+- keep doc-parity full-coverage assertion strict;
+- preserve MCP tool behavior, docs and registry.
+
+Allowed paths:
+
+- `.aidp/**`
+- `infra/scripts/**`
+- `tests/unit/ts/**` only if doc-parity test coverage needs adjustment.
+
+Protected boundaries:
+
+- No MCP tool/schema behavior changes.
+- No auth/session changes.
+- No product runtime changes.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after the Discovery preview fix allowed `pnpm test:mcp:compose` to pass `discovery-operator-flows` and `discovery-vnext-full-flow`.
+- Failure observed: `doc-parity-matrix` reported `MCP doc-parity matrix found shipped HTTP surfaces without coverage: tool:operator.flow.route`.
+- Diagnosis: `operator.flow.route` is shipped and required by MCP operator guidance, so deterministic HTTP compose should exercise it rather than marking it not-yet-tested.
+- Fix implemented: deterministic MCP read/operator coverage now calls `operator.flow.route` through HTTP MCP.
+- Proof passed:
+  - `pnpm test:mcp:compose`;
+  - artifact `/tmp/signalops-mcp-http-deterministic-8cfce5c0-0ee3-4a0f-b0f1-af77dc534a4c.json`.
+
+## Completed Bugfix: SIGNALOPS-MCP-DISCOVERY-BRIEF-PREVIEW-FIX-1
+
+- id: `SIGNALOPS-MCP-DISCOVERY-BRIEF-PREVIEW-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live-proof failure in MCP Discovery brief preview HTTP contract.
+- route phase: `regression-then-minimal-fix`
+- route-specific next step: add a deterministic regression proving FastAPI binds `/maintenance/discovery/brief/preview` request body to `DiscoveryVNextBriefPreviewPayload`, then fix the facade wrapper signature without changing Discovery behavior.
+- route-specific proof: targeted Python Discovery vNext route/facade tests, `pnpm test:mcp:compose`, and resume the paused live-proof failed lane.
+- status: `done`
+- risk: `medium`
+- approval: implicit operator approval from "запускай и тестируй"; this is a narrow bugfix required by the live proof failure before continuing the high-risk proof.
+- planning required: conditional for bugfix; accepted inline from the observed live failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/MCP/operator boundary context already checked for the live proof and Discovery vNext facade split; fix is limited to API route binding/facade compatibility.
+- cleanup status: no new live/staging state created by this bugfix item yet.
+
+## Scope
+
+Fix the live-proof failure where `pnpm test:mcp:compose` calls MCP tool `discovery.brief.preview` and the backend returns `422 Unprocessable Entity` requiring `query.args` and `query.kwargs`.
+
+In scope:
+
+- add/strengthen deterministic regression coverage for the Discovery brief preview API route binding;
+- preserve the `services.api.app.discovery_vnext_api` public facade and monkeypatch-compatible wrappers;
+- preserve MCP tool names, schemas and behavior;
+- rerun the failed MCP compose lane and targeted proof.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/api/app/**`
+- `tests/unit/python/**`
+- `infra/scripts/**` only if the failure proves to be a harness bug.
+
+Protected boundaries:
+
+- No auth/session changes.
+- No Discovery algorithm changes.
+- No DB migrations.
+- No permanent live-proof command.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after `release:verify` failed inside `product-local-core`.
+- Failure reproduced by live proof output: `pnpm test:mcp:compose` scenario `discovery-operator-flows` failed on MCP tool `discovery.brief.preview` with `422 Unprocessable Entity`; backend error required `query.args` and `query.kwargs`.
+- Initial diagnosis: MCP sends `tools/call.params.arguments` correctly; SDK posts the payload to `/maintenance/discovery/brief/preview`; FastAPI appears to inspect the compatibility wrapper as `*args, **kwargs` instead of the wrapped payload signature.
+- Fix implemented: `discovery_vnext_api` compatibility wrappers now preserve the wrapped function signature for FastAPI route binding while keeping monkeypatch synchronization.
+- Proof passed:
+  - targeted regression for `preview_brief` facade route signature;
+  - full `test_discovery_vnext_foundation.py`;
+  - `pnpm test:mcp:compose` passed the previous `discovery-operator-flows` failure point before surfacing the next doc-parity coverage failure.
+
+## Completed Bugfix: SIGNALOPS-CRITERION-REVIEW-DIRECT-EVENT-CONSTANT-FIX-1
+
+- id: `SIGNALOPS-CRITERION-REVIEW-DIRECT-EVENT-CONSTANT-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live-proof LLM cost review direct processor failure.
+- route phase: `tests-first-direct-event-constant-fix`
+- route-specific next step: add a deterministic regression proving criterion review persistence dispatches the criteria-matched event without reading constants from old worker `main`, then replace the legacy-main constant lookup with the explicit queue/event contract import.
+- route-specific proof: targeted Python selection write repository test, `docker compose ... python -m infra.scripts.workers.smoke llm-cost-proof`, `pnpm unit_tests:py`.
+- status: `done`
+- risk: `medium`
+- approval: implicit operator approval from "запускай и тестируй"; this narrow bugfix surfaced while validating the adjacent LLM live-proof smoke after the system-feed proof invariant fix.
+- planning required: conditional for bugfix; accepted inline from observed live failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` and `.aidp/contracts/universal-task-engine.md` direct processor/runtime trimming boundaries.
+- cleanup status: local compose stack is still running for targeted proof and will be stopped before close.
+
+## Scope
+
+Fix the compose smoke failure where `llm-cost-proof` crashes with `AttributeError: module 'services.workers.app.main' has no attribute 'SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT'`.
+
+In scope:
+
+- characterize that `persist_criterion_review_resolution` dispatches the criteria-matched event through an explicit event constant;
+- remove the legacy-main constant lookup from this direct repository path;
+- preserve event name and runtime behavior.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/workers/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- No queue fallback restoration.
+- No selection algorithm changes.
+- No DB migrations.
+- No broad worker refactor.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 after `SIGNALOPS-SYSTEM-FEED-PROOF-INVARIANT-FIX-1` made `pnpm test:llm-budget-stop:compose` pass.
+- Adjacent direct smoke command failed:
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m infra.scripts.workers.smoke llm-cost-proof`
+  - error: `AttributeError: module 'services.workers.app.main' has no attribute 'SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT'`.
+- Diagnosis: `selection_write_repository.persist_criterion_review_resolution` still reads the event constant from legacy worker `main` instead of the explicit `worker_queues` contract.
+- Fix implemented: `persist_criterion_review_resolution` now imports `SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT` from `services.workers.app.worker_queues`.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_selection_write_repository tests.unit.python.test_worker_smoke_system_feed_invariant tests.unit.python.test_final_selection`
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_task_engine_scheduler tests.unit.python.test_task_engine tests.unit.python.test_task_engine_pipeline_plugins tests.unit.python.test_worker_bootstrap_runtime`
+  - `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml exec -T worker python -m infra.scripts.workers.smoke llm-cost-proof`
+  - `pnpm test:llm-budget-stop:compose`
+  - `pnpm unit_tests:py`
+
+## Completed Bugfix: SIGNALOPS-SYSTEM-FEED-PROOF-INVARIANT-FIX-1
+
+- id: `SIGNALOPS-SYSTEM-FEED-PROOF-INVARIANT-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live-proof selection/system-feed proof invariant drift.
+- route phase: `tests-first-compatibility-projection-proof-fix`
+- route-specific next step: add a deterministic regression for `system_feed_results` compatibility projection rows whose stored decision intentionally differs from raw criteria-count summary, then update the smoke invariant without weakening final-selection truth.
+- route-specific proof: targeted Python proof helper test, `pnpm test:llm-budget-stop:compose`, `pnpm unit_tests:py` if touched broadly, and resume the failed total-live lane only after the narrow lane is green.
+- status: `done`
+- risk: `medium`
+- approval: implicit operator approval from "запускай и тестируй"; this narrow bugfix is required by the live-proof failure loop after the sequence FK failure was fixed.
+- planning required: conditional for bugfix; accepted inline from observed live failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` and `.aidp/contracts/signal-candidate-pipeline-core.md` final-selection truth boundaries; `system_feed_results` is compatibility/read projection while `final_selection_results` is primary selection truth.
+- cleanup status: broad total-live rerun was manually stopped after separate failures surfaced; local compose cleanup is pending after this narrow diagnosis/fix.
+
+## Scope
+
+Fix the live-proof failure where `pnpm test:llm-budget-stop:compose` reports `System feed verification failed: stored decision drifted from criteria counts` even though the current writer intentionally stores `system_feed_results.decision` as a compatibility projection sourced from `final_selection_results`.
+
+In scope:
+
+- characterize compatibility-projection system feed rows in deterministic tests;
+- update the smoke/proof helper to accept explicit `compatibilityDecisionOverride` evidence while still rejecting unexplained drift;
+- keep `final_selection_results` as primary selection truth;
+- preserve runtime selection/LLM-review behavior.
+
+Allowed paths:
+
+- `.aidp/**`
+- `infra/scripts/workers/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- No runtime selection algorithm changes.
+- No API/UI/read-model behavior changes in this item.
+- No DB migrations.
+- No broad live-proof command changes.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 during resumed `SIGNALOPS-LIVE-STAGING-PROOF-1`.
+- Sequence FK fix targeted tests passed and the broad total-live rerun progressed past relay/sequence lanes without repeating the FK crash.
+- New failure observed in `llm-budget-stop-compose`:
+  - `RuntimeError: System feed verification failed: stored decision drifted from criteria counts.`
+- Diagnosis:
+  - `services/workers/app/selection_write_repository.py` writes `system_feed_results.decision` from `final_selection_results.compatSystemFeedDecision`.
+  - When that compatibility decision differs from raw criteria-count summary, the writer records `explain_json.compatibilityDecisionOverride`.
+  - `infra/scripts/workers/smoke.py` still expects the old criteria-only `system_feed_results.decision`, so the proof invariant is stale.
+- Fix implemented:
+  - `fetch_system_feed_result()` now reads `explain_json` for proof read-back.
+  - `verify_system_feed_result_consistency()` accepts drift only when the row explicitly proves a `final_selection_results` compatibility projection override.
+  - the synthetic LLM cost/budget fixture now includes item-level project candidate signal evidence so the accept-gray-zone branch still proves modern final-selection eligibility.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_worker_smoke_system_feed_invariant`
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_worker_smoke_system_feed_invariant tests.unit.python.test_final_selection`
+  - `pnpm test:llm-budget-stop:compose`
+  - `pnpm unit_tests:py`
+
+## Completed Bugfix: SIGNALOPS-SEQUENCE-RUN-FK-LIVE-FIX-1
+
+- id: `SIGNALOPS-SEQUENCE-RUN-FK-LIVE-FIX-1`
+- lifecycle: `normal`
+- route: `bugfix` for live-proof sequence runtime integrity failure.
+- route phase: `tests-first-sequence-run-parent-integrity`
+- route-specific next step: add a deterministic regression for `q.sequence` jobs whose parent `sequence_runs` row is missing, then fix the runtime path that allows `sequence_task_runs` FK violations and resume the failed live lane.
+- route-specific proof: targeted Python task-engine/worker sequence tests, `pnpm unit_tests:py` if touched broadly, and rerun the failed `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose` lane.
+- status: `done`
+- risk: `high`
+- approval: implicit operator approval from "запускай и тестируй"; this narrow bugfix is required by the live-proof failure loop before continuing maximal proof.
+- planning required: conditional for bugfix; accepted inline from observed live failure.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL business truth and sequence runtime boundaries; `.aidp/verification.md` failure-loop discipline.
+- cleanup status: failed `product-total-live` compose stack was stopped with `pnpm dev:mvp:internal:down`; no staging writes were performed.
+
+## Scope
+
+Fix the live-proof failure where `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose` hangs after the worker logs a `sequence_task_runs_run_id_fkey` violation for a `run_id` not present in `sequence_runs`.
+
+In scope:
+
+- characterize the missing parent `sequence_runs` behavior in deterministic worker/task-engine tests;
+- prevent `sequence_task_runs` inserts for missing parent runs, with explicit failure/skip behavior rather than raw FK crashes;
+- preserve sequence routing as the only runtime path for sequence-managed events;
+- rerun targeted proof and resume the failed total-live lane.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/workers/**`
+- `services/relay/**` only if diagnosis proves the bad job is produced there
+- `services/api/**` only if sequence command/API dispatch is the producer
+- `tests/unit/python/**`
+- `tests/unit/ts/**` only if relay producer tests are needed
+- `infra/scripts/**` only for deterministic harness proof if the failure is harness-created
+
+Protected boundaries:
+
+- No auth/session changes.
+- No DB migrations unless diagnosis proves schema is wrong.
+- No fallback/legacy queue restoration.
+- No broad refactor.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Current Proof Status
+
+- Started on 2026-06-10 during `SIGNALOPS-LIVE-STAGING-PROOF-1`.
+- `pnpm release:verify` passed before this lane.
+- `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose` was started after Docker escalation and then hung inside `product-mega-flow:compose`.
+- Worker log evidence:
+  - `ForeignKeyViolation('insert or update on table "sequence_task_runs" violates foreign key constraint "sequence_task_runs_run_id_fkey"... Key (run_id)=(51710bf7-063c-4b3b-980e-50bc81a1c1a0) is not present in table "sequence_runs".')`
+- No current-run total-live JSON artifact was produced before manual stop; only the earlier sandbox-denied artifact existed.
+- Cleanup performed:
+  - killed hanging total-live/mega-flow node processes;
+  - `pnpm dev:mvp:internal:down` removed the compose stack.
+- Fix implemented:
+  - sequence executor now fail-closes missing parent `sequence_runs` jobs as `missing_run` instead of inserting orphan `sequence_task_runs`;
+  - repository catches the concrete parent-run FK miss and raises an explicit task-engine exception.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_task_engine_scheduler.SequenceRunJobProcessorTests`
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_task_engine_scheduler`
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_task_engine tests.unit.python.test_task_engine_pipeline_plugins tests.unit.python.test_worker_bootstrap_runtime`
+  - broad total-live rerun progressed through relay phase 3 and phase 4/5 sequence routing without repeating the FK crash before surfacing separate selection/UI/MCP failures.
+
+## Paused Item
+
+- id: `SIGNALOPS-LIVE-STAGING-PROOF-1`
+- lifecycle: `normal`
+- route: `delivery` with `live-audit` phase for one-off maximal live/staging proof.
+- route phase: `blocked-on-new-live-proof-residuals`
+- route-specific next step: open separate narrow items for remaining deterministic blockers before rerunning broad total-live: MCP `confirm_scope` assertion/response contract, UI `system-selected` projection availability, and website-admin maintenance web-resources route/stale-stack proof.
+- route-specific proof: static/release baseline, full local total-live proof, external Discovery/MCP live flows, provider/runtime/UI/index lanes, staging read-after-write proof where configured, cleanup proof and explicit residual gap review.
+- status: `active`
+- risk: `high`
+- approval: approved by operator request on 2026-06-10 to implement the “План Максимально Валидной Live/Staging Проверки”; high-risk boundary is limited to disposable staging/test state and configured real external provider budgets.
+- planning required: yes, because this is a complex high-risk delivery/live-audit proof with external/staging state.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/routes.md`; `.aidp/verification.md` high-risk/stateful proof and cleanup gates; `.aidp/contracts/test-access-and-fixtures.md`; `.aidp/blueprint.md` runtime/data truth boundaries.
+- cleanup status: local compose state was stopped with `pnpm dev:mvp:internal:down --remove-orphans`; `docker ps` returned no running containers; no `/tmp/signalops-live-proof-*` scripts remained.
+
+## Scope
+
+Run a one-off maximal live/staging proof without adding a permanent verification command.
+
+In scope:
+
+- preflight current git/worktree, Docker, ports, `.env.dev`, real-provider credentials and disposable staging readiness;
+- run existing static, release, local live, external Discovery/MCP, provider/runtime/UI/index proof commands until the first hard fail or through full completion;
+- use only temporary `/tmp/signalops-live-proof-*` scripts if a real API/IMAP/staging gap harness is needed;
+- classify failures as env/credential, provider transient, staging data, product/runtime bug, test harness gap or unsupported surface;
+- cleanup local/temp/staging state and record proof/residuals.
+
+Allowed paths:
+
+- `.aidp/**`
+
+Protected boundaries:
+
+- Do not add a permanent `package.json` command.
+- Do not change `release:verify`.
+- Do not write product/source/config/test files under this delivery item.
+- If a product/runtime bug requires source changes, stop this item and open a narrow `bugfix`/`capability` item first.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: high-risk route, active item and cleanup discipline.
+- `.aidp/routes.md`: delivery route and high-risk approval behavior.
+- `.aidp/verification.md`: high-risk proof, stateful proof and cleanup requirements.
+- `.aidp/contracts/test-access-and-fixtures.md`: discovery fixture and smoke proof boundaries.
+- `docs/product/operator/local-product-testing.md`: current product live/local proof layers.
+- `infra/scripts/test-product-total-live-audit.mjs`: widest existing local/live audit harness.
+- `infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs`: real external Discovery/MCP gap flow harness.
+- `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`: real external Discovery/MCP signal flow harness.
+
+## Proof Gates
+
+Planned gates:
+
+- preflight: git/worktree, Docker, ports, `.env.dev`, credentials, staging disposability, secret-artifact safety;
+- static/release baseline: compliance, dependency/env/secret/truth/domain checks, lint, typecheck, unit tests, builds, `release:verify`, diff check;
+- local live runtime: `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose`;
+- external Discovery/MCP: live gap and live signal flow preflight plus full commands;
+- provider/runtime/UI/index lanes listed in the accepted plan;
+- cleanup: local cleanup, stack down, token/entity cleanup, temporary `/tmp` script cleanup and residual recording.
+
+## Current Proof Status
+
+- Started on 2026-06-10.
+- Dirty worktree observed before this item and preserved.
+- Docker availability confirmed via `docker info`.
+- `.env.dev` exists.
+- Preflight status: blocked before static/release/live/staging gates.
+- Preflight passed:
+  - Docker is available;
+  - no repo-tracked live harness or permanent command was added;
+  - no stale `/tmp/signalops-live-proof-*` scripts were present.
+- Preflight failures:
+  - `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS` is not configured, so real Discovery/MCP live budget is not explicitly bounded;
+  - `SIGNALOPS_MCP_URL` and `SIGNALOPS_MCP_TOKEN` are not configured, so remote/staging MCP smoke cannot run;
+  - no explicit disposable staging target is configured (`SIGNALOPS_STAGING_MCP_URL`, `SIGNALOPS_STAGING_API_URL`, disposable flag, run namespace, max budget and cleanup policy are absent);
+  - `API_LIVE_TEST_URL` is not configured, so real external API source proof cannot run;
+  - `IMAP_HOST`, `IMAP_USERNAME` and `IMAP_PASSWORD` are not configured, so real external IMAP source proof cannot run.
+- Commands intentionally not run because preflight hard-failed:
+  - static/release baseline;
+  - `DISCOVERY_ENABLED=1 pnpm test:product:total-live:compose`;
+  - external Discovery/MCP live gap and signal flows;
+  - staging read-after-write harness;
+  - provider/runtime/UI/index lanes.
+- Residual status: system is not live/staging-validated by this item; missing env/staging inputs must be supplied before a valid maximal live proof can start.
+- Operator follow-up on 2026-06-10: requested to run and test anyway. Scope adjusted to run available local/static/live-provider gates without claiming unavailable staging/API/IMAP lanes as passed.
+
+## Historical Archive: Completed Hotspot Refactor Consolidation 1
+
+- id: `SIGNALOPS-HOTSPOT-REFACTOR-CONSOLIDATION-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor/docs-operator` scope for hotspot refactor roadmap consolidation.
+- route phase: `hotspot-refactor-consolidation-1`
+- route-specific next step: run final roadmap proof gates and update completed slice state plus residual parked items.
+- route-specific proof: TS unit gate, Python unit gate, lint, typecheck, operator truth parity, domain-neutrality and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement final consolidation after all roadmap refactor slices passed.
+- planning required: yes, because this item closes a multi-slice roadmap and records proof state.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md`; `.aidp/engineering.md`; `.aidp/verification.md`; `.aidp/contracts/mcp-control-plane.md`; `.aidp/contracts/discovery-agent.md`; `.aidp/contracts/feed-ingress-adapters.md`; `.aidp/contracts/signal-candidate-pipeline-core.md`; `.aidp/contracts/universal-selection-profiles.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Consolidate the completed hotspot refactor roadmap and run final proof gates.
+
+In scope:
+
+- run final proof gates across TS/Python/lint/typecheck/operator-truth/domain-neutrality/diff;
+- update `.aidp/work.md` with completed slice list and residual parked items;
+- avoid additional refactors or behavior changes.
+
+Allowed paths:
+
+- `.aidp/**`
+
+Protected boundaries:
+
+- No source/product behavior changes in this item.
+- Existing completed slice changes are preserved.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: architecture and boundary context.
+- `.aidp/engineering.md`: behavior-preserving refactor, proof and hotspot discipline.
+- `.aidp/verification.md`: final proof gate policy.
+- Completed slice archive in this file.
+
+## Implementation Expectations
+
+- Do not refactor further in this item.
+- Run and record proof gates.
+- Park any residual cleanup that is outside the approved roadmap.
+
+## Proof Gates
+
+Required gates:
+
+- `pnpm unit_tests:ts`;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:operator-truth-parity`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Completed slice list:
+  - `SIGNALOPS-MCP-RESOURCES-SLICE-1`;
+  - `SIGNALOPS-MCP-PROMPTS-SLICE-1`;
+  - `SIGNALOPS-DISCOVERY-VNEXT-API-SLICE-1`;
+  - `SIGNALOPS-SOURCE-CONTRACTS-SLICE-1`;
+  - `SIGNALOPS-SELECTION-READMODEL-SLICE-1`;
+  - `SIGNALOPS-HOTSPOT-REFACTOR-CONSOLIDATION-1`.
+- Residual parked items:
+  - no additional refactor was opened during consolidation;
+  - any broad cleanup beyond the approved roadmap remains a separate future AIDP item.
+- Proof passed:
+  - `pnpm unit_tests:ts`;
+  - `PYTHON_TEST_PYTHON=.venv/bin/python pnpm unit_tests:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Selection ReadModel Slice 1
+
+- id: `SIGNALOPS-SELECTION-READMODEL-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor` scope for selection read-model extraction.
+- route phase: `selection-readmodel-slice-1`
+- route-specific next step: add characterization coverage for current selection read-model payload shape and final selection truth, then split helper clusters behind `content_selection_read_model.py`.
+- route-specific proof: targeted Python selection/read-model tests before and after extraction, then Python unit gate, lint, typecheck where applicable and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Roadmap Следующих Refactor Slices plan after MCP resources/prompts, Discovery vNext API and source contracts slices passed.
+- planning required: yes, because this is a multi-file structural refactor around public API read-model payload shape.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` selection/read-model and final-selection truth boundaries; `.aidp/engineering.md` behavior-preserving refactor and public facade discipline; `.aidp/verification.md` API/read-model proof policy; `.aidp/contracts/signal-candidate-pipeline-core.md`; `.aidp/contracts/universal-selection-profiles.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Split selection read-model helper clusters into focused modules while preserving `services/api/app/content_selection_read_model.py` as the public import facade.
+
+In scope:
+
+- add or strengthen characterization tests for signal_candidate/resource/content selection payload fields;
+- cover `final_selection_results` truth, fallback blocker payloads, diagnostics/guidance and content item ID parsing;
+- keep existing imports from `services.api.app.content_selection_read_model` working;
+- add internal `services/api/app/content_selection/` modules for SQL fragments, payload builders and projection helpers;
+- preserve all API payload keys and current query behavior;
+- avoid MCP, Discovery API, contracts, runtime, auth, DB migrations or behavior changes in this item.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/api/app/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- Existing imports from `content_selection_read_model.py` remain valid.
+- API payload keys remain unchanged.
+- `final_selection_results` remains the primary selection truth.
+- `reindex_read_model.py` stayed out of this refactor.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: selection/read-model and API boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, public facade and proof discipline.
+- `.aidp/verification.md`: API/read-model and structural proof expectations.
+- `.aidp/contracts/signal-candidate-pipeline-core.md`: final selection and signal_candidate payload semantics.
+- `.aidp/contracts/universal-selection-profiles.md`: universal selection truth boundaries.
+- `services/api/app/content_selection_read_model.py`: hotspot and public facade target.
+- selection/read-model tests under `tests/unit/python/`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen selection payload characterization before extraction.
+- Extract helper clusters and preserve public callable names through the facade.
+- Keep SQL predicates, final-selection precedence and payload keys unchanged.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted selection/read-model Python tests before extraction;
+- targeted selection/read-model Python tests after extraction;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction for final-selection precedence, fallback blocker diagnostics, guidance, resource selection payload and content item ID parsing.
+- Refactor completed:
+  - `services/api/app/content_selection_read_model.py` remains the public facade/import target;
+  - added internal `services/api/app/content_selection/payloads.py`, `projection.py`, `sql_fragments.py` and `__init__.py`;
+  - SQL predicates, final-selection precedence and payload keys were preserved;
+  - `services/api/app/content_selection_read_model.py` reduced from 1232 lines to 79 lines.
+- Proof passed:
+  - targeted selection/read-model Python tests before extraction;
+  - targeted selection/read-model Python tests after extraction;
+  - `PYTHON_TEST_PYTHON=.venv/bin/python pnpm unit_tests:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Source Contracts Slice 1
+
+- id: `SIGNALOPS-SOURCE-CONTRACTS-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor` scope for source contract provider-config extraction.
+- route phase: `source-contracts-slice-1`
+- route-specific next step: add characterization coverage for provider-specific source channel config parsing, then split `packages/contracts/src/source.ts` behind its existing public facade.
+- route-specific proof: targeted TS source contract tests before and after extraction, then TS unit gate, lint, typecheck and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Roadmap Следующих Refactor Slices plan after MCP resources/prompts and Discovery vNext API slices passed.
+- planning required: yes, because this is a multi-file structural refactor around public source contract exports and validation defaults.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` source/channel and contracts boundaries; `.aidp/engineering.md` behavior-preserving refactor and public facade discipline; `.aidp/verification.md` contracts/source proof policy; `.aidp/contracts/feed-ingress-adapters.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Split provider-specific source channel config parsing into focused modules while preserving `packages/contracts/src/source.ts` as the public compatibility facade.
+
+In scope:
+
+- add or strengthen characterization tests for `parseRssChannelConfig`, `parseWebsiteChannelConfig`, `parseApiChannelConfig`, `parseEmailImapChannelConfig` and `parseSourceChannelConfig`;
+- cover auth/header safety, adapter metadata, schedule defaults and resource-kind config behavior;
+- keep existing public exports from `packages/contracts/src/source.ts` working;
+- add internal `packages/contracts/src/source/` modules for provider parsers and shared helpers;
+- preserve all validation/default behavior;
+- avoid MCP, Discovery API, selection read-model, runtime, auth, DB migrations or behavior changes in this item.
+
+Allowed paths:
+
+- `.aidp/**`
 - `packages/contracts/**`
 - `tests/unit/ts/**`
 
 Protected boundaries:
 
-- Intent fields are advisory and optional.
-- Existing write tools remain compatible and do not require intent.
-- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+- Existing imports from `packages/contracts/src/source.ts` remain valid.
+- No config default or validation behavior changes.
+- No public source contract export removals.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: source/channel and contract boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, public facade and proof discipline.
+- `.aidp/verification.md`: contracts/source and structural proof expectations.
+- `.aidp/contracts/feed-ingress-adapters.md`: source/provider adapter boundaries.
+- `packages/contracts/src/source.ts`: hotspot and public facade target.
+- source contract tests under `tests/unit/ts/`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen source parser characterization before extraction.
+- Extract provider parser clusters and preserve public exports through the facade.
+- Keep validation, defaults and adapter metadata behavior unchanged.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted source contract TS tests before extraction;
+- targeted source contract TS tests after extraction;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction for provider dispatch, auth/header safety, schedule defaults and API adapter resource-kind metadata.
+- Refactor completed:
+  - `packages/contracts/src/source.ts` remains the public facade/import target;
+  - added internal `packages/contracts/src/source/model.ts`, `shared.ts`, `rss.ts`, `website.ts`, `api.ts` and `email-imap.ts`;
+  - public source exports and provider parser behavior were preserved;
+  - `packages/contracts/src/source.ts` reduced from 1380 lines to 82 lines.
+- Proof passed:
+  - focused provider/source tests before extraction;
+  - focused provider/source tests after extraction;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Discovery VNext API Slice 1
+
+- id: `SIGNALOPS-DISCOVERY-VNEXT-API-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor/bugfix` scope for Discovery vNext API facade extraction.
+- route phase: `discovery-vnext-api-slice-1`
+- route-specific next step: strengthen Discovery vNext characterization around payload validation and facade behavior, then split `services/api/app/discovery_vnext_api.py` into internal modules while keeping existing imports stable.
+- route-specific proof: targeted Python Discovery tests before and after extraction, then Python unit gate, lint, typecheck where applicable and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Roadmap Следующих Refactor Slices plan after MCP resources/prompts slices passed.
+- planning required: yes, because this is a multi-file structural refactor around API payload/orchestration behavior.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` Discovery/API/control-plane and source/resource boundaries; `.aidp/engineering.md` behavior-preserving refactor and API boundary discipline; `.aidp/verification.md` Discovery vNext and API proof policy; `.aidp/contracts/discovery-agent.md`; `.aidp/contracts/feed-ingress-adapters.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Split Discovery vNext API internals into focused modules while preserving `services/api/app/discovery_vnext_api.py` as the public compatibility facade.
+
+In scope:
+
+- add or strengthen characterization tests for payload model validation, list/get facade behavior, probation handoff, source identity key and probe/understand/route orchestration;
+- keep existing imports from `services.api.app.discovery_vnext_api` working;
+- add internal `services/api/app/discovery_vnext/` modules for models, repository helpers, source inventory, provider helpers and orchestration;
+- preserve existing route/API payload shapes and runtime/provider behavior;
+- avoid MCP resources/prompts changes, contracts split, selection read-model split, auth, DB migrations or behavior changes in this item.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/api/app/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- Existing imports from `discovery_vnext_api.py` remain valid.
+- No route/API payload shape changes.
+- No runtime/provider behavior changes.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: Discovery/API/control-plane and source/resource boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, API boundary and proof discipline.
+- `.aidp/verification.md`: Discovery vNext, API and structural proof expectations.
+- `.aidp/contracts/discovery-agent.md`: Discovery vNext contracts and operator-facing source acquisition boundaries.
+- `.aidp/contracts/feed-ingress-adapters.md`: source/provider adapter boundaries.
+- `services/api/app/discovery_vnext_api.py`: hotspot and public facade target.
+- `tests/unit/python/test_discovery_vnext_foundation.py`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen characterization before extraction.
+- Extract by behavior cluster and preserve public callable names through the facade.
+- Keep route payloads and database/runtime behavior unchanged.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted Discovery Python tests before extraction;
+- targeted Discovery Python tests after extraction;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction for facade public symbols, payload alias validation and extra-field rejection.
+- Refactor completed:
+  - `services/api/app/discovery_vnext_api.py` remains the public compatibility facade;
+  - added internal `services/api/app/discovery_vnext/models.py`, `repository.py`, `providers.py`, `source_inventory.py` and `orchestration.py`;
+  - public imports from `discovery_vnext_api.py` continue working through facade wrappers;
+  - route/API payload shapes and runtime/provider behavior were not intentionally changed.
+- Proof passed:
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_discovery_vnext_foundation` before extraction;
+  - `PYTHONPATH=tests/unit/python:. .venv/bin/python -m unittest tests.unit.python.test_discovery_vnext_foundation` after extraction;
+  - `PYTHON_TEST_PYTHON=.venv/bin/python pnpm unit_tests:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `git diff --check`.
+
+## Historical Archive: Completed MCP Prompts Slice 1
+
+- id: `SIGNALOPS-MCP-PROMPTS-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor/docs-operator` scope for MCP prompts hotspot extraction.
+- route phase: `mcp-prompts-slice-1`
+- route-specific next step: add characterization coverage for the MCP prompt registry and critical render outputs, then split prompt groups behind the existing public `services/mcp/src/prompts.ts` facade without changing behavior.
+- route-specific proof: targeted MCP control-plane test before and after extraction, then TS unit gate, lint, typecheck, operator truth parity, domain-neutrality and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Roadmap Следующих Refactor Slices plan after the resources slice passed.
+- planning required: yes, because this is a multi-file structural refactor around MCP public prompt/operator guidance.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/operator and control-plane boundaries; `.aidp/engineering.md` behavior-preserving refactor and hotspot pressure discipline; `.aidp/verification.md` MCP/control-plane, docs-operator and domain-neutral proof policy; `.aidp/contracts/mcp-control-plane.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Split MCP prompt definitions into internal modules while preserving the public MCP prompt facade and behavior.
+
+In scope:
+
+- add or strengthen characterization tests for `MCP_PROMPTS` names/descriptions/argument names and representative prompt render outputs;
+- keep `services/mcp/src/prompts.ts` as the public import facade;
+- add internal `services/mcp/src/prompts/` modules for sessions, operations, selection, discovery, channels, templates and cleanup;
+- preserve `MCP_PROMPTS`, `listMcpPrompts()` and `resolveMcpPrompt()` public behavior;
+- avoid resources split follow-up, Discovery API split, contracts split, selection read-model split, runtime, auth, DB migrations or behavior changes in this item.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Existing imports from `./prompts` remain valid.
+- No new MCP prompts are introduced.
+- Prompt names, descriptions, argument names and render behavior remain behavior-compatible.
+- No caller outside `services/mcp/src/prompts.ts` should import internal `services/mcp/src/prompts/*` modules.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: MCP/operator and control-plane boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, hotspot and proof discipline.
+- `.aidp/verification.md`: MCP/control-plane, docs-operator and domain-neutral proof expectations.
+- `.aidp/contracts/mcp-control-plane.md`: MCP prompt/operator truth and read-back proof semantics.
+- `services/mcp/src/prompts.ts`: current hotspot and public facade target.
+- `services/mcp/src/context.ts`, `services/mcp/src/tools.ts`, `services/mcp/src/main.ts`: existing MCP surfaces that must keep using the facade.
+- `tests/unit/ts/mcp-control-plane.test.ts`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen prompt characterization before extraction.
+- Extract by prompt group and preserve existing array order.
+- Re-export through the existing facade and do not update external callers to internal module paths.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane test before extraction;
+- targeted MCP control-plane test after extraction;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:operator-truth-parity`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction:
+  - full `MCP_PROMPTS` name/description/argument-name order is pinned;
+  - critical render outputs are covered for operator session, Discovery session, selection tuning, channel review, LLM budget review and cleanup guidance;
+  - known and unknown `resolveMcpPrompt()` behavior is covered.
+- Refactor completed:
+  - `services/mcp/src/prompts.ts` remains the public facade/import target;
+  - added internal `services/mcp/src/prompts/types.ts`, `sessions.ts`, `operations.ts`, `selection.ts`, `discovery.ts`, `channels.ts`, `templates.ts` and `cleanup.ts`;
+  - `MCP_PROMPTS` order is preserved through grouped arrays;
+  - no new MCP prompts were introduced;
+  - `services/mcp/src/prompts.ts` reduced from 734 lines to 60 lines.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` before extraction;
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` after extraction;
+  - no external caller imports internal `services/mcp/src/prompts/*` modules outside the facade;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed MCP Resources Slice 1
+
+- id: `SIGNALOPS-MCP-RESOURCES-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor/docs-operator` scope for MCP resources hotspot extraction.
+- route phase: `mcp-resources-slice-1`
+- route-specific next step: add characterization coverage for the MCP resource registry and key resource reads, then split resource groups behind the existing public `services/mcp/src/resources.ts` facade without changing behavior.
+- route-specific proof: targeted MCP control-plane test before and after extraction, then TS unit gate, lint, typecheck, operator truth parity, domain-neutrality and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Roadmap Следующих Refactor Slices plan.
+- planning required: yes, because this is a multi-file structural refactor around MCP public resources/operator guidance.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/operator and control-plane boundaries; `.aidp/engineering.md` behavior-preserving refactor and hotspot pressure discipline; `.aidp/verification.md` MCP/control-plane, docs-operator and domain-neutral proof policy; `.aidp/contracts/mcp-control-plane.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Split MCP resource definitions into internal modules while preserving the public MCP resource facade and behavior.
+
+In scope:
+
+- add or strengthen characterization tests for complete `MCP_RESOURCES` metadata, representative resource reads and `resolveMcpResource()` known/unknown behavior;
+- keep `services/mcp/src/resources.ts` as the public import facade;
+- add internal `services/mcp/src/resources/` modules for playbooks, reference resources, scenarios, ops resources, generated guides and server guides;
+- preserve `MCP_RESOURCES`, `listMcpResources()` and `resolveMcpResource()` public behavior;
+- avoid prompt split, Discovery API split, contracts split, selection read-model split, runtime, auth, DB migrations or behavior changes in this item.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Existing imports from `./resources` remain valid.
+- No new MCP resources are introduced.
+- Resource URI/name/title/description/mime/read behavior remains behavior-compatible.
+- No caller outside `services/mcp/src/resources.ts` should import internal `services/mcp/src/resources/*` modules.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: MCP/operator and control-plane boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, hotspot and proof discipline.
+- `.aidp/verification.md`: MCP/control-plane, docs-operator and domain-neutral proof expectations.
+- `.aidp/contracts/mcp-control-plane.md`: MCP resource/operator truth and read-back proof semantics.
+- `services/mcp/src/resources.ts`: current hotspot and public facade target.
+- `services/mcp/src/context.ts`, `services/mcp/src/tools.ts`, `services/mcp/src/main.ts`: existing MCP surfaces that must keep using the facade.
+- `tests/unit/ts/mcp-control-plane.test.ts`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen resource characterization before extraction.
+- Extract by resource group and preserve existing array order.
+- Re-export through the existing facade and do not update external callers to internal module paths.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane test before extraction;
+- targeted MCP control-plane test after extraction;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:operator-truth-parity`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction:
+  - full `MCP_RESOURCES` URI/name/title order is pinned;
+  - representative reads are covered for server overview, client contract, flow-routing playbook, reference guide, Discovery scenario, operator playbooks and ops resources;
+  - known and unknown `resolveMcpResource()` behavior is covered.
+- Refactor completed:
+  - `services/mcp/src/resources.ts` remains the public facade/import target;
+  - added internal `services/mcp/src/resources/types.ts`, `server-guides.ts`, `playbooks.ts`, `generated-guides.ts`, `ops.ts`, `reference.ts` and `scenarios.ts`;
+  - `MCP_RESOURCES` order is preserved through grouped arrays;
+  - no new MCP resources were introduced;
+  - `services/mcp/src/resources.ts` reduced from 1737 lines to 49 lines.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` before extraction;
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` after extraction;
+  - no external caller imports internal `services/mcp/src/resources/*` modules outside the facade;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed MCP Operating Intelligence Slice 1
+
+- id: `SIGNALOPS-MCP-OPERATING-INTELLIGENCE-SLICE-1`
+- lifecycle: `normal`
+- route: `capability` with `refactor/docs-operator` scope for MCP operating-intelligence hotspot extraction.
+- route phase: `mcp-operating-intelligence-slice-1`
+- route-specific next step: add characterization coverage for MCP flow routing/guides, then extract flow-routing, guide helpers and shared model constants from the public operating-intelligence facade without changing behavior.
+- route-specific proof: targeted MCP control-plane test before and after extraction, then TS unit gate, lint, typecheck, operator truth parity, domain-neutrality and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the MCP Operating Intelligence Hotspot Slice 1 plan.
+- planning required: yes, because this is a multi-file structural refactor around MCP public guidance/tool behavior.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/operator, API/control-plane and docs/operator truth boundaries; `.aidp/engineering.md` behavior-preserving refactor and hotspot pressure discipline; `.aidp/verification.md` MCP/control-plane, docs-operator and domain-neutral proof policy; `.aidp/contracts/mcp-control-plane.md`.
+- cleanup status: no production/operator DB mutation performed; proof created only local caches/build artifacts as expected.
+
+## Scope
+
+Extract MCP flow-routing and operator guide logic from the large operating-intelligence module while keeping public imports and MCP behavior stable.
+
+In scope:
+
+- add or strengthen characterization tests for `operator.flow.route`, operating/diagnostics/tuning guide resources and `operator.tuning.recommend` route block behavior;
+- keep `services/mcp/src/operating-intelligence.ts` as the public import facade;
+- add internal `services/mcp/src/operating-intelligence/` modules for model constants/types/domain registry, shared helpers, flow routing and guides;
+- preserve exported MCP operating constants/types and public helper functions;
+- avoid changes to resources/prompts split, Discovery vNext API, selection read-model, runtime, auth, docs truth or product behavior.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- Existing imports from `./operating-intelligence` remain valid.
+- No new MCP tools/resources/prompts are introduced.
+- Returned JSON keys, enum values, guide URIs and prompt/resource text remain behavior-compatible.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and write-ahead active item discipline.
+- `.aidp/routes.md`: capability/refactor proof obligations.
+- `.aidp/blueprint.md`: MCP/operator and control-plane boundaries.
+- `.aidp/engineering.md`: behavior-preserving refactor, hotspot and proof discipline.
+- `.aidp/verification.md`: MCP/control-plane, docs-operator and domain-neutral proof expectations.
+- `.aidp/contracts/mcp-control-plane.md`: MCP read-first/read-back/proof semantics.
+- `services/mcp/src/operating-intelligence.ts`: current hotspot and public facade target.
+- `services/mcp/src/tools.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/context.ts`: existing callers that must keep importing the facade.
+- `tests/unit/ts/mcp-control-plane.test.ts`: characterization and regression boundary.
+
+## Implementation Expectations
+
+- Tests-first: add/strengthen characterization before extraction.
+- Extract by behavior cluster, not by broad rewrite.
+- Re-export through the existing facade and do not update external callers to internal module paths.
+- Move shared helpers only when required by both extracted modules and remaining logic.
+- Prefer behavior identity over perfect final module boundaries.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane test before extraction;
+- targeted MCP control-plane test after extraction;
+- `pnpm unit_tests:ts`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:operator-truth-parity`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Characterization coverage added before extraction:
+  - `operator.flow.route` now covers mixed hidden/recall hard-gate guardrails in addition to existing zero-selected/source/planned/cleanup/expert-override routes;
+  - operating/diagnostics/tuning guide facade shapes are covered;
+  - `operator.tuning.recommend` route block shape is covered through the public MCP tool path.
+- Refactor completed:
+  - `services/mcp/src/operating-intelligence.ts` remains the public facade/import target;
+  - added internal `services/mcp/src/operating-intelligence/model.ts`, `shared.ts`, `flow-routing.ts` and `guides.ts`;
+  - external MCP callers still import from `./operating-intelligence`;
+  - no new MCP tools/resources/prompts were introduced;
+  - `services/mcp/src/operating-intelligence.ts` reduced from 6142 lines to 4557 lines.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` before extraction;
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` after extraction;
+  - no external caller imports internal `services/mcp/src/operating-intelligence/*` modules outside the facade;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Runtime Trimming And Truth Parity Item
+
+- id: `SIGNALOPS-RUNTIME-TRIMMING-PARITY-1`
+- lifecycle: `normal`
+- route: `capability` with `sweep/docs-operator/bugfix` scope for runtime legacy removal, operator truth parity and dependency policy alignment.
+- route phase: `runtime-trimming-truth-parity`
+- route-specific next step: remove runtime-only legacy queue/fallback switches, add operator truth parity proof, align dependency compliance with fixed-version policy, and perform only tests-first hotspot extraction where needed for this work.
+- route-specific proof: targeted queue/relay/worker/task-engine/dependency/parity tests first, then TS/Python unit gates, lint, typecheck, dependency/domain/truth parity checks, relay proof as feasible and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the Runtime Legacy, Truth Drift and Hotspot Complexity plan.
+- planning required: yes, because this changes queue/runtime compatibility, worker runtime, proof commands, docs/operator truth checks and dependency policy.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL/derived-state, async pipeline routing, MCP/operator, source/resource and selection boundaries; `.aidp/engineering.md` dependency, compatibility/deprecation, god-module and proof discipline; `.aidp/verification.md` relay/queue, worker, MCP/control-plane, dependency and docs-operator proof policy; `.aidp/contracts/universal-task-engine.md`; `.aidp/contracts/mcp-control-plane.md`.
+- cleanup status: no production/operator DB mutation performed; compose proof stopped the dev stack and removed dev volumes, with only local build/cache artifacts expected.
+
+## Scope
+
+Remove unsupported runtime fallback paths while preserving current sequence/task-engine behavior and audience-specific truth ownership.
+
+In scope:
+
+- relay sequence routing becomes mandatory for sequence-managed events;
+- worker runtime stops creating old per-stage BullMQ consumers;
+- task-engine processor adapters stop falling back to old `services.workers.app.main` handler lookup;
+- old runtime fallback env flags are removed from config, compose and docs;
+- `check:operator-truth-parity` proof is added for MCP/product/AIDP invariant alignment;
+- dependency compliance rejects mutable Node dependency specs and manifests are aligned to exact installed versions;
+- hotspot work is limited to tests-first extraction required by this item.
+
+Out of scope:
+
+- auth/session behavior;
+- ingress adapter legacy diagnostics/readers;
+- cosmetic renaming of every internal `legacy` symbol when it is not runtime fallback;
+- broad Discovery/API/selection source refactors beyond characterization guards needed by this item;
+- production/operator DB mutation.
+
+Allowed paths:
+
+- `.aidp/**`
+- `packages/**`
+- `services/relay/**`
+- `services/workers/**`
+- `services/mcp/**`
+- `services/api/**`
+- `docs/product/**`
+- `infra/scripts/**`
+- `infra/docker/**`
+- `.env.example`
+- `.env.dev`
+- `.env.prod`
+- `README.md`
+- `package.json`
+- workspace package manifests
+- `tests/**`
+
+Protected boundaries:
+
+- PostgreSQL remains business truth; Redis/BullMQ/queues/indexes/cache remain transport or derived state.
+- Sequence-managed events must route through `q.sequence` only and fail closed when no active route exists.
+- Processor functions remain executable sequence task-engine steps.
+- MCP truth remains for MCP operators, product docs for developer/operator docs, and AIDP for agent runtime; parity proof prevents contradictory claims.
+- Existing dirty worktree content is treated as prior user/agent work and must not be reverted.
 
 ## Context Manifest
 
 - `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
-- `.aidp/routes.md`: capability and MCP/control-plane proof obligations.
-- `.aidp/blueprint.md`: MCP/control-plane, operator/admin and selection/discovery boundaries.
-- `.aidp/engineering.md`: observable diagnostics and no hidden domain logic.
-- `.aidp/verification.md`: MCP/control-plane proof and static guard expectations.
-- `.aidp/contracts/mcp-control-plane.md`: schema validation, report/context and MCP proof rules.
+- `.aidp/routes.md`: capability/sweep/docs-operator proof obligations.
+- `.aidp/blueprint.md`: PostgreSQL truth, derived-state, async routing, MCP/operator and source/resource boundaries.
+- `.aidp/engineering.md`: fixed dependency specs, compatibility removal, proof-before-claim and module pressure rules.
+- `.aidp/verification.md`: relay/queue, worker, MCP/control-plane, dependency and docs proof expectations.
+- `.aidp/contracts/universal-task-engine.md`: sequence runtime, `q.sequence`, relay handoff and task plugin boundary.
+- `.aidp/contracts/mcp-control-plane.md`: MCP operator guidance and doc parity/read-back proof.
+- `packages/contracts/src/queue.ts`, `services/relay/src/**`, `services/workers/app/**`: runtime trimming targets.
+- `infra/scripts/check-dependency-compliance.mjs`, package manifests and `pnpm-lock.yaml`: dependency policy targets.
+- `services/mcp/src/context.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`, `docs/product/**`, `.aidp/**`: truth parity surfaces.
 
 ## Implementation Expectations
 
-- Keep existing six `operationMode` values unchanged.
-- Add domain-neutral intent taxonomy for change/update/tuning/cleanup scenarios.
-- Make recommendations and report verification echo intent fields and return intent-specific proof requirements.
-- Keep source acquisition proof separate from selection proof and mutation responses separate from verified effect.
+- Add or update characterization tests before deleting fallback behavior.
+- Remove runtime fallback flags rather than preserving no-op compatibility.
+- Keep sequence task graph semantics stable except for removal of hidden handler fallback.
+- Preserve public facade imports where refactor slices are needed.
+- Use exact installed dependency versions; do not opportunistically upgrade packages.
+
+## Proof Gates
+
+Required gates:
+
+- targeted queue/relay runtime tests;
+- targeted Python worker bootstrap/runtime tests;
+- targeted task-engine plugin handler tests;
+- dependency spec validator tests;
+- `pnpm check:operator-truth-parity`;
+- `pnpm check:dependency-compliance`;
+- `pnpm check:domain-neutrality`;
+- `pnpm unit_tests:ts`;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- relay/worker smoke or compose proof as feasible for routing semantics;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Dirty worktree observed before writes and preserved.
+- Runtime legacy trimming:
+  - removed relay sequence-routing disable flag/config and made sequence routing mandatory for sequence-managed outbox events;
+  - removed embed/sequence runtime fallback env flags from documented/dev compose env surfaces;
+  - removed worker bootstrap creation of old per-stage BullMQ consumers while preserving processor functions as sequence task-engine steps;
+  - removed task-engine fallback lookup into old `services.workers.app.main` handlers and now requires the explicit direct processor registry.
+- Truth/dependency proof:
+  - added `pnpm check:operator-truth-parity` and wired it into compliance/release verification;
+  - aligned MCP/product/AIDP invariant wording for PostgreSQL truth, `q.sequence` routing, MCP read/read-back/report verification, selection/discovery/resource truth and domain-neutral configuration;
+  - extracted dependency-spec validation helper and made dependency compliance reject mutable/range/tag/git/url Node specs except `workspace:*`;
+  - converted workspace direct Node dependency specs to exact versions from the current lockfile/installed metadata and refreshed `pnpm-lock.yaml`.
+- Hotspot handling: broad MCP/API/discovery/selection splits were not bundled into this runtime trimming item; the new parity/dependency/characterization checks are in place so later slices can stay tests-first and behavior-preserving.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/queue.test.ts tests/unit/ts/relay-sequence-routing.test.ts tests/unit/ts/dependency-specs.test.ts`;
+  - `PYTHONPATH=. python3 -m unittest tests.unit.python.test_worker_entrypoint_runtime_deps tests.unit.python.test_worker_bootstrap_runtime tests.unit.python.test_task_engine_pipeline_plugins`;
+  - `pnpm check:operator-truth-parity`;
+  - `pnpm check:dependency-compliance`;
+  - `pnpm check:domain-neutrality`;
+  - `pnpm check:compliance`;
+  - `pnpm unit_tests:ts`;
+  - `pnpm unit_tests:py`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm test:relay:compose`;
+  - `pnpm test:relay:phase3:compose`;
+  - `pnpm test:relay:phase45:compose`;
+  - `pnpm verify:local-smoke`;
+  - `git diff --check`.
+
+## Historical Archive: Completed MCP Flow Routing Layer Item
+
+- id: `SIGNALOPS-MCP-FLOW-ROUTING-LAYER-1`
+- lifecycle: `normal`
+- route: `capability` with `docs-operator/bugfix` scope for MCP control-plane routing guidance and proof hardening.
+- route phase: `mcp-flow-routing-layer`
+- route-specific next step: implemented read-only `operator.flow.route` MCP tool, consolidated flow/intent routing into a shared operating-intelligence helper, strengthened MCP entrypoint instructions/prompts/resources, and added targeted control-plane regression tests.
+- route-specific proof: targeted MCP control-plane unit tests, TS unit gate as feasible, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement the MCP Flow Routing Layer plan.
+- planning required: yes, because this changes MCP public read tools, server instructions, resources/prompts and operating-intelligence advisory outputs.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` API/control-plane, MCP/operator and selection/discovery boundaries; `.aidp/engineering.md` trust boundary, observable diagnostics and compatibility rules; `.aidp/verification.md` MCP/control-plane proof policy; `.aidp/contracts/mcp-control-plane.md`.
+- cleanup status: no production/operator DB mutation planned; proof limited to local tests/static checks. If tests create caches/build artifacts, no repo-tracked cleanup expected.
+
+## Scope
+
+Add active MCP flow routing so clients can discover the correct operator flow before recommendations, writes or final claims without needing to know the guide resources upfront.
+
+In scope:
+
+- `operator.flow.route` read-only MCP tool and schema;
+- shared operating-intelligence routing helper reused by `operator.tuning.recommend`;
+- MCP server instructions and relevant prompts/resources;
+- targeted TS control-plane tests and domain-neutrality proof.
+
+Out of scope:
+
+- selection/runtime algorithm changes;
+- domain-specific runtime defaults, prompts or required tests;
+- automatic source/channel/config writes;
+- requiring `operationMode` or intent fields on write tools;
+- destructive cleanup or operator DB mutation.
+
+Allowed paths:
+
+- `.aidp/**`
+- `services/mcp/**`
+- `tests/unit/ts/**`
+
+Protected boundaries:
+
+- `operator.flow.route` is advisory/read-only and must not mutate state.
+- Existing write tools remain backward-compatible and do not require `operationMode`.
+- Expert override can skip parts of diagnosis only as advisory flow; it cannot skip read-back or final report verification.
+- Domain-specific scenario/config remains only MCP/admin/scenario-pack config, never runtime defaults.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: capability proof obligations.
+- `.aidp/blueprint.md`: API/control-plane, MCP/operator and selection/discovery boundaries.
+- `.aidp/engineering.md`: trust boundary, observable diagnostics, compatibility and no hidden domain logic.
+- `.aidp/verification.md`: MCP/control-plane proof expectations.
+- `.aidp/contracts/mcp-control-plane.md`: MCP read-back/proof semantics.
+- `services/mcp/src/context.ts`: server instructions and tool metadata.
+- `services/mcp/src/operating-intelligence.ts`: flow/intent/recommendation logic.
+- `services/mcp/src/tools.ts`: MCP tool schemas/registration.
+- `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`: operator guidance entrypoints.
+- `tests/unit/ts/mcp-control-plane.test.ts`: MCP control-plane regression tests.
+
+## Implementation Expectations
+
+- Add `operator.flow.route` as the lightweight routing entrypoint before deeper recommendations.
+- Reuse existing flow mode, intent, signal visibility, hard-gate and strict-level logic instead of duplicating divergent copy.
+- Make server instructions and session prompts tell autonomous/default clients to call `operator.flow.route` or use an equivalent route block before mutations/final claims.
+- Keep `operator.tuning.recommend` as the deeper recommendation tool and include/align with the same route block.
+- Keep all guidance domain-neutral.
 
 ## Proof Gates
 
@@ -80,21 +2204,260 @@ Required gates:
 
 ## Current Proof Status
 
-- Implemented and locally proofed on 2026-06-07.
-- MCP resources/prompts/server instructions:
-  - added `signalops://guide/playbooks/change-intents`;
-  - extended `signalops://guide/playbooks/operator-flow-modes` with intent taxonomy and intent-aware recommendation/report contracts;
-  - clarified `strict-next-steps` that diagnostic flow can carry advisory intent/tuningLayer while remaining diagnostic;
-  - updated initialize instructions and session prompts to require/report `flowMode` plus relevant `changeIntent`, `cleanupIntent`, `tuningLayer` and `updateRisk` before mutation recommendations.
-- MCP recommendations/reports:
-  - `operator.tuning.recommend` and `operator.report.verify` accept advisory `changeIntent`, `cleanupIntent`, `tuningLayer` and `updateRisk`;
-  - recommendations and supported report verification outputs now expose `intentSequence`, `intentGuardrails`, `intentProofRequired`, `intentBlockedUntil` and `intentWarnings`;
-  - cleanup report verification exposes cleanup intent proof guardrails without changing destructive tool requirements.
+- Implemented and locally proofed on 2026-06-10.
+- MCP flow routing layer:
+  - added read-only `operator.flow.route` with symptom/domain/objective/flow/intent/signal-visibility routing schema;
+  - added shared `buildOperatorFlowRoute` operating-intelligence helper and included its route block in `operator.tuning.recommend`;
+  - added `signalops://guide/playbooks/flow-routing`;
+  - updated MCP server instructions and session prompts so default/autonomous clients call `operator.flow.route` or use an equivalent route block before mutations/final claims;
+  - added TS tests for tool exposure, invalid schema values, zero-selected, zero-LLM, source failure, planned change, cleanup and expert override routes.
+- Proof passed:
+  - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts`;
+  - `pnpm unit_tests:ts`;
+  - `pnpm lint`;
+  - `pnpm typecheck`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Hidden-Signal Docs Consolidation Item
+
+- id: `SIGNALOPS-HIDDEN-SIGNAL-DOCS-CONSOLIDATION-1`
+- lifecycle: `normal`
+- route: `docs-operator`
+- route phase: `hidden-signal-selection-docs-consolidation`
+- route-specific next step: document the implemented hidden-signal selection, admin/API/MCP guidance and replay-readback repairs in operator and architecture docs, including the three signal visibility types and their approaches in the unique technical decisions document.
+- route-specific proof: owner-file alignment review, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to document the implemented fixes and add the three signal types to the unique-system document.
+- planning required: yes, because this updates durable operator/architecture docs and consolidates implementation truth.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` selection, operator/admin, API/MCP and derived-state boundaries; `.aidp/contracts/zero-shot-interest-filtering.md`; `.aidp/contracts/universal-selection-profiles.md`; `.aidp/contracts/mcp-control-plane.md`; `.aidp/contracts/runtime-migrations-and-derived-state.md`.
+- cleanup status: docs-only work; no runtime state mutation planned.
+- proof passed: `pnpm check:domain-neutrality`; `git diff --check`.
+
+## Historical Archive: Completed Admin/API Hidden-Signal Parity Item
+
+- id: `SIGNALOPS-HIDDEN-SIGNAL-ADMIN-API-PARITY-1`
+- lifecycle: `normal`
+- route: `capability` with `bugfix/docs-operator` scope for admin/API hidden-signal guardrail parity.
+- route phase: `admin-api-hidden-signal-guardrail-parity`
+- route-specific next step: expose hidden-signal safety guidance in admin interest forms and API/read-model outputs where needed, surface reindex replay freshness counters through API read-back, add targeted regression proof without removing legacy fields.
+- route-specific proof: targeted admin/API unit tests, targeted reindex read-model tests, TS/Python unit gates as feasible, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `medium`
+- approval: approved by operator request on 2026-06-10 to implement necessary admin/API follow-through from the hidden-signal repair.
+- planning required: yes, because this changes admin/API/operator-facing public read surfaces and guidance.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` operator/admin, API/control-plane and derived-state boundaries; `.aidp/engineering.md` MCP trust boundary, observable diagnostics, state/data boundary and no hidden domain logic rules; `.aidp/verification.md`; `.aidp/contracts/mcp-control-plane.md`; `.aidp/contracts/runtime-migrations-and-derived-state.md`; `.aidp/contracts/zero-shot-interest-filtering.md`; `.aidp/contracts/universal-selection-profiles.md`.
+- cleanup status: no production/operator DB mutation planned; proof limited to local tests/static checks. If tests create caches/build artifacts, no repo-tracked cleanup expected.
+
+## Scope
+
+Add the necessary admin/API parity for hidden-signal safety without changing selection semantics or adding domain defaults.
+
+In scope:
+
+- admin/web interest form guidance for `must_have_terms`, `short_tokens_required`, `positive_texts`, `candidateSignals` and hidden/mixed signal hard-gate safety;
+- API/read-model advisory warnings for system-interest configurations where the API already returns profile/config read-back;
+- API/reindex job read-back fields for selection replay/enrichment target counters added by the replay freshness repair;
+- targeted tests for the changed admin/API surfaces.
+
+Out of scope:
+
+- removing or renaming legacy fields such as `must_have_terms`, `short_tokens_required`, `positive_texts` or `candidateSignals`;
+- selection/runtime algorithm changes;
+- making `signalVisibility` or operation modes required on write tools;
+- automatic source/channel/config writes;
+- domain-specific outsourcing/RFP/procurement runtime defaults;
+- destructive cleanup.
+
+Allowed paths:
+
+- `.aidp/**`
+- `apps/admin/**`
+- `apps/web/**`
+- `packages/control-plane/**`
+- `packages/contracts/**`
+- `services/api/**`
+- `tests/unit/ts/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- Hidden-signal guardrails are advisory/read-back proof helpers in this item; write schemas remain backward-compatible.
+- Runtime `must_have_terms` remains any-of, and `short_tokens_required` remains extracted-token matching.
+- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+- PostgreSQL remains business truth; reindex/read models expose derived-state freshness but do not become selection truth.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: capability and admin/API proof obligations.
+- `.aidp/blueprint.md`: operator/admin, API/control-plane and derived-state ownership.
+- `.aidp/engineering.md`: observable diagnostics, state/data boundary, trust boundary and no hidden domain logic.
+- `.aidp/verification.md`: medium-risk proof, API/admin test expectations and cleanup policy.
+- `.aidp/contracts/mcp-control-plane.md`: read-back/proof semantics reused by admin/API guidance.
+- `.aidp/contracts/runtime-migrations-and-derived-state.md`: reindex derived-state read-back rules.
+- `.aidp/contracts/zero-shot-interest-filtering.md`: selection truth and final-selection ownership.
+- `.aidp/contracts/universal-selection-profiles.md`: selection profile boundary.
+
+## Implementation Expectations
+
+- Put hidden-signal warnings where operators edit interests, not only in MCP docs.
+- Expose advisory warnings on API read-back where existing system-interest read models already return config.
+- Surface replay target counters from reindex jobs so API/admin clients can verify selection replay was not skipped by enrichment state.
+- Keep all examples domain-neutral.
+
+## Proof Gates
+
+Required gates:
+
+- targeted admin/API unit tests;
+- targeted reindex read-model unit tests;
+- `pnpm unit_tests:ts`;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Admin/API parity:
+  - API system-interest read-back now returns `candidate_signals_quality_warnings`, `hard_gate_safety_warnings`, and candidate signal warning counts.
+  - API reindex job read-back now returns normalized `selection_replay` / `selectionReplay` counters for selection replay targets, replayed rows, enrichment targets, processed enrichment rows and enrichment-state selection skips.
+  - Admin system-interest editor now shows persisted guardrail warnings and clearer guidance for positive prototypes, hard lexical gates, short tokens and literal candidate cue fragments.
+  - Admin per-user interest editor copy now warns that must-have terms are any-of but hard pre-semantic gates, and that short tokens are extracted-token requirements rather than broad keyword OR lists.
+  - Admin reindex UI/live updates now display selection replay and enrichment counters.
+- Proof passed:
+  - `pnpm unit_tests` (TS 445/445, Python 385/385);
+  - `pnpm unit_tests:py` (385/385);
+  - `pnpm unit_tests:ts` (445/445);
+  - `pnpm typecheck` (0 errors; existing Astro hints/warnings only);
+  - `pnpm lint`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+
+## Historical Archive: Completed Hidden-Signal Selection Repair Item
+
+- id: `SIGNALOPS-HIDDEN-SIGNAL-SELECTION-REPAIR-1`
+- lifecycle: `normal`
+- route: `bugfix/capability` with `docs-operator` scope for hidden-signal MCP/control-plane diagnostics, replay freshness and operator guidance hardening.
+- route phase: `hidden-signal-evidence-lanes-hard-gate-safety-replay-freshness`
+- route-specific next step: create implementation reference, add hidden-signal evidence-lane guidance, candidateSignals quality diagnostics, hard-gate safety recommendations, replay freshness repair, selection/LLM/Discovery report diagnostics and regression proof.
+- route-specific proof: targeted MCP control-plane unit tests, targeted Python worker/reindex tests, unit TS/Python gates as feasible, lint, typecheck, domain-neutrality guard and diff check.
+- status: `done`
+- risk: `high`
+- approval: approved by operator request on 2026-06-10 to implement the Hidden-Signal Selection Repair Plan.
+- planning required: yes, because this changes MCP/control-plane public advisory schemas, operator-facing guidance, reports/recommendations, selection diagnostics and replay/backfill behavior.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` MCP/control-plane, operator/admin, selection/discovery and derived-state boundaries; `.aidp/engineering.md` observable diagnostics, MCP trust boundary, state/data boundary and no hidden domain logic rules; `.aidp/verification.md`; `.aidp/contracts/mcp-control-plane.md`; `.aidp/contracts/zero-shot-interest-filtering.md`; `.aidp/contracts/universal-selection-profiles.md`; `.aidp/contracts/runtime-migrations-and-derived-state.md`.
+- cleanup status: no production/operator DB mutation planned; proof limited to local tests/static checks. If tests create caches/build artifacts, no repo-tracked cleanup expected.
+
+## Scope
+
+Implement domain-neutral hidden-signal selection repair so MCP clients can distinguish explicit, hidden and mixed evidence paths, avoid unsafe hard lexical gates, diagnose candidateSignals/replay freshness/LLM absence correctly and verify outcomes through read-back.
+
+In scope:
+
+- reference plan document under `docs/mcp_test/`;
+- MCP resources/prompts/server instructions for hidden-signal evidence lanes, hard-gate safety and candidateSignals literal cue contracts;
+- optional advisory fields on `operator.tuning.recommend` and `operator.report.verify`: `signalVisibility`, `evidenceLaneType`, `hardGatePolicy`;
+- recommendation/report outputs for evidence-lane guidance, mandatory marker proof, candidateSignals quality, replay freshness, score thresholds and proof blocking;
+- `operator.selection.dashboard`, `signal_candidates.residuals.summary/list`, `operator.report.verify`, `operator.tuning.recommend` diagnostics;
+- system-interest write/read-back warnings for label-like candidateSignals and unsafe hidden-signal hard gates;
+- replay freshness repair so selection replay is not narrowed by enrichment rerun eligibility;
+- LLM diagnostics for `no_reviewable_path` and `historical_backfill_skip`;
+- Discovery/source report interpretation hardening where reachable through MCP/control-plane;
+- deterministic unit/regression tests.
+
+Out of scope:
+
+- domain-specific outsourcing/RFP/procurement runtime defaults;
+- LLM bypass of semantic rejection;
+- automatic source/channel/config writes;
+- production/external credentials;
+- full native multi-lane runtime selection algorithm rewrite;
+- destructive cleanup or operator DB config mutation.
+
+Allowed paths:
+
+- `.aidp/**`
+- `docs/mcp_test/**`
+- `services/mcp/**`
+- `packages/contracts/**`
+- `packages/control-plane/**`
+- `services/workers/**`
+- `services/indexer/**`
+- `tests/unit/ts/**`
+- `tests/unit/python/**`
+
+Protected boundaries:
+
+- Evidence lanes are advisory/configuration-level in this stage; no native multi-lane selection algorithm rewrite.
+- Runtime `must_have_terms` remains any-of, but guidance treats it as unsafe hard pre-semantic gate for hidden intent unless mandatory marker proof exists.
+- Existing write tools remain backward-compatible; new advisory fields are optional.
+- Domain-specific tuning remains operator/admin/MCP configuration or scenario-pack evidence only.
+- PostgreSQL remains business truth; HNSW/snapshots/reindex outputs are derived state and must be explained as such.
+
+## Context Manifest
+
+- `.aidp/AGENTS.md`: lifecycle/work route and pre-write active item discipline.
+- `.aidp/routes.md`: capability and MCP/control-plane proof obligations.
+- `.aidp/blueprint.md`: MCP/control-plane, operator/admin, selection/discovery and derived-state boundaries.
+- `.aidp/engineering.md`: observable diagnostics, state/data boundary, MCP trust boundary and no hidden domain logic.
+- `.aidp/verification.md`: high-risk proof, worker/selection/MCP proof expectations and cleanup policy.
+- `.aidp/contracts/mcp-control-plane.md`: schema validation, report/context and MCP proof rules.
+- `.aidp/contracts/zero-shot-interest-filtering.md`: selection truth and final-selection ownership.
+- `.aidp/contracts/universal-selection-profiles.md`: selection profile boundary.
+- `.aidp/contracts/runtime-migrations-and-derived-state.md`: HNSW/reindex derived-state boundary.
+- `docs/mcp_test/audit_trail.md`: current run evidence, not runtime canon.
+
+## Implementation Expectations
+
+- Keep hidden/explicit/mixed signal behavior domain-neutral.
+- Make `must_have_terms` guidance clear: any-of but still hard pre-semantic gate.
+- Make hidden/unknown signal baseline empty hard gates unless mandatory marker proof exists.
+- Diagnose candidateSignals literal cue quality and hit rate before positive-term or LLM tuning.
+- Fix replay freshness so selection replay is not skipped for already-enriched candidates.
+- Report score thresholds, stale profile versions, candidateSignals hit rate and LLM historical skip/no-reviewable-path reasons.
+
+## Proof Gates
+
+Required gates:
+
+- targeted MCP control-plane unit test;
+- targeted Python worker/reindex unit tests;
+- `pnpm unit_tests:ts`;
+- `pnpm unit_tests:py`;
+- `pnpm lint`;
+- `pnpm typecheck`;
+- `pnpm check:domain-neutrality`;
+- `git diff --check`.
+
+## Current Proof Status
+
+- Implemented and locally proofed on 2026-06-10.
+- Added reference plan document `docs/mcp_test/hidden_signal_selection_repair_plan.md`.
+- MCP/control-plane:
+  - added advisory `signalVisibility`, `evidenceLaneType` and `hardGatePolicy` fields to `operator.tuning.recommend` and `operator.report.verify`;
+  - added `signalops://guide/reference/hidden-signal-evidence-lanes`;
+  - updated server instructions, strict-next-steps, change-intents, flow modes, selection calibration and system-interest guidance;
+  - added candidateSignals literal cue warnings, hard-gate safety warnings, score threshold diagnostics, stale profile diagnostics and selection report proof warnings.
+- Replay freshness:
+  - changed historical backfill snapshot selection so selection replay targets are not filtered by enrichment eligibility;
+  - reindex backfill results now expose selection/enrichment target/replayed counters and `skippedSelectionDueToEnrichmentState=0`.
 - Proof passed:
   - `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (51/51);
   - `pnpm unit_tests:ts` (445/445);
+  - `pnpm unit_tests:py` (384/384);
   - `pnpm lint`;
-  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm typecheck` (0 errors; existing Astro hints/warnings only);
   - `pnpm check:domain-neutrality`;
   - `git diff --check`.
 

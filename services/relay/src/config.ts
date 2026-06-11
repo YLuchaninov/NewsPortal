@@ -4,7 +4,6 @@ export interface RelayConfig {
   relayPort: number;
   outboxPollIntervalMs: number;
   outboxBatchSize: number;
-  enableSequenceRouting: boolean;
 }
 
 function readNumber(name: string, fallback: number): number {
@@ -21,26 +20,6 @@ function readNumber(name: string, fallback: number): number {
   }
 
   return parsed;
-}
-
-function readBoolean(name: string, fallback: boolean): boolean {
-  const rawValue = process.env[name];
-
-  if (!rawValue) {
-    return fallback;
-  }
-
-  const normalized = rawValue.trim().toLowerCase();
-
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-
-  throw new Error(`Environment variable ${name} must be a boolean flag.`);
 }
 
 function buildPostgresUrl(): string {
@@ -78,7 +57,6 @@ export function loadRelayConfig(): RelayConfig {
     redisUrl: buildRedisUrl(),
     relayPort: readNumber("RELAY_PORT", 4000),
     outboxPollIntervalMs: readNumber("OUTBOX_POLL_INTERVAL_MS", 1000),
-    outboxBatchSize: readNumber("OUTBOX_BATCH_SIZE", 20),
-    enableSequenceRouting: readBoolean("RELAY_ENABLE_SEQUENCE_ROUTING", true)
+    outboxBatchSize: readNumber("OUTBOX_BATCH_SIZE", 20)
   };
 }

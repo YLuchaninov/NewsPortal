@@ -14,6 +14,8 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 - `final_selection_results` is primary internal final-selection gate.
 - `system_feed_results` remains bounded compatibility projection.
 - Discovery/source scoring must not read downstream selected-content outcomes as upstream source-quality truth.
+- Selection diagnostics and operator guidance distinguish `explicit_marker`, `hidden_intent`, `mixed` and `unknown` signal visibility.
+- Evidence lanes are configuration/control-plane concepts in the current implementation; native runtime multi-lane selection is not assumed.
 
 ## Processing rules
 
@@ -22,6 +24,10 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 - Duplicate copies should not carry the full expensive semantic/verification burden independently.
 - Verification is not equivalent to interest match.
 - Final selection combines technical filters, semantic decisions, verification state, gray-zone/LLM policy and compatibility constraints.
+- `must_have_terms` remains any-of at runtime, but it is a hard pre-semantic gate and must not be recommended as hidden-intent safe without mandatory-marker proof.
+- `short_tokens_required` is an extracted-token requirement, not a phrase gate or broad OR keyword replacement.
+- Hidden/unknown signal tuning baseline is empty hard lexical gates plus representative prototypes, literal candidate cue groups, near-miss negatives, content-kind/source-context evidence and bounded replay.
+- Mixed signal tuning must split evidence paths into lane-like system interests/config entries or otherwise avoid applying a global hard gate to hidden lanes.
 
 ## Responsibility boundaries
 
@@ -42,6 +48,8 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 - Early semantic filtering that drops observations.
 - Per-copy expensive processing in duplicate-heavy corpus.
 - Compatibility layer becoming accidental permanent truth.
+- Treating any-of `must_have_terms` as sufficient safety for hidden-intent signals.
+- Applying an explicit-marker gate globally to a mixed signal.
 - Docs claiming a target stage is shipped before code/runtime exists.
 
 ## Proof expectations

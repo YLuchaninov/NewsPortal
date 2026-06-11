@@ -16,10 +16,6 @@ def env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def legacy_queue_consumers_enabled() -> bool:
-    return env_flag("WORKER_ENABLE_LEGACY_QUEUE_CONSUMERS", default=False)
-
-
 def sequence_runner_enabled() -> bool:
     return env_flag("WORKER_ENABLE_SEQUENCE_RUNNER", default=True)
 

@@ -68,7 +68,6 @@ services:
       RELAY_PORT: ${RELAY_PORT:-4000}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
       OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-20}
-      RELAY_ENABLE_EMBED_FANOUT: ${RELAY_ENABLE_EMBED_FANOUT:-0}
     depends_on:
       postgres:
         condition: service_healthy
