@@ -124,7 +124,7 @@ export const referenceResources: readonly McpResourceDefinition[] = [
         "candidateSignals group.cues must be literal observable text fragments that could appear in title, lead or body text.",
         "Snake_case or id-like values such as rfp_published or vendor_search are usually labels, not observable cues, and should trigger read-back warnings.",
         "A single-cue group is weak evidence diversity; verify with rejected samples and bounded replay.",
-        "candidateSignals can recover candidates toward gray/hold/review paths but cannot directly publish or select content.",
+        "candidateSignals can recover candidates toward gray/hold/review paths, and can select only through an explicit auto-select policy with clean evidence thresholds and veto checks.",
       ],
       defaultNextSteps: [
         "Read operator.selection.dashboard and check stale profile versions before tuning.",

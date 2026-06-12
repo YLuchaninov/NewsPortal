@@ -175,6 +175,7 @@ create table if not exists llm_prompt_templates (
   prompt_template_id uuid primary key default gen_random_uuid(),
   name text not null,
   scope text not null,
+  purpose text not null default 'selection_review',
   language text,
   template_text text not null,
   is_active boolean not null default true,
@@ -183,12 +184,16 @@ create table if not exists llm_prompt_templates (
   updated_at timestamptz not null default now(),
   constraint llm_prompt_templates_scope_check
     check (scope in ('criteria', 'interests', 'global')),
+  constraint llm_prompt_templates_purpose_check
+    check (purpose in ('selection_review', 'structured_extraction', 'classification', 'scoring')),
   constraint llm_prompt_templates_version_check
     check (version > 0)
 );
 
 create index if not exists llm_prompt_templates_scope_active_idx
   on llm_prompt_templates (scope, is_active, updated_at desc);
+create index if not exists llm_prompt_templates_scope_purpose_active_idx
+  on llm_prompt_templates (scope, purpose, is_active, updated_at desc);
 
 create table if not exists llm_review_log (
   review_id uuid primary key default gen_random_uuid(),

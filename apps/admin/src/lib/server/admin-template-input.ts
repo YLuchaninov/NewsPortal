@@ -1,5 +1,6 @@
 export interface CandidateSignalGroup {
   name: string;
+  tier?: "context" | "buyer_intent" | "project_intent";
   cues: string[];
 }
 
@@ -19,6 +20,16 @@ export function slugifyCandidateSignalName(value: string, fallback: string): str
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
   return normalized || fallback;
+}
+
+function normalizeCandidateSignalTier(
+  value: unknown
+): CandidateSignalGroup["tier"] | undefined {
+  const normalized = String(value ?? "").trim();
+  if (["context", "buyer_intent", "project_intent"].includes(normalized)) {
+    return normalized as CandidateSignalGroup["tier"];
+  }
+  return undefined;
 }
 
 export function parseCandidateSignalGroups(value: unknown): CandidateSignalGroup[] {
@@ -61,8 +72,10 @@ export function normalizeCandidateSignalGroup(value: unknown): CandidateSignalGr
     return null;
   }
 
+  const tier = normalizeCandidateSignalTier(record.tier);
   return {
     name: slugifyCandidateSignalName(String(record.name ?? ""), "group"),
+    ...(tier ? { tier } : {}),
     cues,
   };
 }

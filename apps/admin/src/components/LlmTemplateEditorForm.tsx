@@ -5,6 +5,7 @@ export interface LlmTemplateEditorValue {
   promptTemplateId?: string;
   name: string;
   scope: "criteria" | "interests" | "global";
+  purpose: "selection_review" | "structured_extraction" | "classification" | "scoring";
   language: string;
   templateText: string;
   isActive: boolean;
@@ -107,7 +108,7 @@ export function LlmTemplateEditorForm({
           </FormField>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
           <FormField
             label="Scope"
             name="llm-template-scope"
@@ -124,6 +125,26 @@ export function LlmTemplateEditorForm({
               <option value="interests">Interests</option>
               <option value="criteria">System interests</option>
               <option value="global">Global fallback</option>
+            </select>
+          </FormField>
+
+          <FormField
+            label="Purpose"
+            name="llm-template-purpose"
+            required
+            helpText="Only selection_review templates can resolve selected decisions; extraction, classification, and scoring templates stay non-selection."
+            helpWide
+          >
+            <select
+              id="llm-template-purpose"
+              name="purpose"
+              defaultValue={value.purpose}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="selection_review">selection_review</option>
+              <option value="structured_extraction">structured_extraction</option>
+              <option value="classification">classification</option>
+              <option value="scoring">scoring</option>
             </select>
           </FormField>
 

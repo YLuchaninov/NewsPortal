@@ -293,7 +293,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
             "gray_zone_hold",
         )
 
-    def test_promotes_project_intent_gray_zone_consensus_to_selected(self) -> None:
+    def test_project_intent_gray_zone_consensus_without_auto_policy_stays_hold(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=5,
             matched_filter_count=0,
@@ -308,12 +308,12 @@ class FinalSelectionLogicTests(unittest.TestCase):
             candidate_signal_tier_counts={"project_intent": 1},
         )
 
-        self.assertEqual(summary["decision"], "selected")
-        self.assertTrue(summary["isSelected"])
-        self.assertEqual(summary["selectionReason"], "strong_gray_zone_consensus")
+        self.assertEqual(summary["decision"], "gray_zone")
+        self.assertFalse(summary["isSelected"])
+        self.assertEqual(summary["selectionReason"], "candidate_signal_hold")
         self.assertEqual(
             summary["explain_json"]["downstreamLossBucket"],
-            "selected_useful_evidence_present",
+            "project_intent_hold",
         )
 
     def test_candidate_signal_uplift_promotes_near_threshold_request_to_gray_zone(self) -> None:
@@ -636,7 +636,7 @@ class FinalSelectionLogicTests(unittest.TestCase):
             "project_intent",
         )
 
-    def test_strong_item_level_project_candidate_signal_selects_without_semantic_match(self) -> None:
+    def test_strong_item_level_project_candidate_signal_without_auto_policy_stays_hold(self) -> None:
         summary = summarize_final_selection_result(
             total_filter_count=15,
             matched_filter_count=0,
@@ -652,10 +652,49 @@ class FinalSelectionLogicTests(unittest.TestCase):
             candidate_signal_tier_counts={"project_intent": 4},
         )
 
+        self.assertEqual(summary["decision"], "gray_zone")
+        self.assertFalse(summary["isSelected"])
+        self.assertEqual(summary["compatSystemFeedDecision"], "filtered_out")
+        self.assertEqual(summary["selectionReason"], "candidate_signal_hold")
+
+    def test_evidence_led_candidate_signal_auto_selects_without_semantic_match(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=15,
+            matched_filter_count=0,
+            no_match_filter_count=13,
+            gray_zone_filter_count=2,
+            llm_review_pending_filter_count=0,
+            hold_filter_count=2,
+            technical_filtered_out_count=0,
+            verification_state="medium",
+            candidate_signal_uplift_count=2,
+            candidate_signal_eligible_count=4,
+            candidate_signal_auto_select_count=1,
+            candidate_signal_tier="project_intent",
+            candidate_signal_tier_counts={"project_intent": 4},
+        )
+
         self.assertEqual(summary["decision"], "selected")
         self.assertTrue(summary["isSelected"])
         self.assertEqual(summary["compatSystemFeedDecision"], "eligible")
-        self.assertEqual(summary["selectionReason"], "strong_item_level_candidate_signal")
+        self.assertEqual(summary["selectionReason"], "evidence_led_candidate_signal")
+
+    def test_hidden_intent_llm_approve_auto_selects(self) -> None:
+        summary = summarize_final_selection_result(
+            total_filter_count=3,
+            matched_filter_count=0,
+            no_match_filter_count=2,
+            gray_zone_filter_count=1,
+            llm_review_pending_filter_count=0,
+            hold_filter_count=1,
+            technical_filtered_out_count=0,
+            verification_state="medium",
+            llm_approved_auto_select_count=1,
+        )
+
+        self.assertEqual(summary["decision"], "selected")
+        self.assertTrue(summary["isSelected"])
+        self.assertEqual(summary["selectionReason"], "llm_approved_signal")
 
     def test_candidate_signal_consensus_still_respects_document_level_veto(self) -> None:
         summary = summarize_final_selection_result(
@@ -669,6 +708,8 @@ class FinalSelectionLogicTests(unittest.TestCase):
             verification_state="medium",
             candidate_signal_uplift_count=2,
             candidate_signal_eligible_count=4,
+            candidate_signal_auto_select_count=1,
+            llm_approved_auto_select_count=1,
             candidate_signal_tier="project_intent",
             candidate_signal_tier_counts={"project_intent": 4},
             filter_reason_counts={"wrapper_directory_noise": 13},

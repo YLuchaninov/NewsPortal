@@ -253,6 +253,9 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 }
 
 function countRequestedCandidateSignalGroups(value: unknown): number {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => String(entry ?? "").trim()).length;
+  }
   const values = Array.isArray(value)
     ? value
     : String(value ?? "")
@@ -390,6 +393,15 @@ async function buildSystemInterestReadBackVerification(
     selectionProfileStrictness: policy.strictness,
     selectionProfileUnresolvedDecision: policy.unresolvedDecision,
     selectionProfileLlmReviewMode: policy.llmReviewMode,
+    selectionProfileAutoSelectMode: policy.autoSelectMode ?? "disabled",
+    selectionProfileSignalVisibility: policy.signalVisibility ?? "unknown",
+    selectionProfileAutoSelectMinPositiveGroups:
+      policy.autoSelectMinPositiveGroups ?? 3,
+    selectionProfileAutoSelectMinCueHits: policy.autoSelectMinCueHits ?? 4,
+    selectionProfileAutoSelectRequiresNoNoise:
+      policy.autoSelectRequiresNoNoise ?? true,
+    selectionProfileAutoSelectRequiresNoTechnicalVeto:
+      policy.autoSelectRequiresNoTechnicalVeto ?? true,
     candidatePositiveSignalGroupCount: readCandidateSignalGroupCount(
       row.definitionJson,
       "positiveGroups"
@@ -410,6 +422,24 @@ async function buildSystemInterestReadBackVerification(
     );
   }
   if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "selection_profile_auto_select_mode") &&
+    String(requestedPayload.selection_profile_auto_select_mode) !==
+      String(actual.selectionProfileAutoSelectMode ?? "")
+  ) {
+    warnings.push(
+      "Requested selection_profile_auto_select_mode does not match persisted selectionProfileAutoSelectMode."
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "selection_profile_signal_visibility") &&
+    String(requestedPayload.selection_profile_signal_visibility) !==
+      String(actual.selectionProfileSignalVisibility ?? "")
+  ) {
+    warnings.push(
+      "Requested selection_profile_signal_visibility does not match persisted selectionProfileSignalVisibility."
+    );
+  }
+  if (
     Object.prototype.hasOwnProperty.call(requestedPayload, "allowed_content_kinds") &&
     !sameStringSet(normalizeRequestedList(requestedPayload.allowed_content_kinds), allowedContentKinds)
   ) {
@@ -422,6 +452,24 @@ async function buildSystemInterestReadBackVerification(
   ) {
     warnings.push(
       "Requested candidate_positive_signals count does not match persisted candidate positive signal groups."
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "candidate_positive_signal_groups") &&
+    countRequestedCandidateSignalGroups(requestedPayload.candidate_positive_signal_groups) !==
+      actual.candidatePositiveSignalGroupCount
+  ) {
+    warnings.push(
+      "Requested candidate_positive_signal_groups count does not match persisted candidate positive signal groups."
+    );
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(requestedPayload, "candidate_negative_signal_groups") &&
+    countRequestedCandidateSignalGroups(requestedPayload.candidate_negative_signal_groups) !==
+      actual.candidateNegativeSignalGroupCount
+  ) {
+    warnings.push(
+      "Requested candidate_negative_signal_groups count does not match persisted candidate negative signal groups."
     );
   }
   if (
@@ -541,13 +589,14 @@ const UNSUPPORTED_SYSTEM_INTEREST_FIELD_HINTS: Readonly<Record<string, {
   expectedShape: string;
 }>> = {
   candidateSignals: {
-    canonical: "candidate_positive_signals and candidate_negative_signals",
+    canonical:
+      "candidate_positive_signals/candidate_negative_signals or candidate_positive_signal_groups/candidate_negative_signal_groups",
     expectedShape:
-      "Use candidate_positive_signals / candidate_negative_signals as string arrays or newline-separated group lines.",
+      "Use flat candidate_positive_signals / candidate_negative_signals for simple single-cue groups, or structured candidate_positive_signal_groups / candidate_negative_signal_groups with { name, tier, cues } for quality auto-select.",
   },
   selectionProfile: {
     canonical:
-      "selection_profile_strictness, selection_profile_unresolved_decision, selection_profile_llm_review_mode",
+      "selection_profile_strictness, selection_profile_unresolved_decision, selection_profile_llm_review_mode, selection_profile_auto_select_mode, selection_profile_signal_visibility",
     expectedShape:
       "Use flat selection_profile_* fields, not a nested selectionProfile object.",
   },
@@ -695,6 +744,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
             prompt_template_id::text as id,
             name,
             scope,
+            purpose,
             language,
             template_text,
             is_active as "isActive",
@@ -724,6 +774,7 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
         name: row.name,
         normalizedName: normalizeAuditName(row.name),
         scope: row.scope,
+        purpose: row.purpose ?? "selection_review",
         reviewerFamily: inferLlmAuditFamily(row),
         isActive: row.isActive,
         language: row.language,

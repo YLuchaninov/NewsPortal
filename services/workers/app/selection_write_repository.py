@@ -475,6 +475,27 @@ async def upsert_final_selection_result(
           )::int as candidate_signal_strong_match_count,
           count(*) filter (
             where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
+              and coalesce((explain_json -> 'candidateSignals' ->> 'evidenceLedUplift')::boolean, false)
+              and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') in ('buyer_intent', 'project_intent')
+              and coalesce(explain_json -> 'selectionProfile' ->> 'autoSelectMode', '') in ('evidence_led', 'evidence_or_llm')
+              and coalesce((explain_json -> 'candidateSignals' ->> 'positiveSignalCount')::int, 0) >= coalesce(nullif(explain_json -> 'selectionProfile' ->> 'autoSelectMinPositiveGroups', '')::int, 3)
+              and coalesce((explain_json -> 'candidateSignals' ->> 'positiveSignalHitCount')::int, 0) >= coalesce(nullif(explain_json -> 'selectionProfile' ->> 'autoSelectMinCueHits', '')::int, 4)
+              and (
+                coalesce(nullif(explain_json -> 'selectionProfile' ->> 'autoSelectRequiresNoNoise', '')::boolean, true) = false
+                or coalesce((explain_json -> 'candidateSignals' ->> 'noiseSignalCount')::int, 0) = 0
+              )
+              and (
+                coalesce(nullif(explain_json -> 'selectionProfile' ->> 'autoSelectRequiresNoTechnicalVeto', '')::boolean, true) = false
+                or jsonb_array_length(coalesce(explain_json -> 'filterReasons', '[]'::jsonb)) = 0
+              )
+          )::int as candidate_signal_auto_select_count,
+          count(*) filter (
+            where coalesce(explain_json -> 'llmReview' ->> 'decision', '') = 'approve'
+              and coalesce(explain_json -> 'selectionProfile' ->> 'autoSelectMode', '') in ('llm_approved', 'evidence_or_llm')
+              and jsonb_array_length(coalesce(explain_json -> 'filterReasons', '[]'::jsonb)) = 0
+          )::int as llm_approved_auto_select_count,
+          count(*) filter (
+            where coalesce((explain_json -> 'candidateSignals' ->> 'candidateSelectionEligible')::boolean, false)
               and coalesce(explain_json -> 'candidateSignals' ->> 'candidateSignalTier', '') = 'context'
           )::int as candidate_signal_context_count,
           count(*) filter (
@@ -565,6 +586,12 @@ async def upsert_final_selection_result(
         candidate_signal_strong_match_count=int(
             counts.get("candidate_signal_strong_match_count") or 0
         ),
+        candidate_signal_auto_select_count=int(
+            counts.get("candidate_signal_auto_select_count") or 0
+        ),
+        llm_approved_auto_select_count=int(
+            counts.get("llm_approved_auto_select_count") or 0
+        ),
         candidate_signal_tier=candidate_signal_tier,
         candidate_signal_tier_counts=candidate_signal_tier_counts,
         filter_reason_counts=filter_reason_counts,
@@ -578,6 +605,12 @@ async def upsert_final_selection_result(
     )
     explain_json["candidateSignalStrongMatchCount"] = int(
         counts.get("candidate_signal_strong_match_count") or 0
+    )
+    explain_json["candidateSignalAutoSelectCount"] = int(
+        counts.get("candidate_signal_auto_select_count") or 0
+    )
+    explain_json["llmApprovedAutoSelectCount"] = int(
+        counts.get("llm_approved_auto_select_count") or 0
     )
     explain_json["candidateSignalTier"] = candidate_signal_tier
     explain_json["candidateSignalTierCounts"] = candidate_signal_tier_counts
@@ -700,6 +733,12 @@ async def upsert_final_selection_result(
         ),
         "candidateSignalStrongMatchCount": int(
             counts.get("candidate_signal_strong_match_count") or 0
+        ),
+        "candidateSignalAutoSelectCount": int(
+            counts.get("candidate_signal_auto_select_count") or 0
+        ),
+        "llmApprovedAutoSelectCount": int(
+            counts.get("llm_approved_auto_select_count") or 0
         ),
         "canonicalReviewReused": bool(counts.get("canonical_review_reused_count") or 0),
         "canonicalReviewReusedCount": int(

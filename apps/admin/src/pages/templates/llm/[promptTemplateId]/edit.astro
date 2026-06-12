@@ -79,6 +79,7 @@ const isActive = template.is_active === true;
         promptTemplateId,
         name: String(template.name ?? ""),
         scope: String(template.scope ?? "interests") as "criteria" | "interests" | "global",
+        purpose: String(template.purpose ?? "selection_review") as "selection_review" | "structured_extraction" | "classification" | "scoring",
         language: String(template.language ?? ""),
         templateText: String(template.template_text ?? ""),
         isActive,

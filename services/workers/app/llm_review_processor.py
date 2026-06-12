@@ -97,10 +97,12 @@ async def process_llm_review_with_dependencies(
                     select
                       prompt_template_id::text as prompt_template_id,
                       name,
+                      purpose,
                       template_text,
                       version
                     from llm_prompt_templates
                     where prompt_template_id = %s
+                      and purpose = 'selection_review'
                     """,
                     (prompt_template_id,),
                 )

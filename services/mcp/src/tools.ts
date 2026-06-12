@@ -1267,6 +1267,26 @@ export async function executeMcpTool(
   const argumentIssues = validateJsonSchema(args, tool.inputSchema);
   if (argumentIssues.length > 0) {
     const firstIssue = argumentIssues[0];
+    const unsupportedSystemInterestAlias = readUnsupportedSystemInterestAliasIssue(
+      tool.name,
+      firstIssue?.path
+    );
+    if (unsupportedSystemInterestAlias) {
+      throw new JsonRpcError(
+        -32602,
+        `payload.${unsupportedSystemInterestAlias.fieldName} is not a supported system_interests write field. Use ${unsupportedSystemInterestAlias.canonical}.`,
+        {
+          statusCode: 400,
+          data: {
+            tool: tool.name,
+            path: `payload.${unsupportedSystemInterestAlias.fieldName}`,
+            code: "unsupported_field_alias",
+            canonicalField: unsupportedSystemInterestAlias.canonical,
+            expectedShape: unsupportedSystemInterestAlias.expectedShape,
+          },
+        }
+      );
+    }
     throw new JsonRpcError(
       -32602,
       `MCP tool "${tool.name}" arguments failed schema validation: ${firstIssue?.message ?? "invalid arguments."}`,
@@ -1318,4 +1338,38 @@ export async function executeMcpTool(
     }
   }
   return result;
+}
+
+function readUnsupportedSystemInterestAliasIssue(
+  toolName: string,
+  issuePath: string | undefined
+): { fieldName: string; canonical: string; expectedShape: string } | null {
+  if (!["system_interests.create", "system_interests.update"].includes(toolName)) {
+    return null;
+  }
+  const fieldName = String(issuePath ?? "").replace(/^payload\./u, "");
+  const hints: Record<string, { canonical: string; expectedShape: string }> = {
+    candidateSignals: {
+      canonical:
+        "candidate_positive_signals/candidate_negative_signals or candidate_positive_signal_groups/candidate_negative_signal_groups",
+      expectedShape:
+        "Flat candidate_*_signals arrays create simple groups; structured candidate_*_signal_groups accepts { name, tier, cues } for quality auto-select.",
+    },
+    selectionProfile: {
+      canonical:
+        "selection_profile_strictness, selection_profile_unresolved_decision, selection_profile_llm_review_mode, selection_profile_auto_select_mode, selection_profile_signal_visibility",
+      expectedShape: "Use flat selection_profile_* fields, not a nested selectionProfile object.",
+    },
+    allowedContentKinds: {
+      canonical: "allowed_content_kinds",
+      expectedShape: "Use allowed_content_kinds as a string array or comma/newline-separated string.",
+    },
+    llmReviewMode: {
+      canonical: "selection_profile_llm_review_mode",
+      expectedShape:
+        "Use selection_profile_llm_review_mode with disabled, optional_high_value_only, or always.",
+    },
+  };
+  const hint = hints[fieldName];
+  return hint ? { fieldName, ...hint } : null;
 }

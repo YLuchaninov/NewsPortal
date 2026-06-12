@@ -309,6 +309,12 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
       selectionProfileStrictness: "broad",
       selectionProfileUnresolvedDecision: "reject",
       selectionProfileLlmReviewMode: "disabled",
+      selectionProfileSignalVisibility: "explicit_marker",
+      selectionProfileAutoSelectMode: "evidence_or_llm",
+      selectionProfileAutoSelectMinPositiveGroups: 2,
+      selectionProfileAutoSelectMinCueHits: 3,
+      selectionProfileAutoSelectRequiresNoNoise: true,
+      selectionProfileAutoSelectRequiresNoTechnicalVeto: true,
       priority: 0.9,
       isActive: true,
     }
@@ -338,6 +344,12 @@ test("syncInterestTemplateSelectionProfile inserts a compatibility profile for a
     strictness: "broad",
     unresolvedDecision: "reject",
     llmReviewMode: "disabled",
+    signalVisibility: "explicit_marker",
+    autoSelectMode: "evidence_or_llm",
+    autoSelectMinPositiveGroups: 2,
+    autoSelectMinCueHits: 3,
+    autoSelectRequiresNoNoise: true,
+    autoSelectRequiresNoTechnicalVeto: true,
     finalSelectionMode: "compatibility_system_selected",
     priority: 0.9,
     allowedContentKinds: ["editorial", "document"],
@@ -540,6 +552,18 @@ test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
     selection_profile_strictness: "strict",
     selection_profile_unresolved_decision: "reject",
     selection_profile_llm_review_mode: "optional_high_value_only",
+    selection_profile_signal_visibility: "hidden_intent",
+    selection_profile_auto_select_min_positive_groups: "2",
+    selection_profile_auto_select_min_cue_hits: "3",
+    selection_profile_auto_select_requires_no_noise: "true",
+    selection_profile_auto_select_requires_no_technical_veto: "true",
+    candidate_positive_signal_groups: [
+      {
+        name: "budget_signal",
+        tier: "buyer_intent",
+        cues: ["budget approved", "funded initiative"],
+      },
+    ],
     candidate_positive_signals:
       "request_search: looking for | need help | seeking\nexternal_delivery: implementation partner | systems integrator",
     candidate_negative_signals:
@@ -555,6 +579,11 @@ test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
       name: "external_delivery",
       cues: ["implementation partner", "systems integrator"],
     },
+    {
+      name: "budget_signal",
+      tier: "buyer_intent",
+      cues: ["budget approved", "funded initiative"],
+    },
   ]);
   assert.deepEqual(parsed.candidateNegativeSignals, [
     {
@@ -569,6 +598,12 @@ test("parseInterestTemplateInput accepts grouped candidate signal cues", () => {
   assert.equal(parsed.selectionProfileStrictness, "strict");
   assert.equal(parsed.selectionProfileUnresolvedDecision, "reject");
   assert.equal(parsed.selectionProfileLlmReviewMode, "optional_high_value_only");
+  assert.equal(parsed.selectionProfileSignalVisibility, "hidden_intent");
+  assert.equal(parsed.selectionProfileAutoSelectMode, "llm_approved");
+  assert.equal(parsed.selectionProfileAutoSelectMinPositiveGroups, 2);
+  assert.equal(parsed.selectionProfileAutoSelectMinCueHits, 3);
+  assert.equal(parsed.selectionProfileAutoSelectRequiresNoNoise, true);
+  assert.equal(parsed.selectionProfileAutoSelectRequiresNoTechnicalVeto, true);
 });
 
 test("saveInterestTemplate keeps json casts aligned around nullable time windows on create", async () => {

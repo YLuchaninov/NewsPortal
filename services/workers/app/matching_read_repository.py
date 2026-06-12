@@ -107,11 +107,13 @@ async def find_prompt_template(
           prompt_template_id::text as prompt_template_id,
           name,
           scope,
+          purpose,
           template_text,
           version
         from llm_prompt_templates
         where is_active = true
           and scope in (%s, 'global')
+          and purpose = 'selection_review'
         order by case when scope = %s then 0 else 1 end, version desc, updated_at desc
         limit 1
         """,

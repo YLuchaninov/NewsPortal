@@ -10,11 +10,17 @@ import {
 } from "./admin-template-input";
 
 export type LlmTemplateScope = "criteria" | "interests" | "global";
+export type LlmTemplatePurpose =
+  | "selection_review"
+  | "structured_extraction"
+  | "classification"
+  | "scoring";
 
 export interface LlmTemplateInput {
   promptTemplateId?: string;
   name: string;
   scope: LlmTemplateScope;
+  purpose: LlmTemplatePurpose;
   language: string | null;
   templateText: string;
   isActive: boolean;
@@ -39,6 +45,20 @@ export interface InterestTemplateInput {
   selectionProfileStrictness: "strict" | "balanced" | "broad";
   selectionProfileUnresolvedDecision: "hold" | "reject";
   selectionProfileLlmReviewMode: "disabled" | "optional_high_value_only" | "always";
+  selectionProfileAutoSelectMode:
+    | "disabled"
+    | "evidence_led"
+    | "llm_approved"
+    | "evidence_or_llm";
+  selectionProfileSignalVisibility:
+    | "explicit_marker"
+    | "hidden_intent"
+    | "mixed"
+    | "unknown";
+  selectionProfileAutoSelectMinPositiveGroups: number;
+  selectionProfileAutoSelectMinCueHits: number;
+  selectionProfileAutoSelectRequiresNoNoise: boolean;
+  selectionProfileAutoSelectRequiresNoTechnicalVeto: boolean;
   priority: number;
   isActive: boolean;
 }
@@ -94,6 +114,12 @@ interface SelectionProfilePolicyDefinition {
   strictness: "strict" | "balanced" | "broad";
   unresolvedDecision: "hold" | "reject";
   llmReviewMode: "disabled" | "optional_high_value_only" | "always";
+  autoSelectMode: "disabled" | "evidence_led" | "llm_approved" | "evidence_or_llm";
+  signalVisibility: "explicit_marker" | "hidden_intent" | "mixed" | "unknown";
+  autoSelectMinPositiveGroups: number;
+  autoSelectMinCueHits: number;
+  autoSelectRequiresNoNoise: boolean;
+  autoSelectRequiresNoTechnicalVeto: boolean;
 }
 
 export interface InterestTemplateCriterionSyncResult {
@@ -114,6 +140,12 @@ const DEFAULT_SELECTION_PROFILE_POLICY: SelectionProfilePolicyDefinition = {
   strictness: "balanced",
   unresolvedDecision: "hold",
   llmReviewMode: "always",
+  autoSelectMode: "disabled",
+  signalVisibility: "unknown",
+  autoSelectMinPositiveGroups: 3,
+  autoSelectMinCueHits: 4,
+  autoSelectRequiresNoNoise: true,
+  autoSelectRequiresNoTechnicalVeto: true,
 };
 
 function readOptionalString(value: unknown): string | null {
@@ -174,6 +206,18 @@ function readPositiveNumber(value: unknown, fallback: number, fieldName: string)
   return parsed;
 }
 
+function readPositiveInteger(value: unknown, fallback: number, fieldName: string): number {
+  if (value == null || value === "") {
+    return fallback;
+  }
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    throw new Error(`Template field "${fieldName}" must be a positive integer.`);
+  }
+  return parsed;
+}
+
 function readStringEnum<T extends string>(
   value: unknown,
   allowed: readonly T[],
@@ -207,6 +251,18 @@ function readNullablePositiveInteger(
   }
 
   return parsed;
+}
+
+function readAutoSelectModeDefault(
+  signalVisibility: SelectionProfilePolicyDefinition["signalVisibility"]
+): SelectionProfilePolicyDefinition["autoSelectMode"] {
+  if (signalVisibility === "explicit_marker") {
+    return "evidence_or_llm";
+  }
+  if (signalVisibility === "hidden_intent") {
+    return "llm_approved";
+  }
+  return DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMode;
 }
 
 function nullablePositiveIntegersEqual(left: unknown, right: unknown): boolean {
@@ -259,6 +315,12 @@ function readSelectionProfilePolicyDefinition(
   }
 
   const record = policyJson as Record<string, unknown>;
+  const signalVisibility = readStringEnum(
+    record.signalVisibility,
+    ["explicit_marker", "hidden_intent", "mixed", "unknown"] as const,
+    DEFAULT_SELECTION_PROFILE_POLICY.signalVisibility,
+    "selection_profile_signal_visibility"
+  );
   return {
     strictness: readStringEnum(
       record.strictness,
@@ -277,6 +339,33 @@ function readSelectionProfilePolicyDefinition(
       ["disabled", "optional_high_value_only", "always"] as const,
       DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
       "selection_profile_llm_review_mode"
+    ),
+    signalVisibility,
+    autoSelectMode: readStringEnum(
+      record.autoSelectMode,
+      ["disabled", "evidence_led", "llm_approved", "evidence_or_llm"] as const,
+      readAutoSelectModeDefault(signalVisibility),
+      "selection_profile_auto_select_mode"
+    ),
+    autoSelectMinPositiveGroups: readPositiveInteger(
+      record.autoSelectMinPositiveGroups,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinPositiveGroups,
+      "selection_profile_auto_select_min_positive_groups"
+    ),
+    autoSelectMinCueHits: readPositiveInteger(
+      record.autoSelectMinCueHits,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinCueHits,
+      "selection_profile_auto_select_min_cue_hits"
+    ),
+    autoSelectRequiresNoNoise: readBoolean(
+      record.autoSelectRequiresNoNoise,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoNoise,
+      "selection_profile_auto_select_requires_no_noise"
+    ),
+    autoSelectRequiresNoTechnicalVeto: readBoolean(
+      record.autoSelectRequiresNoTechnicalVeto,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoTechnicalVeto,
+      "selection_profile_auto_select_requires_no_technical_veto"
     ),
   };
 }
@@ -381,10 +470,12 @@ function buildSelectionProfileCompatibilityPayload(
   const candidateSignals = {
     positiveGroups: template.candidatePositiveSignals.map((group) => ({
       name: group.name,
+      ...(group.tier ? { tier: group.tier } : {}),
       cues: [...group.cues],
     })),
     negativeGroups: template.candidateNegativeSignals.map((group) => ({
       name: group.name,
+      ...(group.tier ? { tier: group.tier } : {}),
       cues: [...group.cues],
     })),
   };
@@ -423,6 +514,15 @@ function buildSelectionProfileCompatibilityPayload(
       strictness: template.selectionProfileStrictness,
       unresolvedDecision: template.selectionProfileUnresolvedDecision,
       llmReviewMode: template.selectionProfileLlmReviewMode,
+      autoSelectMode: template.selectionProfileAutoSelectMode,
+      signalVisibility: template.selectionProfileSignalVisibility,
+      autoSelectMinPositiveGroups:
+        template.selectionProfileAutoSelectMinPositiveGroups,
+      autoSelectMinCueHits: template.selectionProfileAutoSelectMinCueHits,
+      autoSelectRequiresNoNoise:
+        template.selectionProfileAutoSelectRequiresNoNoise,
+      autoSelectRequiresNoTechnicalVeto:
+        template.selectionProfileAutoSelectRequiresNoTechnicalVeto,
       finalSelectionMode: "compatibility_system_selected",
       priority: Number(template.priority ?? 1),
       allowedContentKinds: [...template.allowedContentKinds],
@@ -508,6 +608,16 @@ async function readInterestTemplateForSync(
     selectionProfileUnresolvedDecision:
       DEFAULT_SELECTION_PROFILE_POLICY.unresolvedDecision,
     selectionProfileLlmReviewMode: DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
+    selectionProfileAutoSelectMode: DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMode,
+    selectionProfileSignalVisibility: DEFAULT_SELECTION_PROFILE_POLICY.signalVisibility,
+    selectionProfileAutoSelectMinPositiveGroups:
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinPositiveGroups,
+    selectionProfileAutoSelectMinCueHits:
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinCueHits,
+    selectionProfileAutoSelectRequiresNoNoise:
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoNoise,
+    selectionProfileAutoSelectRequiresNoTechnicalVeto:
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoTechnicalVeto,
     priority: Number(row.priority ?? 1),
     isActive: row.is_active === true,
   };
@@ -747,6 +857,22 @@ export async function syncInterestTemplateSelectionProfile(
       existingPolicy.unresolvedDecision,
     selectionProfileLlmReviewMode:
       templateOverride?.selectionProfileLlmReviewMode ?? existingPolicy.llmReviewMode,
+    selectionProfileAutoSelectMode:
+      templateOverride?.selectionProfileAutoSelectMode ?? existingPolicy.autoSelectMode,
+    selectionProfileSignalVisibility:
+      templateOverride?.selectionProfileSignalVisibility ?? existingPolicy.signalVisibility,
+    selectionProfileAutoSelectMinPositiveGroups:
+      templateOverride?.selectionProfileAutoSelectMinPositiveGroups ??
+      existingPolicy.autoSelectMinPositiveGroups,
+    selectionProfileAutoSelectMinCueHits:
+      templateOverride?.selectionProfileAutoSelectMinCueHits ??
+      existingPolicy.autoSelectMinCueHits,
+    selectionProfileAutoSelectRequiresNoNoise:
+      templateOverride?.selectionProfileAutoSelectRequiresNoNoise ??
+      existingPolicy.autoSelectRequiresNoNoise,
+    selectionProfileAutoSelectRequiresNoTechnicalVeto:
+      templateOverride?.selectionProfileAutoSelectRequiresNoTechnicalVeto ??
+      existingPolicy.autoSelectRequiresNoTechnicalVeto,
   };
   const criterion = await readCriterionForProfileSync(queryable, interestTemplateId);
   const nextProfile = buildSelectionProfileCompatibilityPayload(nextTemplate, {
@@ -882,6 +1008,12 @@ export function parseLlmTemplateInput(payload: Record<string, unknown>): LlmTemp
     promptTemplateId: readOptionalString(payload.promptTemplateId) ?? undefined,
     name: readRequiredString(payload.name, "name"),
     scope: scope as LlmTemplateScope,
+    purpose: readStringEnum(
+      payload.purpose,
+      ["selection_review", "structured_extraction", "classification", "scoring"] as const,
+      "selection_review",
+      "purpose"
+    ),
     language: readOptionalString(payload.language),
     templateText: readRequiredString(payload.templateText, "templateText"),
     isActive: readBoolean(payload.isActive, true, "isActive"),
@@ -896,6 +1028,12 @@ export function parseInterestTemplateInput(
   if (positiveTexts.length === 0) {
     throw new Error('Template field "positive_texts" must contain at least one line.');
   }
+  const selectionProfileSignalVisibility = readStringEnum(
+    payload.selection_profile_signal_visibility,
+    ["explicit_marker", "hidden_intent", "mixed", "unknown"] as const,
+    DEFAULT_SELECTION_PROFILE_POLICY.signalVisibility,
+    "selection_profile_signal_visibility"
+  );
 
   return {
     interestTemplateId: readOptionalString(payload.interestTemplateId) ?? undefined,
@@ -913,8 +1051,14 @@ export function parseInterestTemplateInput(
       : [...DEFAULT_ALLOWED_CONTENT_KINDS],
     shortTokensRequired: readTextList(payload.short_tokens_required, { splitCommas: true }),
     shortTokensForbidden: readTextList(payload.short_tokens_forbidden, { splitCommas: true }),
-    candidatePositiveSignals: parseCandidateSignalGroups(payload.candidate_positive_signals),
-    candidateNegativeSignals: parseCandidateSignalGroups(payload.candidate_negative_signals),
+    candidatePositiveSignals: [
+      ...parseCandidateSignalGroups(payload.candidate_positive_signals),
+      ...normalizeCandidateSignalGroups(payload.candidate_positive_signal_groups),
+    ],
+    candidateNegativeSignals: [
+      ...parseCandidateSignalGroups(payload.candidate_negative_signals),
+      ...normalizeCandidateSignalGroups(payload.candidate_negative_signal_groups),
+    ],
     selectionProfileStrictness: readStringEnum(
       payload.selection_profile_strictness,
       ["strict", "balanced", "broad"] as const,
@@ -933,6 +1077,33 @@ export function parseInterestTemplateInput(
       DEFAULT_SELECTION_PROFILE_POLICY.llmReviewMode,
       "selection_profile_llm_review_mode"
     ),
+    selectionProfileSignalVisibility,
+    selectionProfileAutoSelectMode: readStringEnum(
+      payload.selection_profile_auto_select_mode,
+      ["disabled", "evidence_led", "llm_approved", "evidence_or_llm"] as const,
+      readAutoSelectModeDefault(selectionProfileSignalVisibility),
+      "selection_profile_auto_select_mode"
+    ),
+    selectionProfileAutoSelectMinPositiveGroups: readPositiveInteger(
+      payload.selection_profile_auto_select_min_positive_groups,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinPositiveGroups,
+      "selection_profile_auto_select_min_positive_groups"
+    ),
+    selectionProfileAutoSelectMinCueHits: readPositiveInteger(
+      payload.selection_profile_auto_select_min_cue_hits,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectMinCueHits,
+      "selection_profile_auto_select_min_cue_hits"
+    ),
+    selectionProfileAutoSelectRequiresNoNoise: readBoolean(
+      payload.selection_profile_auto_select_requires_no_noise,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoNoise,
+      "selection_profile_auto_select_requires_no_noise"
+    ),
+    selectionProfileAutoSelectRequiresNoTechnicalVeto: readBoolean(
+      payload.selection_profile_auto_select_requires_no_technical_veto,
+      DEFAULT_SELECTION_PROFILE_POLICY.autoSelectRequiresNoTechnicalVeto,
+      "selection_profile_auto_select_requires_no_technical_veto"
+    ),
     priority: readPositiveNumber(payload.priority, 1.0, "priority"),
     isActive: readBoolean(payload.isActive, true, "isActive"),
   };
@@ -949,13 +1120,15 @@ export async function saveLlmTemplate(
         set
           name = $2,
           scope = $3,
-          language = $4,
-          template_text = $5,
-          is_active = $6,
+          purpose = $4,
+          language = $5,
+          template_text = $6,
+          is_active = $7,
           version = case
-            when template_text is distinct from $5
+            when template_text is distinct from $6
               or scope is distinct from $3
-              or language is distinct from $4
+              or purpose is distinct from $4
+              or language is distinct from $5
             then version + 1
             else version
           end,
@@ -966,6 +1139,7 @@ export async function saveLlmTemplate(
         input.promptTemplateId,
         input.name,
         input.scope,
+        input.purpose,
         input.language,
         input.templateText,
         input.isActive,
@@ -988,17 +1162,19 @@ export async function saveLlmTemplate(
         prompt_template_id,
         name,
         scope,
+        purpose,
         language,
         template_text,
         is_active,
         version
       )
-      values ($1, $2, $3, $4, $5, $6, 1)
+      values ($1, $2, $3, $4, $5, $6, $7, 1)
     `,
     [
       promptTemplateId,
       input.name,
       input.scope,
+      input.purpose,
       input.language,
       input.templateText,
       input.isActive,

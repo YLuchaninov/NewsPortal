@@ -49,26 +49,31 @@ function readPolicyRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function readCandidateSignalLines(
+function readCandidateSignalGroups(
   definitionJson: unknown,
   key: "positiveGroups" | "negativeGroups"
-): string[] {
+): Array<Record<string, unknown>> {
   const definition = readPolicyRecord(definitionJson);
   const candidateSignals = readPolicyRecord(definition.candidateSignals);
   const groups = Array.isArray(candidateSignals[key]) ? candidateSignals[key] : [];
-  return groups
-    .map((group) => {
-      const record = readPolicyRecord(group);
-      const cues = Array.isArray(record.cues)
-        ? record.cues.map((entry) => String(entry ?? "").trim()).filter(Boolean)
-        : [];
-      if (cues.length === 0) {
-        return "";
-      }
-      const name = String(record.name ?? "").trim();
-      return name ? `${name}: ${cues.join(", ")}` : cues.join(", ");
-    })
-    .filter(Boolean);
+  const normalized: Array<Record<string, unknown>> = [];
+  for (const group of groups) {
+    const record = readPolicyRecord(group);
+    const cues = Array.isArray(record.cues)
+      ? record.cues.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [];
+    if (cues.length === 0) {
+      continue;
+    }
+    const name = String(record.name ?? "").trim();
+    const tier = String(record.tier ?? "").trim();
+    normalized.push({
+      ...(name ? { name } : {}),
+      ...(tier ? { tier } : {}),
+      cues,
+    });
+  }
+  return normalized;
 }
 
 async function hydrateInterestTemplateUpdatePayload(
@@ -149,15 +154,37 @@ async function hydrateInterestTemplateUpdatePayload(
   copyMissing(hydrated, "selection_profile_strictness", policy.strictness);
   copyMissing(hydrated, "selection_profile_unresolved_decision", policy.unresolvedDecision);
   copyMissing(hydrated, "selection_profile_llm_review_mode", policy.llmReviewMode);
+  copyMissing(hydrated, "selection_profile_auto_select_mode", policy.autoSelectMode);
+  copyMissing(hydrated, "selection_profile_signal_visibility", policy.signalVisibility);
   copyMissing(
     hydrated,
-    "candidate_positive_signals",
-    readCandidateSignalLines(row.definition_json, "positiveGroups")
+    "selection_profile_auto_select_min_positive_groups",
+    policy.autoSelectMinPositiveGroups
   );
   copyMissing(
     hydrated,
-    "candidate_negative_signals",
-    readCandidateSignalLines(row.definition_json, "negativeGroups")
+    "selection_profile_auto_select_min_cue_hits",
+    policy.autoSelectMinCueHits
+  );
+  copyMissing(
+    hydrated,
+    "selection_profile_auto_select_requires_no_noise",
+    policy.autoSelectRequiresNoNoise
+  );
+  copyMissing(
+    hydrated,
+    "selection_profile_auto_select_requires_no_technical_veto",
+    policy.autoSelectRequiresNoTechnicalVeto
+  );
+  copyMissing(
+    hydrated,
+    "candidate_positive_signal_groups",
+    readCandidateSignalGroups(row.definition_json, "positiveGroups")
+  );
+  copyMissing(
+    hydrated,
+    "candidate_negative_signal_groups",
+    readCandidateSignalGroups(row.definition_json, "negativeGroups")
   );
   return hydrated;
 }
@@ -174,12 +201,13 @@ async function hydrateLlmTemplateUpdatePayload(
   const result = await queryable.query<{
     name: string;
     scope: string;
+    purpose: string;
     language: string | null;
     template_text: string;
     is_active: boolean;
   }>(
     `
-      select name, scope, language, template_text, is_active
+      select name, scope, purpose, language, template_text, is_active
       from llm_prompt_templates
       where prompt_template_id = $1
       limit 1
@@ -194,6 +222,7 @@ async function hydrateLlmTemplateUpdatePayload(
   const hydrated = { ...payload };
   copyMissing(hydrated, "name", row.name);
   copyMissing(hydrated, "scope", row.scope);
+  copyMissing(hydrated, "purpose", row.purpose);
   copyMissing(hydrated, "language", row.language);
   copyMissing(hydrated, "templateText", row.template_text);
   copyMissing(hydrated, "isActive", row.is_active);

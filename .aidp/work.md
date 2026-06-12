@@ -1,5 +1,126 @@
 # AIDP Work State
 
+## Completed Operator Closure: SIGNALOPS-OUTSOURCING-AUTOSELECT-CONFIG-REPLAY-1
+
+- id: `SIGNALOPS-OUTSOURCING-AUTOSELECT-CONFIG-REPLAY-1`
+- lifecycle: `normal`
+- route: `delivery` for local operator config application, bounded selection replay, and precision/recall report after the domain-neutral auto-select capability landed.
+- route phase: `completed-local-mcp-admin-config-and-bounded-replay`
+- route-specific next step: optional follow-up is to label/explain the remaining project/buyer-intent holds before broadening recall; no blind auto-select expansion is open under this item.
+- route-specific proof: MCP/admin read-back of updated system interests, completed bounded reindex jobs `0bc954f6-2f3e-494d-8f3d-1b84d984814d` and `3085a773-2d52-4cea-b49c-c50d765155ab`, `operator.report.verify reportKind=selection includeSamples=true`, `operator.selection.precision_audit`, `operator.report.verify reportKind=selection_hold_quality includeSamples=true`, and read-only hold lists.
+- status: `completed-with-recall-residual`
+- risk: `medium`
+- approval: explicit operator request to apply current outsourcing tuning, run bounded replay, and inspect precision/recall report; limited to local compose/MCP/admin state with no production/staging writes and no destructive source cleanup.
+- planning required: yes for stateful operator workflow.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL business truth, final-selection truth, API/control-plane/admin writes; `.aidp/contracts/mcp-control-plane.md`, `.aidp/contracts/universal-selection-profiles.md`, `.aidp/contracts/zero-shot-interest-filtering.md`.
+- allowed files: `.aidp/**` only unless a blocking code/schema issue is found and separately approved.
+- allowed runtime surfaces: local Docker Compose PostgreSQL/API/MCP/admin through declared MCP/admin/maintenance surfaces; read-only SQL allowed for diagnosis, but config writes must go through MCP/admin.
+- cleanup status: completed for temporary MCP tokens; compose was already running before this item and was intentionally left running for the operator.
+
+### Scope
+
+Apply the newly implemented auto-select policy to current outsourcing-like local configuration without domain-specific runtime code.
+
+In scope:
+
+- read current local MCP/admin/system-interest state;
+- update scoped system interests through MCP/admin canonical fields;
+- run bounded selection replay over relevant docIds only;
+- verify selected precision/recall samples and explain selected source (`semantic_match`, evidence-led candidate signals, LLM approve);
+- record results in this item.
+
+Out of scope:
+
+- production/staging writes;
+- destructive cleanup/archive of sources unless explicitly approved after report;
+- direct SQL config writes that bypass MCP/admin;
+- new code changes unless replay exposes a real blocking bug.
+
+### Current Proof Status
+
+- Local compose/MCP/admin stack was running and healthy; no production/staging writes were performed.
+- Current local outsourcing interests were found via MCP/admin: `outsourcing_rfp_generic`, `outsourcing_qa_testing`, `outsourcing_web_mobile_dev`, `outsourcing_scale_pressure`, `outsourcing_cost_reduction`, `outsourcing_legacy_frustration`, `outsourcing_smb_digitalization`, and `outsourcing_ai_ml`.
+- First MCP/admin write applied domain-neutral auto-select policy through canonical `system_interests.update` fields:
+  - `outsourcing_rfp_generic`: `signalVisibility=explicit_marker`, `autoSelectMode=evidence_or_llm`, no-noise/no-technical-veto required;
+  - hidden outsourcing interests: `signalVisibility=hidden_intent`, `autoSelectMode=llm_approved`;
+  - all profiles: structured candidate-signal tiers and near-miss negative groups.
+- First bounded replay `0bc954f6-2f3e-494d-8f3d-1b84d984814d` completed for 40 docIds. It improved precision but over-held explicit RFP-like items: selected moved `253 -> 213`, gray `35 -> 68`, rejected `735 -> 742`; bounded sample became `0 selected / 33 gray / 7 rejected`.
+- Read-back/explain showed two config issues, not runtime domain hardcode issues:
+  - `wrapper_directory_noise` cue `overview` was too broad and vetoed an explicit "Request for Proposals: Website Developer" item;
+  - explicit RFP evidence was only two groups, while evidence-led auto-select requires strong item-level evidence (`evidenceLedUplift`), effectively three or more independent groups and four or more cue hits.
+- Second MCP/admin tuning pass removed the broad `overview` noise cue, added explicit-RFP process/scope groups (`procurement_process_marker`, `technology_delivery_scope`), and added scoped negatives for `RFP NOT INCLUDED` and unrelated procurement. No product runtime code was changed.
+- Second bounded replay `3085a773-2d52-4cea-b49c-c50d765155ab` completed for the same 40 docIds:
+  - global local counts after replay: `selected=224`, `gray_zone=55`, `rejected=770`;
+  - bounded sample after replay: `11 selected`, `20 gray_zone`, `9 rejected`;
+  - selected reason breakdown includes `11 evidence_led_candidate_signal` and `213 strong_item_level_candidate_signal`;
+  - Dev.to/tutorial/editorial noise did not enter `selected`;
+  - explicit RFP/technology procurement samples selected via evidence-led candidate signals;
+  - `INFO ONLY, RFP NOT INCLUDED` samples were rejected.
+- Precision audit after replay: inspected selected sample `61` high-quality vs `39` weak selected, with bucket counts `strong_project_signal=60`, `probable_signal=1`, `context_only=39`, `noise=0`. This improves the initial audit (`53` high-quality, `47` weak, `7` noise) but does not make selected perfect.
+- Hold-quality report remains `partial`: `55` holds remain, `49 project_intent` and `6 buyer_intent`, all `verificationState=weak`, with `llmReviewPending=0`. This is the current recall residual and should be handled by representative hold labeling/explain before expanding auto-select.
+- Artifacts:
+  - `/tmp/signalops-outsourcing-probe.json`;
+  - `/tmp/signalops-outsourcing-apply.json`;
+  - `/tmp/signalops-outsourcing-retune.json`;
+  - `/tmp/signalops-outsourcing-read-reports.json`.
+
+## Active Capability/Bugfix: SIGNALOPS-DOMAIN-NEUTRAL-AUTOSELECT-POLICY-1
+
+- id: `SIGNALOPS-DOMAIN-NEUTRAL-AUTOSELECT-POLICY-1`
+- lifecycle: `normal`
+- route: `capability` with an initial `bugfix` slice for over-permissive candidate-signal selected behavior exposed by MCP audit evidence.
+- route phase: `done-domain-neutral-autoselect-with-admin-parity`
+- route-specific next step: no code next step; production/current DB tuning remains a separate MCP/admin operation after operator approval and bounded replay.
+- route-specific proof: targeted and full Python final-selection tests, TS MCP/control-plane/admin-template tests, `pnpm check:domain-neutrality`, `pnpm typecheck`, `pnpm unit_tests:py`, `git diff --check`, and MCP compose proof.
+- status: `done`
+- risk: `medium`
+- approval: explicit operator request to implement the accepted plan; no production writes, no destructive DB cleanup, and no domain-specific runtime hardcode.
+- planning required: yes for capability/policy/interface change.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL business truth, `final_selection_results` primary selection truth, system-selected/personalization separation, API/control-plane/MCP boundary, and no domain-specific runtime hardcode invariants.
+- allowed paths: `.aidp/**`, `services/workers/app/**`, `services/mcp/src/**`, `packages/contracts/**`, `packages/control-plane/**`, `apps/admin/src/**`, `tests/unit/python/**`, `tests/unit/ts/**`, `database/migrations/**`, `database/ddl/**`.
+- cleanup status: no runtime DB/config cleanup performed; outsourcing/current DB tuning remains a separate MCP/admin action after code proof.
+
+### Scope
+
+Implement configurable, domain-neutral automatic selection for matching signals.
+
+In scope:
+
+- selection profile policy for auto-select mode, signal visibility, and evidence thresholds;
+- final-selection behavior that auto-selects only when configured evidence/LLM conditions are met;
+- MCP/admin schema/read-back support for auto-select policy and structured candidate signal groups;
+- tests proving explicit-marker auto-select, hidden-signal LLM-only auto-select, generic-noise rejection, and technical veto behavior.
+
+Out of scope:
+
+- hardcoding outsourcing, RFPMart, Dev.to, Reddit, RFP or other domain/source names in runtime logic;
+- destructive cleanup of channels/interests/templates;
+- production/staging writes;
+- broad unrelated refactors.
+
+### Current Proof Status
+
+- Started after MCP audit of `docs/mcp_test/audit.log` and local PostgreSQL read-only inspection showed current selected rows can be driven by weak candidate-signal consensus.
+- Implemented domain-neutral auto-select policy parsing in worker runtime and control-plane profile sync.
+- Final selection now selects from candidate signals only through explicit evidence-led auto-select counts, or through LLM-approved auto-select counts; document-level technical veto and verification conflict still block selected.
+- MCP/admin write schemas now expose canonical auto-select fields and structured candidate signal groups; invalid camelCase aliases are not advertised and return canonical-field errors.
+- LLM prompt templates now have `purpose`; only `selection_review` templates are eligible for selection-review worker prompts, while structured extraction/classification/scoring templates are separated from selected decisions.
+- MCP guidance/playbooks/reference text now says candidateSignals can auto-select only through explicit policy plus evidence thresholds/veto checks.
+- Follow-up read-only audit found browser-admin duplicate implementation and partial-update hydration still lacked the new auto-select fields, so this item was reopened for parity repair before final closure.
+- Browser-admin parity repair added auto-select policy controls to interest template create/edit, LLM `purpose` controls to prompt template create/edit, and update hydration that preserves structured candidate-signal group tiers, auto-select policy thresholds, and LLM purpose on partial edits.
+- Proof passed:
+  - `pnpm unit_tests:py -- tests/unit/python/test_selection_profiles.py tests/unit/python/test_final_selection.py`;
+  - `pnpm unit_tests:ts -- mcp-control-plane admin-template-sync`;
+  - `pnpm check:domain-neutrality`;
+  - `pnpm typecheck`;
+  - `pnpm unit_tests:py`;
+  - `git diff --check`;
+  - `pnpm test:mcp:compose` with artifacts `/tmp/signalops-mcp-http-deterministic-9ff4b60c-933e-4ef3-97ac-aae8d321aafb.json` and `.md`.
+
 ## Completed Delivery With Staging Residual: SIGNALOPS-LIVE-PROOF-CONSOLIDATION-1
 
 - id: `SIGNALOPS-LIVE-PROOF-CONSOLIDATION-1`

@@ -412,6 +412,8 @@ def build_downstream_selection_diagnostics(
     candidate_signal_uplift_count: int = 0,
     candidate_signal_eligible_count: int = 0,
     candidate_signal_strong_match_count: int = 0,
+    candidate_signal_auto_select_count: int = 0,
+    llm_approved_auto_select_count: int = 0,
     candidate_signal_tier: str | None = None,
     candidate_signal_tier_counts: Mapping[str, int] | None = None,
     filter_reason_counts: Mapping[str, int] | None = None,
@@ -426,6 +428,8 @@ def build_downstream_selection_diagnostics(
     candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
     candidate_signal_eligible = max(int(candidate_signal_eligible_count or 0), 0)
     candidate_signal_strong_match = max(int(candidate_signal_strong_match_count or 0), 0)
+    candidate_signal_auto_select = max(int(candidate_signal_auto_select_count or 0), 0)
+    llm_approved_auto_select = max(int(llm_approved_auto_select_count or 0), 0)
     normalized_candidate_signal_tier = str(candidate_signal_tier or "").strip() or None
     normalized_candidate_signal_tier_counts = {
         str(key).strip(): max(int(value or 0), 0)
@@ -532,6 +536,8 @@ def build_downstream_selection_diagnostics(
             "candidateSignalUplift": candidate_signal_uplift,
             "candidateSignalEligible": candidate_signal_eligible,
             "candidateSignalStrongMatch": candidate_signal_strong_match,
+            "candidateSignalAutoSelect": candidate_signal_auto_select,
+            "llmApprovedAutoSelect": llm_approved_auto_select,
             "candidateSignalTier": normalized_candidate_signal_tier,
             "candidateSignalTierCounts": normalized_candidate_signal_tier_counts,
             "dominantFilterReason": dominant_filter_reason,
@@ -558,6 +564,8 @@ def summarize_final_selection_result(
     candidate_signal_uplift_count: int = 0,
     candidate_signal_eligible_count: int = 0,
     candidate_signal_strong_match_count: int = 0,
+    candidate_signal_auto_select_count: int = 0,
+    llm_approved_auto_select_count: int = 0,
     candidate_signal_tier: str | None = None,
     candidate_signal_tier_counts: Mapping[str, int] | None = None,
     filter_reason_counts: Mapping[str, int] | None = None,
@@ -572,6 +580,9 @@ def summarize_final_selection_result(
     candidate_signal_uplift = max(int(candidate_signal_uplift_count or 0), 0)
     candidate_signal_eligible = max(int(candidate_signal_eligible_count or 0), 0)
     candidate_signal_strong_match = max(int(candidate_signal_strong_match_count or 0), 0)
+    candidate_signal_auto_select = max(int(candidate_signal_auto_select_count or 0), 0)
+    llm_approved_auto_select = max(int(llm_approved_auto_select_count or 0), 0)
+    normalized_candidate_signal_tier = str(candidate_signal_tier or "").strip()
     normalized_verification_state = str(verification_state or "").strip() or None
     normalized_filter_reason_counts = {
         str(key).strip(): max(int(value or 0), 0)
@@ -584,37 +595,17 @@ def summarize_final_selection_result(
     )
     item_level_candidate_signal = (
         (candidate_signal_uplift > 0 or candidate_signal_eligible > 0)
-        and str(candidate_signal_tier or "").strip()
-        in {"buyer_intent", "project_intent"}
+        and normalized_candidate_signal_tier in {"buyer_intent", "project_intent"}
     )
     clean_item_level_match = (
         candidate_signal_strong_match > 0
-        and str(candidate_signal_tier or "").strip()
-        in {"buyer_intent", "project_intent"}
+        and normalized_candidate_signal_tier in {"buyer_intent", "project_intent"}
     )
-
-    strong_gray_zone_consensus = (
-        gray_zone >= 4
-        and matched == 0
-        and no_match <= 1
-        and llm_review_pending == 0
-        and technical_filtered_out == 0
-        and not document_level_technical_veto
-        and item_level_candidate_signal
+    evidence_led_auto_select = (
+        candidate_signal_auto_select > 0
+        and normalized_candidate_signal_tier in {"buyer_intent", "project_intent"}
     )
-    strong_item_level_candidate_consensus = (
-        matched == 0
-        and gray_zone > 0
-        and llm_review_pending == 0
-        and technical_filtered_out == 0
-        and normalized_verification_state != "conflicting"
-        and not document_level_technical_veto
-        and item_level_candidate_signal
-        and (
-            candidate_signal_uplift >= 2
-            or candidate_signal_eligible >= 4
-        )
-    )
+    llm_approved_auto_select_allowed = llm_approved_auto_select > 0
 
     selection_reason = "semantic_match"
     if document_level_technical_veto:
@@ -622,21 +613,24 @@ def summarize_final_selection_result(
         compat_system_feed_decision = "filtered_out"
         is_selected = False
         selection_reason = "document_level_technical_filter"
-    elif strong_item_level_candidate_consensus:
-        decision = "selected"
-        compat_system_feed_decision = "eligible"
-        is_selected = True
-        selection_reason = "strong_item_level_candidate_signal"
-    elif strong_gray_zone_consensus:
-        decision = "selected"
-        compat_system_feed_decision = "eligible"
-        is_selected = True
-        selection_reason = "strong_gray_zone_consensus"
-    elif matched > 0 and normalized_verification_state == "conflicting":
+    elif (
+        (matched > 0 or evidence_led_auto_select or llm_approved_auto_select_allowed)
+        and normalized_verification_state == "conflicting"
+    ):
         decision = "gray_zone"
         compat_system_feed_decision = "filtered_out"
         is_selected = False
         selection_reason = "verification_conflict"
+    elif llm_approved_auto_select_allowed:
+        decision = "selected"
+        compat_system_feed_decision = "eligible"
+        is_selected = True
+        selection_reason = "llm_approved_signal"
+    elif evidence_led_auto_select:
+        decision = "selected"
+        compat_system_feed_decision = "eligible"
+        is_selected = True
+        selection_reason = "evidence_led_candidate_signal"
     elif matched > 0 and clean_item_level_match:
         decision = "selected"
         compat_system_feed_decision = "eligible"
@@ -685,6 +679,8 @@ def summarize_final_selection_result(
         candidate_signal_uplift_count=candidate_signal_uplift,
         candidate_signal_eligible_count=candidate_signal_eligible,
         candidate_signal_strong_match_count=candidate_signal_strong_match,
+        candidate_signal_auto_select_count=candidate_signal_auto_select,
+        llm_approved_auto_select_count=llm_approved_auto_select,
         candidate_signal_tier=candidate_signal_tier,
         candidate_signal_tier_counts=candidate_signal_tier_counts,
         filter_reason_counts=filter_reason_counts,
@@ -715,10 +711,14 @@ def summarize_final_selection_result(
                 "candidateSignalUplift": candidate_signal_uplift,
                 "candidateSignalEligible": candidate_signal_eligible,
                 "candidateSignalStrongMatch": candidate_signal_strong_match,
+                "candidateSignalAutoSelect": candidate_signal_auto_select,
+                "llmApprovedAutoSelect": llm_approved_auto_select,
             },
             "candidateSignalUpliftCount": candidate_signal_uplift,
             "candidateSignalEligibleCount": candidate_signal_eligible,
             "candidateSignalStrongMatchCount": candidate_signal_strong_match,
+            "candidateSignalAutoSelectCount": candidate_signal_auto_select,
+            "llmApprovedAutoSelectCount": llm_approved_auto_select,
             **downstream_diagnostics,
         },
     }

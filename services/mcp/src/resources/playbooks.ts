@@ -116,8 +116,16 @@ export const operatorFlowPlaybookResources: readonly McpResourceDefinition[] = [
       canonicalWriteFields: {
         candidate_positive_signals: "Positive item-level cue groups for candidateSignals recovery.",
         candidate_negative_signals: "Near-miss negative cue groups for candidateSignals recovery.",
+        candidate_positive_signal_groups:
+          "Structured positive cue groups for quality auto-select, with { name, tier, cues }.",
+        candidate_negative_signal_groups:
+          "Structured near-miss/noise cue groups for quality auto-select, with { name, tier, cues }.",
         selection_profile_llm_review_mode:
           "Flat review-mode field; llmReviewMode or selectionProfile.llmReviewMode are not write fields.",
+        selection_profile_auto_select_mode:
+          "Flat auto-select mode: disabled, evidence_led, llm_approved, or evidence_or_llm.",
+        selection_profile_signal_visibility:
+          "Flat signal visibility: explicit_marker, hidden_intent, mixed, or unknown.",
         allowed_content_kinds:
           "Flat content-kind field; allowedContentKinds is not a write field.",
       },

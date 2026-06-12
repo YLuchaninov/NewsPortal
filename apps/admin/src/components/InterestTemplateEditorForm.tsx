@@ -37,6 +37,12 @@ export interface InterestTemplateEditorValue {
   selectionProfileStrictness?: string;
   selectionProfileUnresolvedDecision?: string;
   selectionProfileLlmReviewMode?: string;
+  selectionProfileAutoSelectMode?: string;
+  selectionProfileSignalVisibility?: string;
+  selectionProfileAutoSelectMinPositiveGroups?: string;
+  selectionProfileAutoSelectMinCueHits?: string;
+  selectionProfileAutoSelectRequiresNoNoise?: string;
+  selectionProfileAutoSelectRequiresNoTechnicalVeto?: string;
   candidateSignalSource?: string;
   candidatePositiveSignalGroupCount?: string;
   candidateNegativeSignalGroupCount?: string;
@@ -252,7 +258,7 @@ export function InterestTemplateEditorForm({
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div className={ADMIN_BACKGROUND_TILE_CLASS}>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Strictness</p>
             <p className="mt-2 text-sm font-semibold">
@@ -303,6 +309,15 @@ export function InterestTemplateEditorForm({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {`${displayValue(value.candidatePositiveSignalGroupCount, "0")} positive groups · ${displayValue(value.candidateNegativeSignalGroupCount, "0")} negative groups`}
+            </p>
+          </div>
+          <div className={ADMIN_BACKGROUND_TILE_CLASS}>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Auto-select</p>
+            <p className="mt-2 text-sm font-semibold">
+              {displayValue(value.selectionProfileAutoSelectMode, "disabled")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {`${displayValue(value.selectionProfileSignalVisibility, "unknown")} · ${displayValue(value.selectionProfileAutoSelectMinPositiveGroups, "3")} groups · ${displayValue(value.selectionProfileAutoSelectMinCueHits, "4")} cues`}
             </p>
           </div>
         </div>
@@ -359,6 +374,106 @@ export function InterestTemplateEditorForm({
               <option value="optional_high_value_only">optional_high_value_only</option>
               <option value="always">always</option>
             </select>
+          </FormField>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <FormField
+            label="Signal visibility"
+            name="interest-template-policy-signal-visibility"
+            helpText="Choose whether the configured idea has explicit markers, hidden intent, mixed lanes, or unknown signal visibility."
+            helpWide
+          >
+            <select
+              id="interest-template-policy-signal-visibility"
+              name="selection_profile_signal_visibility"
+              defaultValue={displayValue(value.selectionProfileSignalVisibility, "unknown")}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="explicit_marker">explicit_marker</option>
+              <option value="hidden_intent">hidden_intent</option>
+              <option value="mixed">mixed</option>
+              <option value="unknown">unknown</option>
+            </select>
+          </FormField>
+
+          <FormField
+            label="Auto-select mode"
+            name="interest-template-policy-auto-select"
+            helpText="Controls whether selected can be reached through clean candidate-signal evidence, selection-review approval, both, or neither."
+            helpWide
+          >
+            <select
+              id="interest-template-policy-auto-select"
+              name="selection_profile_auto_select_mode"
+              defaultValue={displayValue(value.selectionProfileAutoSelectMode, "disabled")}
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="disabled">disabled</option>
+              <option value="evidence_led">evidence_led</option>
+              <option value="llm_approved">llm_approved</option>
+              <option value="evidence_or_llm">evidence_or_llm</option>
+            </select>
+          </FormField>
+
+          <FormField
+            label="Auto-select vetoes"
+            name="interest-template-policy-auto-vetoes"
+            helpText="Keep both enabled unless a bounded replay proves the lane is safe without the veto."
+            helpWide
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                name="selection_profile_auto_select_requires_no_noise"
+                defaultValue={displayValue(value.selectionProfileAutoSelectRequiresNoNoise, "true")}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="true">no noise</option>
+                <option value="false">allow noise</option>
+              </select>
+              <select
+                name="selection_profile_auto_select_requires_no_technical_veto"
+                defaultValue={displayValue(value.selectionProfileAutoSelectRequiresNoTechnicalVeto, "true")}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="true">no tech veto</option>
+                <option value="false">allow tech veto</option>
+              </select>
+            </div>
+          </FormField>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:max-w-3xl md:grid-cols-2">
+          <FormField
+            label="Minimum positive groups"
+            name="interest-template-policy-auto-groups"
+            helpText="Independent positive candidate-signal groups required before evidence-led auto-select."
+          >
+            <Input
+              id="interest-template-policy-auto-groups"
+              name="selection_profile_auto_select_min_positive_groups"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={displayValue(value.selectionProfileAutoSelectMinPositiveGroups, "3")}
+              className={inputClassName}
+            />
+          </FormField>
+
+          <FormField
+            label="Minimum cue hits"
+            name="interest-template-policy-auto-cues"
+            helpText="Total literal cue hits required before evidence-led auto-select."
+          >
+            <Input
+              id="interest-template-policy-auto-cues"
+              name="selection_profile_auto_select_min_cue_hits"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={displayValue(value.selectionProfileAutoSelectMinCueHits, "4")}
+              className={inputClassName}
+            />
           </FormField>
         </div>
       </section>

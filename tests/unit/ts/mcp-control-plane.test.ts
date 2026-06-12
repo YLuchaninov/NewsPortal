@@ -1536,14 +1536,32 @@ test("MCP template update hydration preserves omitted optional fields", async ()
               is_active: true,
               definition_json: {
                 candidateSignals: {
-                  positiveGroups: [{ name: "buyer_need", cues: ["RFP", "vendor search"] }],
-                  negativeGroups: [{ name: "vendor_marketing", cues: ["case study"] }],
+                  positiveGroups: [
+                    {
+                      name: "buyer_need",
+                      tier: "project_intent",
+                      cues: ["RFP", "vendor search"],
+                    },
+                  ],
+                  negativeGroups: [
+                    {
+                      name: "vendor_marketing",
+                      tier: "document_noise",
+                      cues: ["case study"],
+                    },
+                  ],
                 },
               },
               policy_json: {
                 strictness: "broad",
                 unresolvedDecision: "reject",
                 llmReviewMode: "optional_high_value_only",
+                signalVisibility: "explicit_marker",
+                autoSelectMode: "evidence_led",
+                autoSelectMinPositiveGroups: 2,
+                autoSelectMinCueHits: 3,
+                autoSelectRequiresNoNoise: false,
+                autoSelectRequiresNoTechnicalVeto: true,
               },
             },
           ],
@@ -1555,6 +1573,7 @@ test("MCP template update hydration preserves omitted optional fields", async ()
             {
               name: "Existing LLM template",
               scope: "criteria",
+              purpose: "structured_extraction",
               language: "en",
               template_text: "Review {title}",
               is_active: false,
@@ -1580,8 +1599,25 @@ test("MCP template update hydration preserves omitted optional fields", async ()
   assert.equal(interestPayload.selection_profile_strictness, "broad");
   assert.equal(interestPayload.selection_profile_unresolved_decision, "reject");
   assert.equal(interestPayload.selection_profile_llm_review_mode, "optional_high_value_only");
-  assert.deepEqual(interestPayload.candidate_positive_signals, [
-    "buyer_need: RFP, vendor search",
+  assert.equal(interestPayload.selection_profile_signal_visibility, "explicit_marker");
+  assert.equal(interestPayload.selection_profile_auto_select_mode, "evidence_led");
+  assert.equal(interestPayload.selection_profile_auto_select_min_positive_groups, 2);
+  assert.equal(interestPayload.selection_profile_auto_select_min_cue_hits, 3);
+  assert.equal(interestPayload.selection_profile_auto_select_requires_no_noise, false);
+  assert.equal(interestPayload.selection_profile_auto_select_requires_no_technical_veto, true);
+  assert.deepEqual(interestPayload.candidate_positive_signal_groups, [
+    {
+      name: "buyer_need",
+      tier: "project_intent",
+      cues: ["RFP", "vendor search"],
+    },
+  ]);
+  assert.deepEqual(interestPayload.candidate_negative_signal_groups, [
+    {
+      name: "vendor_marketing",
+      tier: "document_noise",
+      cues: ["case study"],
+    },
   ]);
 
   const llmPayload = await hydrateTemplateUpdatePayloadForSave(queryable as any, {
@@ -1593,6 +1629,7 @@ test("MCP template update hydration preserves omitted optional fields", async ()
   assert.equal(llmPayload.templateText, "Updated {title}");
   assert.equal(llmPayload.name, "Existing LLM template");
   assert.equal(llmPayload.scope, "criteria");
+  assert.equal(llmPayload.purpose, "structured_extraction");
   assert.equal(llmPayload.language, "en");
   assert.equal(llmPayload.isActive, false);
   assert.equal(calls.length, 2);

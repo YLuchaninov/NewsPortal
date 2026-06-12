@@ -311,7 +311,7 @@ export const scenarioResources: readonly McpResourceDefinition[] = [
         "For rare-signal baselines, treat empty must_have_terms and empty/null time_window_hours as the default starting point; recency goals belong in report/product-test acceptance unless the marker is truly part of the signal.",
         "Use negative cues and LLM guardrails to reject wrapper, seller-authored, navigation, directory, generic-advice, training, and jobs-only noise instead of adding broad positive hard gates.",
         "Selected content is the only web truth. If selected rows include context-only/noise, use operator.selection.precision_audit and selection tuning/replay to demote them; do not introduce a second public/private selected layer.",
-        "When project-detail listings, support threads, or forum asks are short, tune candidateSignals so several independent item-level cues can recover the item into gray/LLM/hold even if semantic prototype similarity is below the usual near-threshold. This recovery must never select or publish content by itself.",
+        "When project-detail listings, support threads, or forum asks are short, tune candidateSignals so several independent item-level cues can recover the item into gray/LLM/hold even if semantic prototype similarity is below the usual near-threshold. Auto-selection from candidateSignals requires an explicit selection_profile_auto_select_mode plus clean evidence thresholds and veto checks.",
         "For marketplace/forum project pages, prefer positive cue groups like buyer_ask, project_object, deliverable_scope, budget_or_timeline, vendor_search, and integration_or_migration. Pair them with precise negatives such as seller-authored profile, category/navigation wrapper, generic advice without buyer project, and internal job opening without contractor/vendor ask.",
         "For executable search/aggregator lanes, treat search-ad click URLs, category/tag/search wrappers, ranking/list posts, seller-authored landing pages, generic how-to/why/guide signal_candidates, and jobs-only pages as acquisition noise unless the item itself contains buyer/project/vendor-search evidence.",
         "For weak-signal domains, prefer many technically working noisy sources plus strict downstream filtering. Repair transport/provider-shape bottlenecks separately from semantic quality, and do not loosen selected-content rules to compensate for low-yield sources.",
@@ -485,7 +485,7 @@ export const scenarioResources: readonly McpResourceDefinition[] = [
       ],
       invariants: [
         "llmReviewMode=always is not a bypass for semantic_rejected/no_system_match.",
-        "candidateSignals can recover items into gray/hold/review paths but must not select or publish content by themselves.",
+        "candidateSignals can recover items into gray/hold/review paths; they select only when an explicit auto-select policy permits it and clean evidence thresholds/veto checks pass.",
         "Domain examples are calibration evidence only; product behavior must be changed through admin/MCP configuration and read-back.",
         "Live Discovery without runtime credentials is preflight/not_applicable, not a budget-tuning task.",
       ],
