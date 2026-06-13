@@ -483,6 +483,7 @@ test("mutating admin BFF POST routes declare signed action-token scopes", () => 
     ["content-analysis-policies.ts", "content-analysis-policies"],
     ["content-filter-policies.ts", "content-filter-policies"],
     ["discovery.ts", "discovery"],
+    ["funnels.ts", "funnels"],
     ["ingress-adapters.ts", "ingress-adapters"],
     ["mcp-tokens.ts", "mcp-tokens"],
     ["moderation.ts", "moderation"],

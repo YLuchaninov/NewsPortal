@@ -1,0 +1,150 @@
+---
+import { readOperatorFunnel, verifyOperatorFunnel } from "@signalops/control-plane";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { getPool } from "../../lib/server/db";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
+
+export const prerender = false;
+
+type R = Record<string, unknown>;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const funnelId = String(Astro.params.funnelId ?? "");
+const pool = getPool();
+const funnel = await readOperatorFunnel(pool, funnelId);
+if (!funnel) {
+  return Astro.redirect(appPath("/funnels"));
+}
+const verification = await verifyOperatorFunnel(pool, { funnelId, includeSamples: false });
+const counts = (verification.counts ?? {}) as R;
+const lanes = Array.isArray(funnel.lanes) ? (funnel.lanes as R[]) : [];
+const interests = Array.isArray(funnel.systemInterests) ? (funnel.systemInterests as R[]) : [];
+const sources = Array.isArray(funnel.sources) ? (funnel.sources as R[]) : [];
+const templates = Array.isArray(funnel.templates) ? (funnel.templates as R[]) : [];
+const tabs = [
+  ["plan", "Plan"],
+  ["lanes", "Lanes"],
+  ["sources", "Sources"],
+  ["rules", "Rules"],
+  ["replay", "Replay"],
+  ["reports", "Reports"],
+  ["overlap", "Overlap"],
+] as const;
+---
+
+<AdminShell title={`${String(funnel.name)} — Funnel`} session={session} flash={flash} activeNav="funnels">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/funnels")} class="hover:text-foreground">Funnels</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">{String(funnel.name)}</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a href={appPath("/templates/interests")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent">
+      Manual rules
+    </a>
+    <a href={appPath("/channels")} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent">
+      Sources
+    </a>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class={`flex flex-col gap-4 ${ADMIN_HERO_CARD_CLASS} lg:flex-row lg:items-end lg:justify-between`}>
+      <div class="max-w-3xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Funnel</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">{String(funnel.name)}</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">{String(funnel.goal || "No goal recorded.")}</p>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selected</p>
+          <p class="mt-1 text-2xl font-semibold">{Number(counts.selectedCount ?? 0)}</p>
+        </div>
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Gray</p>
+          <p class="mt-1 text-2xl font-semibold">{Number(counts.grayCount ?? 0)}</p>
+        </div>
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+          <p class="mt-1 text-lg font-semibold">{String(funnel.status)}</p>
+        </div>
+      </div>
+    </section>
+
+    <nav class="flex flex-wrap gap-2">
+      {tabs.map(([key, label]) => (
+        <a href={appPath(`/funnels/${funnelId}/${key}`)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent">
+          {label}
+        </a>
+      ))}
+    </nav>
+
+    <div class="grid gap-4 lg:grid-cols-3">
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Lanes</h2>
+        <div class="mt-4 space-y-3">
+          {lanes.length === 0 ? (
+            <p class="text-sm text-muted-foreground">No lanes bound yet.</p>
+          ) : lanes.map((lane) => (
+            <div class={ADMIN_BACKGROUND_TILE_CLASS}>
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-sm font-semibold">{String(lane.name)}</p>
+                <span class="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{String(lane.routingMode)}</span>
+              </div>
+              <p class="mt-1 text-xs text-muted-foreground">{String(lane.laneType)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Rules</h2>
+        <p class="mt-2 text-sm text-muted-foreground">{interests.length} interests · {templates.length} templates</p>
+        <div class="mt-4 space-y-2">
+          {interests.slice(0, 6).map((interest) => (
+            <a href={appPath(`/templates/interests/${String(interest.interestTemplateId)}/edit`)} class="block rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
+              {String(interest.name)}
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Sources</h2>
+        <p class="mt-2 text-sm text-muted-foreground">{sources.length} source bindings</p>
+        <div class="mt-4 space-y-2">
+          {sources.slice(0, 6).map((source) => (
+            <a href={appPath(`/channels/${String(source.channelId)}/edit`)} class="block rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
+              <span class="font-medium">{String(source.name)}</span>
+              <span class="ml-2 text-xs text-muted-foreground">{String(source.sourceRole)}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    </div>
+  </div>
+</AdminShell>

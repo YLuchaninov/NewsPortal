@@ -15,7 +15,8 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 - `system_feed_results` remains bounded compatibility projection.
 - Discovery/source scoring must not read downstream selected-content outcomes as upstream source-quality truth.
 - Selection diagnostics and operator guidance distinguish `explicit_marker`, `hidden_intent`, `mixed` and `unknown` signal visibility.
-- Evidence lanes are configuration/control-plane concepts in the current implementation; native runtime multi-lane selection is not assumed.
+- Evidence lanes are configuration/control-plane concepts backed by Funnel Autopilot 2.0 tables and bindings. Native runtime multi-lane selection is not assumed; selection ownership still resolves through the existing profile/filter/final-selection pipeline.
+- `final_selection_results.explain_json.funnelRuntimeAttribution` is the worker-owned explain projection for Funnel Autopilot runtime participation when active bindings are observable. It may list funnel/lane ids, system-interest bindings, source roles, `selection_review` template bindings and bounded replay bindings.
 
 ## Processing rules
 
@@ -24,6 +25,7 @@ SignalOps принимает noisy intake, сохраняет observations, cano
 - Duplicate copies should not carry the full expensive semantic/verification burden independently.
 - Verification is not equivalent to interest match.
 - Final selection combines technical filters, semantic decisions, verification state, gray-zone/LLM policy and compatibility constraints.
+- Funnel attribution may explain which funnel, lane, source role, template and plan contributed to a decision, but it must not replace the additive truth in `interest_filter_results` and `final_selection_results`, and it must not be treated as semantic proof by itself.
 - `must_have_terms` remains any-of at runtime, but it is a hard pre-semantic gate and must not be recommended as hidden-intent safe without mandatory-marker proof.
 - `short_tokens_required` is an extracted-token requirement, not a phrase gate or broad OR keyword replacement.
 - Hidden/unknown signal tuning baseline is empty hard lexical gates plus representative prototypes, literal candidate cue groups, near-miss negatives, content-kind/source-context evidence and bounded replay.

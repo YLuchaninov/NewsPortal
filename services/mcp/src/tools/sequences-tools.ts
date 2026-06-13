@@ -1,7 +1,7 @@
 import {
   MCP_SEQUENCE_ARGUMENT_SCHEMAS,
 } from "@signalops/contracts";
-import { queueReindexJobWithSupersession } from "@signalops/control-plane";
+import { bindReindexJobToFunnel, queueReindexJobWithSupersession } from "@signalops/control-plane";
 
 import {
   createReadTool,
@@ -11,6 +11,10 @@ import {
   readPayload,
   normalizePayloadStringListFields,
   withActorDefault,
+  readMcpFunnelWriteContext,
+  mcpFunnelWriteContextPayload,
+  shouldAuditMcpFunnelWriteContext,
+  withMcpFunnelWriteContext,
   JsonRpcError,
   writeMcpMutationAudit,
   requireDestructiveConfirmation,
@@ -201,6 +205,23 @@ function normalizeReindexOptions(
   };
 }
 
+function hasBoundedDocIds(optionsJson: Record<string, unknown>): boolean {
+  return Array.isArray(optionsJson.docIds) && optionsJson.docIds.length > 0;
+}
+
+function withReindexFunnelContext(
+  optionsJson: Record<string, unknown>,
+  funnelContext: Awaited<ReturnType<typeof readMcpFunnelWriteContext>>
+): Record<string, unknown> {
+  if (!shouldAuditMcpFunnelWriteContext(funnelContext)) {
+    return optionsJson;
+  }
+  return {
+    ...optionsJson,
+    funnelContext: mcpFunnelWriteContextPayload(funnelContext),
+  };
+}
+
 function normalizeSequencePayload(payload: Record<string, unknown>): Record<string, unknown> {
   return normalizePayloadStringListFields(payload, {
     tags: undefined,
@@ -346,6 +367,20 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     {
       type: "object",
       properties: {
+        funnelId: { type: "string" },
+        laneId: { type: "string" },
+        changeMode: {
+          type: "string",
+          enum: ["autopilot_setup", "manual_tuning", "expert_override"],
+        },
+        configurationScope: { type: "string", enum: ["funnel", "shared", "global"] },
+        funnelPlanId: { type: "string" },
+        planFingerprint: { type: "string" },
+        operator_override_reason: { type: "string" },
+        verificationTarget: {
+          type: "string",
+          enum: ["selection", "source_health", "llm_review", "replay"],
+        },
         payload: {
           type: "object",
           properties: {
@@ -377,13 +412,37 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
       additionalProperties: false,
     },
     async ({ pool, token }, args) => {
+      const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+        toolName: "maintenance.reindex.request",
+        riskKind: "replay",
+        selectionImpacting: true,
+      });
       const payload = args.payload == null ? {} : readPayload(args);
       const indexName = readReindexIndexName(payload.indexName);
       const jobKind = readReindexJobKind(payload.jobKind);
-      const optionsJson = normalizeReindexOptions(
+      const normalizedOptionsJson = normalizeReindexOptions(
         jobKind,
         readOptionalRecord(payload.options, "payload.options")
       );
+      if (
+        funnelContext.funnelId &&
+        jobKind === "backfill" &&
+        !hasBoundedDocIds(normalizedOptionsJson) &&
+        funnelContext.changeMode !== "expert_override"
+      ) {
+        throw new JsonRpcError(
+          -32602,
+          "Funnel-scoped selection replay requires bounded payload.options.docIds unless changeMode=expert_override.",
+          {
+            statusCode: 400,
+            data: {
+              path: "payload.options.docIds",
+              canonicalFields: ["payload.options.docIds", "changeMode", "operator_override_reason"],
+            },
+          }
+        );
+      }
+      const optionsJson = withReindexFunnelContext(normalizedOptionsJson, funnelContext);
       const client = await pool.connect();
       let queuedJob: Awaited<ReturnType<typeof queueReindexJobWithSupersession>>;
       try {
@@ -417,7 +476,31 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
           },
         },
       });
-      return {
+      const funnelReplayBinding = funnelContext.funnelId
+        ? await bindReindexJobToFunnel(pool, token.issuedByUserId, {
+            funnelId: funnelContext.funnelId,
+            laneId: funnelContext.laneId,
+            reindexJobId: queuedJob.reindexJobId,
+            planId: funnelContext.funnelPlanId,
+            bindingRole: funnelContext.changeMode ?? "manual_tuning",
+            verificationTarget: funnelContext.verificationTarget ?? "replay",
+            metadataJson: {
+              indexName,
+              jobKind,
+              planFingerprint: funnelContext.planFingerprint,
+              boundedDocIds: hasBoundedDocIds(normalizedOptionsJson),
+            },
+          })
+        : null;
+      if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+        await writeMcpMutationAudit(pool, token, {
+          actionType: "mcp_funnel_write_context_recorded",
+          entityType: "reindex_job",
+          entityId: queuedJob.reindexJobId,
+          payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+        });
+      }
+      const response = {
         reindexJobId: queuedJob.reindexJobId,
         eventId: queuedJob.eventId,
         indexName,
@@ -442,6 +525,10 @@ export const SEQUENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
                 "Centroid/vector index rebuild queued; this is not a historical selection replay.",
               ],
       };
+      return withMcpFunnelWriteContext(
+        { ...response, ...(funnelReplayBinding ? { funnelReplayBinding } : {}) },
+        funnelContext
+      );
     }
   ),
   createWriteTool(

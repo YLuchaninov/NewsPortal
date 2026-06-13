@@ -1,0 +1,114 @@
+---
+import { buildOperatorFunnelAutoplan } from "@signalops/control-plane";
+import AdminShell from "../../layouts/AdminShell.astro";
+import { buildAdminActionToken } from "../../lib/server/admin-action";
+import { resolveAdminSession } from "../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../lib/server/browser-flow";
+import { getPool } from "../../lib/server/db";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../lib/admin-ui-classes";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const idea = String(Astro.url.searchParams.get("idea") ?? "").trim();
+const pool = getPool();
+const preview = idea
+  ? await buildOperatorFunnelAutoplan(pool, {
+      idea,
+      operatorExperience: "novice",
+    })
+  : null;
+const funnelActionPath = appPath("/bff/admin/funnels");
+const funnelActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: funnelActionPath,
+  scope: "funnels",
+});
+---
+
+<AdminShell title="New Funnel — Admin" session={session} flash={flash} activeNav="funnels">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/funnels")} class="hover:text-foreground">Funnels</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">New</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class={ADMIN_HERO_CARD_CLASS}>
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Create from idea</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">New funnel</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        Start with a plain-language goal. The autopilot preview classifies lanes and proposes safe defaults before any rules, sources or replay jobs are created.
+      </p>
+    </section>
+
+    <section class={ADMIN_SECTION_CARD_CLASS}>
+      <form method="get" action={appPath("/funnels/new")} class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <label class="block">
+          <span class="text-sm font-medium">Idea</span>
+          <textarea name="idea" rows="4" class="mt-2 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{idea}</textarea>
+        </label>
+        <button class="inline-flex h-10 items-center justify-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent" type="submit">
+          Preview
+        </button>
+      </form>
+    </section>
+
+    {preview && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 class="text-base font-semibold">Autopilot preview</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Fingerprint {preview.planFingerprint.slice(0, 12)} · {preview.suggestedAction}</p>
+          </div>
+          <form method="post" action={funnelActionPath}>
+            <input type="hidden" name="adminActionToken" value={funnelActionToken} />
+            <input type="hidden" name="intent" value="create" />
+            <input type="hidden" name="name" value={preview.funnelDraft?.name ?? "New funnel"} />
+            <input type="hidden" name="goal" value={idea} />
+            <input type="hidden" name="idea" value={idea} />
+            <input type="hidden" name="status" value="draft" />
+            <button class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90" type="submit">
+              Create draft funnel
+            </button>
+          </form>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {preview.lanes.map((lane) => (
+            <div class={ADMIN_BACKGROUND_TILE_CLASS}>
+              <div class="flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold">{lane.name}</h3>
+                <span class="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{lane.routingMode}</span>
+              </div>
+              <p class="mt-2 text-sm text-muted-foreground">{lane.laneType}</p>
+              <p class="mt-2 text-xs text-muted-foreground">auto-select: {String(lane.policy.autoSelectMode ?? "disabled")}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+  </div>
+</AdminShell>

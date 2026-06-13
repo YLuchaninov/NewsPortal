@@ -57,6 +57,78 @@ async function queryCount(pool: Pool, sql: string, params: unknown[] = []): Prom
   return Number(row.total ?? row.count ?? 0);
 }
 
+type FunnelReadScope = {
+  funnelId: string | null;
+  laneId: string | null;
+};
+
+function readFunnelReadScope(args: Record<string, unknown> = {}): FunnelReadScope {
+  return {
+    funnelId: readOptionalString(args.funnelId) ?? null,
+    laneId: readOptionalString(args.laneId) ?? null,
+  };
+}
+
+function hasFunnelReadScope(scope: FunnelReadScope): boolean {
+  return Boolean(scope.funnelId || scope.laneId);
+}
+
+function appendSelectionFunnelScopeClause(
+  params: unknown[],
+  scope: FunnelReadScope,
+  fsrAlias = "fsr",
+  parameterOffset = 1
+): string | null {
+  if (!hasFunnelReadScope(scope)) {
+    return null;
+  }
+  const clauses = [
+    `ifr_scope.doc_id = ${fsrAlias}.doc_id`,
+    "ifr_scope.filter_scope = 'system_criterion'",
+  ];
+  if (scope.funnelId) {
+    clauses.push(`fsib_scope.funnel_id = $${parameterOffset + params.push(scope.funnelId) - 1}::uuid`);
+  }
+  if (scope.laneId) {
+    clauses.push(`fsib_scope.lane_id = $${parameterOffset + params.push(scope.laneId) - 1}::uuid`);
+  }
+  return `
+    exists (
+      select 1
+      from interest_filter_results ifr_scope
+      join criteria c_scope on c_scope.criterion_id = ifr_scope.criterion_id
+      join funnel_system_interest_bindings fsib_scope
+        on fsib_scope.interest_template_id = c_scope.source_interest_template_id
+      where ${clauses.join(" and ")}
+    )
+  `;
+}
+
+function appendSourceFunnelScopeClause(
+  params: unknown[],
+  scope: FunnelReadScope,
+  signalCandidateAlias = "a",
+  parameterOffset = 1
+): string | null {
+  if (!hasFunnelReadScope(scope)) {
+    return null;
+  }
+  const clauses = [`fsb_scope.channel_id = ${signalCandidateAlias}.channel_id`];
+  if (scope.funnelId) {
+    clauses.push(`fsb_scope.funnel_id = $${parameterOffset + params.push(scope.funnelId) - 1}::uuid`);
+  }
+  if (scope.laneId) {
+    clauses.push(`fsb_scope.lane_id = $${parameterOffset + params.push(scope.laneId) - 1}::uuid`);
+  }
+  return `
+    exists (
+      select 1
+      from funnel_source_bindings fsb_scope
+      where ${clauses.join(" and ")}
+    )
+  `;
+}
+
 function classifyLlmProviderError(errorText: string): string {
   const normalized = errorText.toLowerCase();
   if (normalized.includes("404") || normalized.includes("not found")) {
@@ -776,8 +848,35 @@ async function readSelectionPipelineDiagnostics(pool: Pool): Promise<Record<stri
   };
 }
 
-export async function buildSelectionDashboard(context: McpToolContext) {
+export async function buildSelectionDashboard(
+  context: McpToolContext,
+  args: Record<string, unknown> = {}
+) {
   const { pool, sdk } = context;
+  const scope = readFunnelReadScope(args);
+  const rawParams: unknown[] = [];
+  const rawScopeClause = appendSourceFunnelScopeClause(rawParams, scope, "a");
+  const rawWhereSql = rawScopeClause ? `where ${rawScopeClause}` : "";
+  const blockedParams: unknown[] = [];
+  const blockedScopeClause = appendSourceFunnelScopeClause(blockedParams, scope, "a");
+  const blockedWhereSql = [
+    "visibility_state = 'blocked'",
+    ...(blockedScopeClause ? [blockedScopeClause] : []),
+  ].join(" and ");
+  const pendingParams: unknown[] = [];
+  const pendingScopeClause = appendSourceFunnelScopeClause(pendingParams, scope, "a");
+  const pendingWhereSql = [
+    "fsr.doc_id is null",
+    ...(pendingScopeClause ? [pendingScopeClause] : []),
+  ].join(" and ");
+  const decisionParams: unknown[] = [];
+  const decisionScopeClause = appendSelectionFunnelScopeClause(
+    decisionParams,
+    scope,
+    "fsr"
+  );
+  const decisionWhereSql = decisionScopeClause ? `where ${decisionScopeClause}` : "";
+  const scoped = hasFunnelReadScope(scope);
   const [
     rawSignalCandidateObservations,
     blockedSignalCandidateObservations,
@@ -786,14 +885,19 @@ export async function buildSelectionDashboard(context: McpToolContext) {
     selectionPipelineDiagnostics,
     contentItemsPage,
   ] = await Promise.all([
-    queryCount(pool, "select count(*)::int as total from signal_candidates"),
+    queryCount(
+      pool,
+      `select count(*)::int as total from signal_candidates a ${rawWhereSql}`,
+      rawParams
+    ),
     queryCount(
       pool,
       `
       select count(*)::int as total
-      from signal_candidates
-      where visibility_state = 'blocked'
-      `
+      from signal_candidates a
+      where ${blockedWhereSql}
+      `,
+      blockedParams
     ),
     queryCount(
       pool,
@@ -801,8 +905,9 @@ export async function buildSelectionDashboard(context: McpToolContext) {
       select count(*)::int as total
       from signal_candidates a
       left join final_selection_results fsr on fsr.doc_id = a.doc_id
-      where fsr.doc_id is null
-      `
+      where ${pendingWhereSql}
+      `,
+      pendingParams
     ),
     pool.query<Record<string, unknown>>(
       `
@@ -817,13 +922,17 @@ export async function buildSelectionDashboard(context: McpToolContext) {
           where coalesce(explain_json ->> 'selectionMode', '') = 'llm_review_pending'
             or coalesce((explain_json -> 'filterCounts' ->> 'llmReviewPending')::int, 0) > 0
         )::int as "llmReviewPendingCount"
-      from final_selection_results
+      from final_selection_results fsr
+      ${decisionWhereSql}
       group by coalesce(final_decision, 'unknown')
       order by decision
-      `
+      `,
+      decisionParams
     ),
     readSelectionPipelineDiagnostics(pool),
-    sdk.listContentItemsPage<Record<string, unknown>>({ page: 1, pageSize: 1 }),
+    scoped
+      ? Promise.resolve({ total: null })
+      : sdk.listContentItemsPage<Record<string, unknown>>({ page: 1, pageSize: 1 }),
   ]);
   const byDecision = decisionRows.rows.map((row) => ({
     decision: String(row.decision ?? "unknown"),
@@ -841,7 +950,9 @@ export async function buildSelectionDashboard(context: McpToolContext) {
   const countForDecision = (decision: string) =>
     byDecision.find((entry) => entry.decision === decision)?.count ?? 0;
   const materializedSelectionRows = byDecision.reduce((sum, entry) => sum + entry.count, 0);
-  const visibleContentItems = Number(contentItemsPage.total ?? 0);
+  const visibleContentItems = scoped
+    ? selectedSignalCandidateSignals
+    : Number(contentItemsPage.total ?? 0);
   const rejectedRows = countForDecision("rejected");
   const grayZoneRows = countForDecision("gray_zone");
   const diagnosticFlags = isRecord(selectionPipelineDiagnostics.diagnosticFlags)
@@ -880,6 +991,14 @@ export async function buildSelectionDashboard(context: McpToolContext) {
       rawSignalCandidateObservations: "signal_candidates",
       signalCandidateSelection: "final_selection_results",
       publicSelectedContent: "content_items",
+    },
+    funnelScope: {
+      funnelId: scope.funnelId,
+      laneId: scope.laneId,
+      rawObservationScope: scoped ? "funnel_source_bindings" : "global",
+      selectionScope: scoped ? "funnel_system_interest_bindings" : "global",
+      pipelineDiagnosticsScope:
+        "global: diagnostic counters remain corpus-wide until scoped pipeline diagnostics are implemented",
     },
     counts: {
       rawSignalCandidateObservations,
@@ -1424,6 +1543,7 @@ function selectionPrecisionSelectSql() {
       coalesce(fsr.explain_json ->> 'selectionReason', '') as "selectionReason",
       coalesce(fsr.explain_json ->> 'downstreamLossBucket', '') as "downstreamLossBucket",
       coalesce(fsr.explain_json ->> 'candidateSignalTier', fsr.explain_json #>> '{semanticSignalSummary,candidateSignalTier}', '') as "candidateSignalTier",
+      fsr.explain_json -> 'funnelRuntimeAttribution' as "funnelRuntimeAttribution",
       fsr.explain_json as "finalSelectionExplain",
       (
         select jsonb_agg(
@@ -1455,11 +1575,16 @@ export async function buildSelectionPrecisionAudit(
   const docIds = readStringArray(args.docIds);
   const pageSize = Math.min(Math.max(readOptionalInteger(args.pageSize) ?? 100, 1), 200);
   const includeSamples = args.includeSamples !== false;
+  const scope = readFunnelReadScope(args);
   const params: unknown[] = [];
   const clauses = ["fsr.is_selected = true", "fsr.final_decision = 'selected'"];
   if (docIds.length > 0) {
     params.push(docIds);
     clauses.push(`fsr.doc_id::text = any($${params.length}::text[])`);
+  }
+  const scopeClause = appendSelectionFunnelScopeClause(params, scope, "fsr");
+  if (scopeClause) {
+    clauses.push(scopeClause);
   }
   const rows = await countQuery(
     pool,
@@ -1483,6 +1608,9 @@ export async function buildSelectionPrecisionAudit(
   const highQualityCount =
     (buckets.strong_project_signal ?? 0) + (buckets.probable_signal ?? 0);
   const weakSelectedCount = (buckets.context_only ?? 0) + (buckets.noise ?? 0);
+  const staleParams: unknown[] = [];
+  const staleScopeClause = appendSelectionFunnelScopeClause(staleParams, scope, "fsr");
+  const staleWhereSql = staleScopeClause ? `where ${staleScopeClause}` : "";
   const staleRows = await countQuery(
     pool,
     `
@@ -1510,7 +1638,9 @@ export async function buildSelectionPrecisionAudit(
           )
         )::int as "missingInterestFilterResults"
       from final_selection_results fsr
-    `
+      ${staleWhereSql}
+    `,
+    staleParams
   );
   const weakSamples = classified
     .filter((row) => ["context_only", "noise"].includes(String((row.precision as Record<string, unknown>).outcome)))
@@ -1518,6 +1648,11 @@ export async function buildSelectionPrecisionAudit(
   return {
     generatedAt: new Date().toISOString(),
     readOnly: true,
+    funnelScope: {
+      funnelId: scope.funnelId,
+      laneId: scope.laneId,
+      selectionScope: hasFunnelReadScope(scope) ? "funnel_system_interest_bindings" : "global",
+    },
     inspectedSelectedCount: rows.length,
     highQualityCount,
     weakSelectedCount,
@@ -1545,7 +1680,13 @@ export async function buildSelectionPrecisionAudit(
       {
         tool: "operator.tuning.recommend",
         reason: "Choose increase_precision when context_only/noise selected rows repeat.",
-        arguments: { domain: "selection", objective: "increase_precision", includeSamples: true },
+        arguments: {
+          domain: "selection",
+          objective: "increase_precision",
+          includeSamples: true,
+          ...(scope.funnelId ? { funnelId: scope.funnelId } : {}),
+          ...(scope.laneId ? { laneId: scope.laneId } : {}),
+        },
       },
       {
         tool: "system_interests.update",
@@ -1566,6 +1707,12 @@ export async function buildSelectionPrecisionAudit(
               reason: "selection-precision-cleanup",
             },
           },
+          ...(scope.funnelId
+            ? {
+                funnelId: scope.funnelId,
+                ...(scope.laneId ? { laneId: scope.laneId } : {}),
+              }
+            : {}),
         },
       },
     ],
@@ -1591,11 +1738,34 @@ function docIdFromRow(row: unknown): string | null {
   return isRecord(row) && typeof row.docId === "string" ? row.docId : null;
 }
 
-function buildReindexRequestTemplate(label: string, docIds: string[], reason: string) {
+function buildReindexRequestTemplate(
+  label: string,
+  docIds: string[],
+  reason: string,
+  funnelScope: Record<string, unknown> = {}
+) {
+  const funnelId = readOptionalString(funnelScope.funnelId);
+  const laneId = readOptionalString(funnelScope.laneId);
+  const funnelPlanId = readOptionalString(funnelScope.funnelPlanId);
+  const planFingerprint = readOptionalString(funnelScope.planFingerprint);
+  const changeMode = readOptionalString(funnelScope.changeMode) ?? "manual_tuning";
+  const scopedRequest =
+    funnelId != null
+      ? {
+          funnelId,
+          ...(laneId ? { laneId } : {}),
+          ...(funnelPlanId ? { funnelPlanId } : {}),
+          ...(planFingerprint ? { planFingerprint } : {}),
+          changeMode,
+          configurationScope: "funnel",
+          verificationTarget: "replay",
+        }
+      : {};
   return {
     bucket: label,
     docIds,
     request: {
+      ...scopedRequest,
       payload: {
         indexName: "interest_centroids",
         jobKind: "backfill",
@@ -1619,6 +1789,13 @@ export async function buildSelectionReindexPlan(
   const includeSamples = args.includeSamples !== false;
   const reason =
     readOptionalString(args.reason) ?? "selection calibration bounded historical replay";
+  const funnelScope = {
+    funnelId: readOptionalString(args.funnelId),
+    laneId: readOptionalString(args.laneId),
+    funnelPlanId: readOptionalString(args.funnelPlanId),
+    planFingerprint: readOptionalString(args.planFingerprint),
+    changeMode: readOptionalString(args.changeMode),
+  };
   const precision = await buildSelectionPrecisionAudit(context, {
     docIds: requestedDocIds,
     pageSize: maxDocIds,
@@ -1676,7 +1853,8 @@ export async function buildSelectionReindexPlan(
       buildReindexRequestTemplate(
         `${bucket.bucket}:${index + 1}`,
         docIds,
-        `${reason}: ${bucket.bucket}`
+        `${reason}: ${bucket.bucket}`,
+        funnelScope
       )
     )
   );
@@ -1692,6 +1870,16 @@ export async function buildSelectionReindexPlan(
       docIds: includeSamples ? bucket.docIds : [],
     })),
     chunks: includeSamples ? chunks : chunks.map((chunk) => ({ ...chunk, docIds: [], request: undefined })),
+    funnelScope: funnelScope.funnelId
+      ? {
+          funnelId: funnelScope.funnelId,
+          laneId: funnelScope.laneId ?? null,
+          funnelPlanId: funnelScope.funnelPlanId ?? null,
+          planFingerprint: funnelScope.planFingerprint ?? null,
+          changeMode: funnelScope.changeMode ?? "manual_tuning",
+          verificationTarget: "replay",
+        }
+      : null,
     recommendedOrder: ["weak_selected", "buyer_hold", "context_only"],
     mutationPolicy:
       "This planner is read-only. Queue only one bounded maintenance.reindex.request chunk at a time, keep retroNotifications=skip, and verify with maintenance.reindex_jobs.list plus operator.report.verify/operator.effect.verify before continuing.",
@@ -3064,6 +3252,7 @@ export async function recommendOperatorTuning(
   const residualBucket = readOptionalString(args.residualBucket);
   const sinceHours = readSinceHours(args.sinceHours, 24);
   const entityIds = readEntityIds(args.entityIds);
+  const scope = readFunnelReadScope(args);
   const flowRoute = buildOperatorFlowRoute({
     ...args,
     domain,
@@ -3135,6 +3324,11 @@ export async function recommendOperatorTuning(
     domain,
     objective,
     residualBucket,
+    funnelScope: {
+      funnelId: scope.funnelId,
+      laneId: scope.laneId,
+      scopeRequiredForFollowThrough: hasFunnelReadScope(scope),
+    },
     flowRoute,
     signalVisibility,
     evidenceLaneType,
@@ -3192,6 +3386,14 @@ export async function recommendOperatorTuning(
       "signalops://ops/issues",
     ],
     suggestedToolCalls: recommendations.suggestedToolCalls,
+    scopedSuggestedToolContext: hasFunnelReadScope(scope)
+      ? {
+          funnelId: scope.funnelId,
+          laneId: scope.laneId,
+          instruction:
+            "Carry these fields into scoped manual writes, bounded replay and report verification.",
+        }
+      : null,
     mutationPolicy:
       "This tool is advisory and read-only. Apply changes only through the suggested guarded MCP write tools after an operator chooses the objective.",
   };
@@ -3522,17 +3724,32 @@ export async function verifyOperatorEffect(
   const comparisonWindowHours = readSinceHours(args.comparisonWindowHours, 24);
   const changeRef = readOptionalString(args.changeRef) ?? "unspecified change";
   const includeSamples = args.includeSamples === true;
+  const scope = readFunnelReadScope(args);
 
-  const query = effectQueryForDomain(domain);
+  const query = effectQueryForDomain(domain, scope);
   const [baseline, comparison] = await Promise.all([
-    countQuery(pool, query.sql, [baselineWindowHours + comparisonWindowHours, comparisonWindowHours]),
-    countQuery(pool, query.sql, [comparisonWindowHours, 0]),
+    countQuery(pool, query.sql, [
+      baselineWindowHours + comparisonWindowHours,
+      comparisonWindowHours,
+      ...query.params,
+    ]),
+    countQuery(pool, query.sql, [comparisonWindowHours, 0, ...query.params]),
   ]);
 
   return {
     generatedAt: new Date().toISOString(),
     domain,
     changeRef,
+    funnelScope: {
+      funnelId: scope.funnelId,
+      laneId: scope.laneId,
+      selectionScope:
+        hasFunnelReadScope(scope) && domain === "selection"
+          ? "funnel_system_interest_bindings"
+          : hasFunnelReadScope(scope)
+            ? "not_applied_to_non_selection_domain"
+            : "global",
+    },
     windows: {
       baseline: `${baselineWindowHours}h before the most recent ${comparisonWindowHours}h`,
       comparison: `last ${comparisonWindowHours}h`,
@@ -3543,12 +3760,15 @@ export async function verifyOperatorEffect(
     interpretation: [
       "This is a deterministic before/after read-back, not causal proof by itself.",
       "If workers or fetchers are still processing, repeat after async state settles.",
+      ...(hasFunnelReadScope(scope) && domain !== "selection"
+        ? ["Funnel scope is currently applied to selection metrics only for operator.effect.verify."]
+        : []),
     ],
     samples: includeSamples ? { baseline, comparison } : {},
   };
 }
 
-function effectQueryForDomain(domain: OperatingDomain) {
+function effectQueryForDomain(domain: OperatingDomain, scope: FunnelReadScope) {
   if (domain === "channels") {
     return {
       metric: "channel_fetch_runs by outcome/provider",
@@ -3560,6 +3780,7 @@ function effectQueryForDomain(domain: OperatingDomain) {
         group by outcome_kind, provider_type
         order by provider_type, outcome_kind
       `,
+      params: [],
     };
   }
   if (domain === "website_pipeline") {
@@ -3576,6 +3797,7 @@ function effectQueryForDomain(domain: OperatingDomain) {
         group by wr.projection_state, coalesce(fsr.final_decision, 'not_projected')
         order by wr.projection_state, coalesce(fsr.final_decision, 'not_projected')
       `,
+      params: [],
     };
   }
   if (domain === "content_analysis") {
@@ -3589,6 +3811,7 @@ function effectQueryForDomain(domain: OperatingDomain) {
         group by decision, passed, mode
         order by decision, mode
       `,
+      params: [],
     };
   }
   if (domain === "discovery") {
@@ -3602,6 +3825,7 @@ function effectQueryForDomain(domain: OperatingDomain) {
         group by current_provider_type, current_state
         order by current_provider_type, current_state
       `,
+      params: [],
     };
   }
   if (domain === "sequences") {
@@ -3615,8 +3839,11 @@ function effectQueryForDomain(domain: OperatingDomain) {
         group by status, trigger_type
         order by status, trigger_type
       `,
+      params: [],
     };
   }
+  const params: unknown[] = [];
+  const scopeClause = appendSelectionFunnelScopeClause(params, scope, "fsr", 3);
   return {
     metric: "final selection decisions",
     sql: `
@@ -3624,9 +3851,11 @@ function effectQueryForDomain(domain: OperatingDomain) {
       from final_selection_results
       where updated_at >= now() - ($1::int * interval '1 hour')
         and updated_at < now() - ($2::int * interval '1 hour')
+        ${scopeClause ? `and ${scopeClause}` : ""}
       group by final_decision, verification_state
       order by final_decision, verification_state
     `,
+    params,
   };
 }
 

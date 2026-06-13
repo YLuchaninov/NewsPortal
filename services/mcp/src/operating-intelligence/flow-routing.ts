@@ -255,6 +255,8 @@ function flowRouteNextToolCalls(args: {
 }
 
 export function buildOperatorFlowRoute(args: Record<string, unknown>) {
+  const funnelId = readOptionalString(args.funnelId);
+  const laneId = readOptionalString(args.laneId);
   const symptoms = readOperatorFlowSymptoms(args.symptoms);
   const sessionGoal = readOptionalString(args.sessionGoal);
   const residualBucket = readOptionalString(args.residualBucket);
@@ -378,6 +380,9 @@ export function buildOperatorFlowRoute(args: Record<string, unknown>) {
     ...(flowMode === "expert_override" && !flowGuidance.operator_override_allowed
       ? ["Expert override is blocked until operatorOverrideReason and affectedScope are explicit."]
       : []),
+    ...(funnelId || laneId
+      ? ["This route block is funnel-scoped; carry funnelId/laneId into follow-up reads, writes, replay and report verification."]
+      : []),
   ]);
   return {
     generatedAt: new Date().toISOString(),
@@ -388,6 +393,11 @@ export function buildOperatorFlowRoute(args: Record<string, unknown>) {
     residualBucket: residualBucket ?? null,
     reportKind: reportKind ?? null,
     flowMode,
+    funnelScope: {
+      funnelId: funnelId ?? null,
+      laneId: laneId ?? null,
+      scopeRequiredForFollowThrough: Boolean(funnelId || laneId),
+    },
     flowSequence: flowGuidance.flowSequence,
     changeIntent: intentGuidance.changeIntent,
     cleanupIntent: intentGuidance.cleanupIntent,

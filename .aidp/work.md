@@ -1,5 +1,185 @@
 # AIDP Work State
 
+## Completed Bugfix: SIGNALOPS-MAX-VERIFY-LINT-1
+
+- id: `SIGNALOPS-MAX-VERIFY-LINT-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `completed-maximum-local-release-verification`
+- route-specific next step: none inside this bugfix; any production/staging rollout or live funnel retuning remains a separate operator action through MCP/admin.
+- route-specific proof: maximum local release verification found two real blockers and both were fixed. `pnpm release:verify` first failed at `pnpm lint` with `F841 Local variable item_level_candidate_signal is assigned to but never used` in `services/workers/app/final_selection.py`; the dead assignment was removed. The next `pnpm release:verify` and standalone `pnpm integration_tests` reproduced `Timed out waiting for scheduled digest delivery`; live local DB inspection showed the scheduled digest worker wrote `skipped_empty` after the deterministic proof seed no longer satisfied the same selected/feed-eligible contract as the scheduled digest query. `infra/scripts/test-mvp-internal.mjs` now re-materializes the deterministic MVP match before forcing the due digest and waits on the exact scheduled-digest eligibility contract before delivery assertion.
+- status: `done-local-proof`
+- risk: `low`
+- approval: explicit operator request to run maximum verification and fix blockers if verification finds them; no production/staging writes or destructive cleanup are approved.
+- planning required: no, narrow verification-blocker bugfixes.
+- planning source: `none`
+- planning status: `absent`
+- blueprint context checked: selection/worker neighborhood already checked by the completed Funnel Autopilot capability; this bugfix removes dead local assignment and stabilizes deterministic product proof seeding without changing selection runtime behavior.
+- allowed paths: `.aidp/**`, `services/workers/app/final_selection.py`, `infra/scripts/test-mvp-internal.mjs`.
+- cleanup status: `pnpm release:verify` completed final local cleanup; `docker ps --format '{{.Names}} {{.Status}}'` returned no running compose containers after verification.
+
+### Proof
+
+- `pnpm lint:py` passed after removing the unused final-selection local assignment.
+- `pnpm unit_tests:py -- tests/unit/python/test_selection_write_repository.py` passed (`405` Python tests; existing historical replay timeout log is non-fatal in the test harness).
+- Standalone `pnpm integration_tests` reproduced the scheduled digest blocker before the proof fix, then passed after re-seeding/preflight hardening.
+- Final `pnpm release:verify` passed end-to-end; artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-fd0b9751`; summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-verify-fd0b9751/release-verify-summary.json`.
+- Release proof included compliance/secret-leak check, operator truth parity, lint, typecheck, TS/Python unit tests, workspace/node/runtime builds, production compose image build/content/size checks, `product-local-core`, `product-local-full`, MCP deterministic scenarios including `funnel-autopilot-flows`, admin/website/automation compose proofs, web viewport proof, UI button audit, discovery-enabled proof, and live website matrix diagnostics.
+- `pnpm check:domain-neutrality` passed after the release gate.
+- `pnpm check:secret-leaks` passed after the release gate (`963` tracked files scanned).
+- `git diff --check` passed after the release gate.
+
+## Completed Capability: SIGNALOPS-FUNNEL-AUTOPILOT-2
+
+- id: `SIGNALOPS-FUNNEL-AUTOPILOT-2`
+- lifecycle: `normal`
+- route: `capability` for Funnel Autopilot 2.0: multi-funnel MCP autopilot, manual funnel tuning, funnel-first admin, scoped routes/reports, and durable documentation.
+- route phase: `completed-local-proof-runtime-read-routes-and-admin-stage`
+- route-specific next step: no code next step inside this approved item; production/staging rollout, real funnel configuration, and precision/recall tuning remain separate operator actions through MCP/admin.
+- route-specific proof: v2.0 implementation plan artifact, tests-first TS coverage for funnel planning/validation/staging/verification, guarded legacy writes, scoped bounded replay, funnel-bound tokens, funnel-scoped content reads, scoped Discovery vNext write provenance, audited admin lane editing, worker-side final-selection funnel runtime attribution, funnel-aware diagnostic read routes including `llm_budget.summary`, admin plan-page lane staging, MCP HTTP funnel autopilot scenario with lane staging, scoped discovery run create, scoped manual system-interest write, scoped content reads, scoped `maintenance.reindex.request` binding, selection report funnel scope and overlap audit, admin compose smoke, Python unit suite, `pnpm typecheck`, `pnpm check:domain-neutrality`, and `git diff --check`.
+- status: `done-local-proof`
+- risk: `medium-high`
+- approval: explicit operator request to implement the accepted Funnel Autopilot 2.0 plan; no production/staging writes and no destructive cleanup are approved.
+- planning required: yes for capability/API/data/admin boundary changes.
+- planning source: `external-spec/tool-native`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` PostgreSQL business truth, MCP/control-plane/admin boundary, final-selection truth, source/discovery ownership; `.aidp/contracts/mcp-control-plane.md`, `.aidp/contracts/universal-selection-profiles.md`, `.aidp/contracts/zero-shot-interest-filtering.md`.
+- allowed paths: `.aidp/**`, `docs/**`, `database/migrations/**`, `packages/contracts/**`, `packages/control-plane/**`, `services/mcp/**`, `services/workers/**`, `apps/admin/**`, `tests/unit/**`.
+- cleanup status: MCP compose proof created temporary local canary funnel/interest state and cleaned it through scenario cleanup; proof artifacts are retained under `/tmp`; local compose services are intentionally left running and healthy for operator follow-up.
+
+### Scope
+
+Build Funnel Autopilot 2.0 as a first-class, domain-neutral product capability.
+
+In scope:
+
+- durable v2.0 plan file under `docs/plans`;
+- multi-funnel data model and compatibility path for existing interests/templates/channels;
+- shared control-plane funnel service reused by MCP and admin;
+- MCP funnel tools and funnel-aware routing/reporting surfaces;
+- manual tuning mode through existing interests/templates/channels/discovery/reindex routes;
+- funnel-first admin cockpit and advanced inventory backlinks;
+- documentation after proof positioning the feature as unique SignalOps functionality.
+
+Out of scope:
+
+- production/staging writes;
+- destructive cleanup of existing local data;
+- replacing `final_selection_results` as primary selection truth;
+- runtime domain-specific hardcode.
+
+### Current Proof Status
+
+- Created durable plan artifact `docs/plans/funnel-autopilot-2.0-implementation.md` to preserve the agreed Funnel Autopilot 2.0 scope: multi-funnel model, novice MCP autopilot, manual tuning route, funnel-first admin, hard/hidden/mixed/context/unknown routing, guarded workflow, scoped replay/reports, and feature docs.
+- Added migration `database/migrations/0064_funnel_autopilot_foundation.sql` with `operator_funnels`, `funnel_lanes`, funnel bindings for system interests/sources/templates, `operator_funnel_plans`, and a Legacy / Unassigned compatibility funnel that binds existing active interests/templates/channels without changing current behavior.
+- Added migration `database/migrations/0065_funnel_reindex_job_bindings.sql` with `funnel_reindex_job_bindings`, linking bounded replay jobs to funnels, lanes, plans and verification targets without replacing `reindex_jobs`.
+- Added migration `database/migrations/0066_mcp_token_funnel_scope.sql` with `mcp_access_tokens.funnel_scope_json`, preserving unrestricted legacy tokens by default while allowing new tokens to be scoped to explicit funnel ids.
+- Added shared control-plane service `packages/control-plane/src/funnels.ts`, exported from `packages/control-plane/src/index.ts`, for list/read/create/update/archive, idea lane classification, autoplan, validate, stage, verify, and overlap audit. MCP and admin reuse this service instead of duplicating funnel business logic in handlers/pages.
+- Added/extended MCP tools:
+  - `operator.funnels.list/read/create/update/archive`;
+  - `operator.funnel.autoplan/validate_plan/stage_plan/verify`;
+  - `operator.funnels.overlap.audit`;
+  - `operator.report.verify reportKind=selection` accepts `entityIds.funnelIds` and attaches funnel-scoped verification/read-back.
+- Added funnel attribution read-back in `operator.funnel.verify includeSamples=true`: samples include funnel/lane, interest binding, source role, final decision, selected/blocker/hold reason, candidate-signal tier, and final-selection timestamps. `final_selection_results` remains the selection truth.
+- Added funnel-first admin foundation:
+  - primary nav `Funnels`;
+  - BFF action scope `funnels`;
+  - pages `/funnels`, `/funnels/new`, `/funnels/[funnelId]`, and `/funnels/[funnelId]/{plan,lanes,sources,rules,replay,reports,overlap}`;
+  - old inventory pages remain available for expert/manual tuning.
+- Preserved manual route through existing `system_interests.*`, `llm_templates.*`, `channels.*`, discovery and reindex tools; write schemas now have optional funnel context fields (`funnelId`, `laneId`, `changeMode`, `funnelPlanId`, `planFingerprint`, `operator_override_reason`, `verificationTarget`) for guarded follow-through.
+- Added guarded MCP follow-through for legacy manual tuning routes:
+  - `system_interests.create/update` require funnel/shared/global scope when `changeMode` is supplied, require `verificationTarget`, validate funnel/lane ids, audit scoped context, bind created/updated interests through `funnel_system_interest_bindings`, and return `funnelWriteContext`, `funnelBinding`, and funnel read-back guidance;
+  - `llm_templates.create/update` apply the same guard/audit/binding pattern through `funnel_template_bindings`;
+  - `channels.create/update/bulk_onboard.apply` apply the same guard/audit/binding pattern through `funnel_source_bindings`, with per-funnel `sourceRole` support and separate `funnelPlanFingerprint` for bulk onboarding plans.
+- Added guarded MCP follow-through for scoped replay:
+  - `operator.selection.reindex_plan` accepts funnel/lane/plan/fingerprint context and emits funnel-scoped `maintenance.reindex.request` templates;
+  - `maintenance.reindex.request` validates funnel/lane/plan ids when funnel context is supplied, rejects unbounded funnel-scoped backfill unless `changeMode=expert_override`, stores funnel provenance in `options_json`, binds successful requests through `funnel_reindex_job_bindings`, audits the write context, and returns replay binding/read-back guidance.
+- `operator.funnel.stage_plan` now materializes lane skeleton rows from validated plan lanes for the scoped funnel and returns staged `laneId`s, so old manual routes can safely bind writes to a real lane instead of a plan-only lane draft.
+- Added MCP token scopes `read.funnels` and `write.funnels`; existing broad read tokens remain compatible.
+- Added funnel-bound MCP token enforcement:
+  - token issue/list/read-back normalizes sanitized `funnelScope.allowedFunnelIds`;
+  - admin MCP token BFF/UI can issue unrestricted or funnel-bound tokens;
+  - bound tokens cannot create new funnels and cannot read/update/archive/stage/verify/overlap/report/reindex outside their allowed funnel ids;
+  - empty funnel scope preserves existing unrestricted token behavior and token secrets remain write-only.
+- Added funnel-scoped content read support:
+  - shared control-plane helpers list funnel-scoped content rows and read doc-level funnel attribution from `final_selection_results`, `interest_filter_results`, funnel bindings and source roles;
+  - `signal_candidates.list` and `content_items.list` switch to DB-backed funnel-scoped rows when `funnelId`, `laneId` or a funnel-bound token is present;
+  - `signal_candidates.read/explain` and `content_items.read/explain` attach `funnelAttribution` and reject bound-token reads when item-to-funnel attribution cannot be proven before backend detail fetch.
+- Added guarded MCP follow-through for Discovery vNext writes:
+  - `discovery.*` write schemas accept optional funnel/lane/change/plan/verification context while keeping old tool names;
+  - scoped Discovery writes validate funnel/lane/plan ids, enforce funnel-bound token scope, strip MCP-only funnel metadata before backend API calls, audit discovery tool/result ids with `mcp_funnel_write_context_recorded`, and return `funnelWriteContext` plus funnel read-back guidance;
+  - unrestricted legacy discovery writes remain compatible and domain-neutral.
+- Added audited admin lane editing:
+  - shared control-plane API `updateOperatorFunnelLane` edits lane name, lane type, routing mode, policy JSON and evidence-contract JSON while writing an `operator_funnel_lane_updated` audit event;
+  - admin BFF `/bff/admin/funnels` supports signed `update_lane` writes with canonical lane/routing validation and JSON-object validation;
+  - admin `/funnels/[funnelId]/lanes` now lets expert operators edit lane routing/policy/evidence contracts without leaving the funnel-first surface.
+- Added worker/runtime attribution:
+  - final-selection writes attach `explain_json.funnelRuntimeAttribution` when active funnel bindings are observable through evaluated system interests, source channel, `selection_review` templates or bounded replay jobs;
+  - MCP/reporting surfaces expose the runtime attribution so external clients can explain which funnel/lane/source role/template/replay participated without inferring from inventory alone;
+  - attribution remains explainability metadata and does not make source membership a semantic selection proof.
+- Added funnel-aware diagnostic read routes:
+  - `operator.flow.route`, `operator.tuning.recommend`, `operator.effect.verify`, `operator.selection.dashboard`, `operator.selection.precision_audit`, `operator.selection.reindex_plan`, `operator.report.verify`, `signal_candidates.*`, `content_items.*` and `llm_budget.summary` carry funnel/lane context where applicable;
+  - single-funnel-bound tokens can default reads to that funnel, while multi-funnel-bound tokens must pass `funnelId`;
+  - `llm_budget.summary` keeps global budget semantics but adds funnel-bound template/review participation and an explicit warning that it is not an isolated per-funnel cap.
+- Added admin plan staging:
+  - `/funnels/[funnelId]/plan` can stage autoplan lanes from the funnel goal through the existing shared control-plane `buildOperatorFunnelAutoplan` and `stageOperatorFunnelPlan` services;
+  - staged lanes become editable on `/funnels/[funnelId]/lanes`, keeping novice setup and expert lane tuning in the same funnel-first admin surface.
+- Updated contracts and feature documentation:
+  - `.aidp/contracts/mcp-control-plane.md`;
+  - `.aidp/contracts/universal-selection-profiles.md`;
+  - `.aidp/contracts/zero-shot-interest-filtering.md`;
+  - `docs/features/mcp-funnel-autopilot.md`.
+- Fixed an admin schema trap found during UI audit: system-interest form boolean values for auto-select policy are normalized before strict BFF validation, so old manual template editing remains usable after adding Funnel Autopilot fields.
+- Proof passed:
+  - `pnpm unit_tests:ts -- funnel-autopilot` (`477` TS tests in the harness);
+  - `pnpm unit_tests:py` (`404` Python tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-fbfe1bb7-3f0c-4d67-b24f-c23f8f77f14f.json` and `.md`;
+  - `pnpm test:website:admin:compose`;
+  - `pnpm test:web:ui-audit` (`ui-button-audit-ok`, run id `e1336357`);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+- Additional guarded manual-route proof passed after the foundation slice:
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`480` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-0e3adc6b-3686-41ec-b3ab-4eaf52b8c313.json` and `.md`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`;
+  - local compose services were observed healthy after proof with `docker ps --format '{{.Names}} {{.Status}}'`.
+- Additional scoped replay proof passed after replay binding slice:
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`481` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-2c28665e-e919-4fbe-a79a-6ff6d84941b3.json` and `.md`.
+- Additional funnel-bound token proof passed after token-scope slice:
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`481` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-4fea0c29-92ad-4eee-89a3-176254da2bbe.json` and `.md`.
+- Additional funnel-scoped content proof passed after content-scope slice:
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`482` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-e8b05933-08b4-4ce9-a73f-3aa00b527a2b.json` and `.md`.
+- Additional Discovery vNext provenance proof passed after discovery-provenance slice:
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`484` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-892e1fb2-e183-42b3-8012-97ba6bcd823e.json` and `.md`;
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+- Additional admin lane editing proof passed after lane-editing slice:
+  - `pnpm unit_tests:ts -- funnel-autopilot admin-action-kit schema-registry` (`485` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:website:admin:compose` (`website-admin-ok`, channel `40bd19a9-5767-44eb-be5d-76e9eb4b02fc`, projected signal candidate `cee79f22-ea00-4b8b-b0df-43ba1638ebc0`).
+- Additional runtime/read-route/admin-stage proof passed after completion slice:
+  - `pnpm unit_tests:py -- tests/unit/python/test_selection_write_repository.py` (`405` Python tests);
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot` (`486` TS tests);
+  - `pnpm unit_tests:ts -- funnel-autopilot admin-action-kit schema-registry` (`486` TS tests);
+  - `pnpm typecheck` (0 errors; existing Astro hints only);
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`, artifact `/tmp/signalops-mcp-http-deterministic-d7990657-376e-4f13-9771-446f77ef116d.json` and `.md`;
+  - `pnpm test:website:admin:compose` (`website-admin-ok`, channel `69721371-fea0-4b52-8b91-5fa5147433ff`, projected signal candidate `e3708250-51e6-401c-85d9-d6e24bddcd4a`);
+  - `pnpm test:web:ui-audit` (`ui-button-audit-ok`, run id `3a817df5`);
+  - `pnpm check:domain-neutrality`;
+  - `git diff --check`.
+- Closure note: this item delivered the durable data model, shared control-plane service, MCP/admin vertical path, guarded validation/staging, guarded legacy/manual writes for system interests, LLM templates, channels, Discovery VNext writes and bounded replay, funnel-bound token enforcement, funnel-scoped reporting/read-back, worker runtime attribution, funnel-aware diagnostics, admin lane editing and admin lane staging. Actual production/staging rollout and domain-specific funnel configuration remain separate MCP/admin operator actions; no domain-specific runtime hardcode was introduced.
+
 ## Completed Operator Closure: SIGNALOPS-OUTSOURCING-AUTOSELECT-CONFIG-REPLAY-1
 
 - id: `SIGNALOPS-OUTSOURCING-AUTOSELECT-CONFIG-REPLAY-1`

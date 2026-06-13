@@ -1,14 +1,36 @@
+import { getMcpTokenAllowedFunnelIds } from "@signalops/control-plane";
 import type { JsonSchema } from "@signalops/contracts";
 
 import {
   createReadTool,
   createWriteTool,
+  JsonRpcError,
+  mcpFunnelWriteContextPayload,
   readOptionalString,
   readPageArgs,
   readRequiredString,
+  readMcpFunnelWriteContext,
+  shouldAuditMcpFunnelWriteContext,
   withActorDefault,
+  withMcpFunnelWriteContext,
+  writeMcpMutationAudit,
+  type McpFunnelWriteContext,
+  type McpToolContext,
   type McpToolDefinition,
 } from "../shared";
+
+const funnelContextSchemaProperties = {
+  funnelId: { type: "string" },
+  laneId: { type: "string" },
+  changeMode: { type: "string", enum: ["autopilot_setup", "manual_tuning", "expert_override"] },
+  configurationScope: { type: "string", enum: ["funnel", "shared", "global"] },
+  funnelPlanId: { type: "string" },
+  planFingerprint: { type: "string" },
+  operator_override_reason: { type: "string" },
+  verificationTarget: { type: "string", enum: ["selection", "source_health", "llm_review", "replay"] },
+} satisfies Record<string, JsonSchema>;
+
+const funnelContextFieldNames = new Set(Object.keys(funnelContextSchemaProperties));
 
 const listSchema = {
   type: "object",
@@ -393,6 +415,157 @@ const feedbackSchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+function withFunnelContextSchema(schema: JsonSchema): JsonSchema {
+  const properties =
+    schema && typeof schema === "object" && "properties" in schema && schema.properties
+      ? (schema.properties as Record<string, JsonSchema>)
+      : {};
+  return {
+    ...schema,
+    properties: {
+      ...properties,
+      ...funnelContextSchemaProperties,
+    },
+    additionalProperties: false,
+  } satisfies JsonSchema;
+}
+
+function withoutFunnelContextArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const payload = { ...args };
+  for (const fieldName of funnelContextFieldNames) {
+    delete payload[fieldName];
+  }
+  return payload;
+}
+
+function asResponseRecord(value: unknown): Record<string, unknown> {
+  if (value != null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return { result: value };
+}
+
+function discoveryRiskKind(
+  args: Record<string, unknown>,
+  fallback: McpFunnelWriteContext["riskKind"]
+): McpFunnelWriteContext["riskKind"] {
+  const verificationTarget = readOptionalString(args.verificationTarget);
+  if (
+    verificationTarget === "selection" ||
+    verificationTarget === "source_health" ||
+    verificationTarget === "llm_review" ||
+    verificationTarget === "replay"
+  ) {
+    return verificationTarget;
+  }
+  const runKind = readOptionalString(args.runKind);
+  if (runKind === "replay" || Object.prototype.hasOwnProperty.call(args, "replayKind")) {
+    return "replay";
+  }
+  return fallback;
+}
+
+function readDiscoveryResultIds(response: Record<string, unknown>): Record<string, unknown> {
+  const candidateIds = Array.isArray(response.candidateIds)
+    ? response.candidateIds
+    : Array.isArray(response.candidate_ids)
+      ? response.candidate_ids
+      : undefined;
+  return {
+    runId: response.runId ?? response.run_id ?? response.vnextRunId ?? response.vnext_run_id ?? null,
+    artifactId: response.artifactId ?? response.artifact_id ?? null,
+    candidateId: response.candidateId ?? response.candidate_id ?? candidateIds?.[0] ?? null,
+    sourceInventoryId: response.sourceInventoryId ?? response.source_inventory_id ?? null,
+    policyId: response.policyId ?? response.policy_id ?? null,
+    replayRunId: response.replayRunId ?? response.replay_run_id ?? null,
+    rollbackGroupId: response.rollbackGroupId ?? response.rollback_group_id ?? null,
+    feedbackId: response.feedbackId ?? response.feedback_id ?? null,
+  };
+}
+
+function readDiscoveryAuditEntityId(response: Record<string, unknown>): string | null {
+  const ids = readDiscoveryResultIds(response);
+  for (const value of Object.values(ids)) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+async function runFunnelAwareDiscoveryWrite(
+  context: McpToolContext,
+  args: Record<string, unknown>,
+  input: {
+    toolName: string;
+    fallbackRiskKind: McpFunnelWriteContext["riskKind"];
+    handler: (backendArgs: Record<string, unknown>) => Promise<unknown>;
+  }
+): Promise<Record<string, unknown>> {
+  const funnelContext = await readMcpFunnelWriteContext(context.pool, context.token, args, {
+    toolName: input.toolName,
+    riskKind: discoveryRiskKind(args, input.fallbackRiskKind),
+    selectionImpacting: true,
+  });
+  if (getMcpTokenAllowedFunnelIds(context.token).length > 0 && !funnelContext.funnelId) {
+    throw new JsonRpcError(
+      -32004,
+      "Funnel-bound MCP tokens must pass funnelId for discovery writes.",
+      {
+        statusCode: 403,
+        data: {
+          path: "funnelId",
+          requiredAction:
+            "Pass one of the token's allowed funnel ids, or use an unrestricted operator token for shared/global discovery writes.",
+        },
+      }
+    );
+  }
+
+  const response = asResponseRecord(await input.handler(withoutFunnelContextArgs(args)));
+  if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+    await writeMcpMutationAudit(context.pool, context.token, {
+      actionType: "mcp_funnel_write_context_recorded",
+      entityType: "discovery_vnext",
+      entityId: readDiscoveryAuditEntityId(response),
+      payloadJson: {
+        ...mcpFunnelWriteContextPayload(funnelContext),
+        discoveryTool: input.toolName,
+        discoveryResultIds: readDiscoveryResultIds(response),
+      },
+    });
+  }
+  return withMcpFunnelWriteContext(response, funnelContext);
+}
+
+function funnelAwareDiscoveryDescription(description: string): string {
+  return `${description} Optional Funnel Autopilot context fields are supported for scoped setup/manual tuning: funnelId, laneId, changeMode, configurationScope, funnelPlanId, planFingerprint and verificationTarget.`;
+}
+
+function createDiscoveryWriteTool(
+  name: string,
+  description: string,
+  inputSchema: JsonSchema,
+  fallbackRiskKind: McpFunnelWriteContext["riskKind"],
+  handler: (context: McpToolContext, args: Record<string, unknown>) => Promise<unknown>,
+  destructive = false
+): McpToolDefinition {
+  return createWriteTool(
+    name,
+    funnelAwareDiscoveryDescription(description),
+    "write.discovery",
+    withFunnelContextSchema(inputSchema),
+    async (context, args) =>
+      runFunnelAwareDiscoveryWrite(context, args, {
+        toolName: name,
+        fallbackRiskKind,
+        handler: (backendArgs) => handler(context, backendArgs),
+      }),
+    destructive
+  );
+}
+
 const DISCOVERY_RESOURCES = [
   ["runs", "runs"],
   ["artifacts", "artifacts"],
@@ -451,202 +624,202 @@ export const DISCOVERY_VNEXT_READ_MCP_TOOLS: readonly McpToolDefinition[] = DISC
 ) as readonly McpToolDefinition[];
 
 export const DISCOVERY_VNEXT_WRITE_MCP_TOOLS: readonly McpToolDefinition[] = [
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.runs.create",
     "Create a Discovery vNext run record. Execution remains bounded by vNext policies.",
-    "write.discovery",
     runCreateSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.createDiscoveryVNextRun<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.runs.execute",
     "Start a policy-governed Discovery vNext run. Live execution fails closed without enabled runtime, credentials and positive budget.",
-    "write.discovery",
     runStartSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.startDiscoveryVNextRun<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.runs.cancel",
     "Cancel a queued or running Discovery vNext run.",
-    "write.discovery",
     { type: "object", required: ["runId"], properties: { runId: { type: "string" } }, additionalProperties: false },
+    "source_health",
     async ({ sdk }, args) =>
       sdk.cancelDiscoveryVNextRun<Record<string, unknown>>(readRequiredString(args.runId, "runId"))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.brief.preview",
     "Compile a domain-neutral DiscoveryBrief preview.",
-    "write.discovery",
     briefPreviewSchema,
+    "selection",
     async ({ sdk }, args) => sdk.previewDiscoveryBrief<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.artifacts.validate",
     "Validate a Discovery vNext artifact payload.",
-    "write.discovery",
     artifactCreateSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.validateDiscoveryArtifact<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.artifacts.create",
     "Create a typed Discovery vNext artifact.",
-    "write.discovery",
     artifactCreateSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.createDiscoveryArtifact<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.mega_loop.preview",
     "Run a bounded non-live HypothesisMegaLoop preview.",
-    "write.discovery",
     megaLoopPreviewSchema,
+    "selection",
     async ({ sdk }, args) => sdk.previewDiscoveryMegaLoop<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.candidates.normalize",
     "Normalize candidate acquisition results without persistence.",
-    "write.discovery",
     candidatesNormalizeSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.normalizeDiscoveryCandidates<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.candidates.create",
     "Persist Discovery vNext candidates plus QueryQualityReport artifact.",
-    "write.discovery",
     candidatesNormalizeSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.createDiscoveryCandidates<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.probe.plan_preview",
     "Create a ProbePlan preview. Browser probing is disabled unless policy explicitly budgets it.",
-    "write.discovery",
     probePlanPreviewSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.previewDiscoveryProbePlan<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.probe.execute",
     "Execute a ProbePlan through fetchers-owned RSS/website probe semantics.",
-    "write.discovery",
     probeExecuteSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.executeDiscoveryProbe<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.scope.resolve_preview",
     "Resolve the monitorable source scope from a candidate and ProbeReport without persistence.",
-    "write.discovery",
     scopeResolveSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.previewDiscoveryScopeResolution<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.scope.resolve_apply",
     "Persist a SourceScopeResolution artifact for a probed candidate.",
-    "write.discovery",
     scopeResolveSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.applyDiscoveryScopeResolution<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.understand.preview",
     "Synthesize SourceUnderstanding from DiscoveryBrief, ProbeReport and SourceScopeResolution.",
-    "write.discovery",
     understandPreviewSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.previewDiscoveryUnderstanding<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.route.preview",
     "Preview a deterministic no-yield-penalty RoutingDecision.",
-    "write.discovery",
     routePreviewSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.previewDiscoveryRoute<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.routing.apply",
     "Persist SourceUnderstanding, RoutingDecision, source inventory and adapter backlog effects.",
-    "write.discovery",
     routingApplySchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.applyDiscoveryRoutingDecision<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.probation.handoff",
     "Register a probation source only through the existing source registrar/outbox path.",
-    "write.discovery",
     handoffSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.handoffDiscoveryProbation<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.source_inventory.explain",
     "Explain a Discovery source inventory row with scope, understanding, routing and observation lineage.",
-    "write.discovery",
     sourceInventoryExplainSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.explainDiscoverySourceInventory<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.source_inventory.resolve_scopes",
     "Preview or apply bounded SourceScopeResolution metadata for source inventory rows; apply may reversible-pause invalid vNext channel projections.",
-    "write.discovery",
     sourceInventoryResolveScopesSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.resolveDiscoverySourceInventoryScopes<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.policies.validate",
     "Validate a Discovery vNext policy definition.",
-    "write.discovery",
     policyActivateSchema,
+    "source_health",
     async ({ sdk }, args) => sdk.validateDiscoveryPolicy<Record<string, unknown>>(args)
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.policies.activate",
     "Activate a versioned Discovery vNext policy and archive the old active version.",
-    "write.discovery",
     policyActivateSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.activateDiscoveryPolicy<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.llm_gateway.run",
     "Run and audit a Discovery vNext LLM gateway task.",
-    "write.discovery",
     llmGatewaySchema,
+    "llm_review",
     async ({ sdk, token }, args) =>
       sdk.runDiscoveryLlmGateway<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.replay.start",
     "Start a non-live Discovery vNext replay. Live provider execution is not available here.",
-    "write.discovery",
     replaySchema,
+    "replay",
     async ({ sdk, token }, args) =>
       sdk.startDiscoveryReplay<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.rollback.prepare",
     "Prepare a rollback group for vNext-owned source inventory/probation effects.",
-    "write.discovery",
     rollbackPrepareSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.prepareDiscoveryRollback<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.rollback.apply",
     "Apply a prepared Discovery vNext rollback. Requires write.destructive and confirm=true.",
-    "write.discovery",
     rollbackApplySchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.applyDiscoveryRollback<Record<string, unknown>>(actor(args, token.issuedByUserId, "appliedBy")),
     true
   ),
-  createWriteTool(
+  createDiscoveryWriteTool(
     "discovery.feedback.submit",
     "Submit operator feedback against a Discovery vNext artifact, candidate, inventory row, decision or policy.",
-    "write.discovery",
     feedbackSchema,
+    "source_health",
     async ({ sdk, token }, args) =>
       sdk.submitDiscoveryFeedback<Record<string, unknown>>(actor(args, token.issuedByUserId))
   ),

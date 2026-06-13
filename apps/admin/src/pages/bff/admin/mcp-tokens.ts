@@ -54,6 +54,7 @@ export const POST: APIRoute = async ({ request }) => {
       label: payload.label,
       scopes: payload.scopes,
       expiresAt: payload.expiresAt,
+      allowedFunnelIds: payload.allowedFunnelIds,
       issuedByUserId: session.userId,
     });
 
@@ -65,6 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
           label: result.label,
           tokenPrefix: result.tokenPrefix,
           scopes: result.scopes,
+          funnelScope: result.funnelScope ?? { allowedFunnelIds: [] },
           status: result.status,
           expiresAt: result.expiresAt,
           lastUsedAt: result.lastUsedAt,

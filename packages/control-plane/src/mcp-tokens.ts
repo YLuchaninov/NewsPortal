@@ -8,6 +8,8 @@ type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
 
 export const MCP_SCOPE_OPTIONS = [
   "read",
+  "read.funnels",
+  "write.funnels",
   "write.templates",
   "write.channels",
   "write.discovery",
@@ -20,11 +22,16 @@ export type McpScope = (typeof MCP_SCOPE_OPTIONS)[number];
 export type McpAccessTokenStatus = "active" | "revoked";
 export type McpAccessTokenEffectiveStatus = "active" | "expired" | "revoked";
 
+export interface McpTokenFunnelScope {
+  allowedFunnelIds: string[];
+}
+
 export interface McpAccessTokenRecord {
   tokenId: string;
   label: string;
   tokenPrefix: string;
   scopes: McpScope[];
+  funnelScope?: McpTokenFunnelScope;
   status: McpAccessTokenStatus;
   issuedByUserId: string;
   revokedByUserId: string | null;
@@ -51,6 +58,7 @@ interface McpAccessTokenRow {
   label: string;
   token_prefix: string;
   scopes: unknown;
+  funnel_scope_json?: unknown;
   status: McpAccessTokenStatus;
   issued_by_user_id: string;
   revoked_by_user_id: string | null;
@@ -67,6 +75,9 @@ interface McpAccessTokenRow {
 function hashTokenSecret(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeIsoString(value: Date | string | null | undefined): string | null {
   if (!value) {
@@ -93,12 +104,52 @@ function normalizeScopes(value: unknown): McpScope[] {
   return scopes;
 }
 
+function normalizeUuidList(value: unknown, path: string): string[] {
+  const rawValues = Array.isArray(value)
+    ? value
+    : String(value ?? "")
+        .split(/[\n,\s]+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+  const normalized = Array.from(
+    new Set(rawValues.map((entry) => String(entry ?? "").trim()).filter(Boolean))
+  );
+  const invalid = normalized.find((entry) => !UUID_RE.test(entry));
+  if (invalid) {
+    throw new Error(`${path} must contain only UUID values.`);
+  }
+  return normalized;
+}
+
+function normalizeFunnelScope(value: unknown): McpTokenFunnelScope {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { allowedFunnelIds: [] };
+  }
+  const scope = value as Record<string, unknown>;
+  return {
+    allowedFunnelIds: normalizeUuidList(scope.allowedFunnelIds, "funnelScope.allowedFunnelIds"),
+  };
+}
+
+function normalizeFunnelScopeInput(input: {
+  funnelScope?: unknown;
+  allowedFunnelIds?: unknown;
+}): McpTokenFunnelScope {
+  if (input.allowedFunnelIds !== undefined) {
+    return {
+      allowedFunnelIds: normalizeUuidList(input.allowedFunnelIds, "allowedFunnelIds"),
+    };
+  }
+  return normalizeFunnelScope(input.funnelScope);
+}
+
 function mapTokenRow(row: McpAccessTokenRow): McpAccessTokenRecord {
   return {
     tokenId: row.token_id,
     label: row.label,
     tokenPrefix: row.token_prefix,
     scopes: normalizeScopes(Array.isArray(row.scopes) ? row.scopes : []),
+    funnelScope: normalizeFunnelScope(row.funnel_scope_json),
     status: row.status,
     issuedByUserId: row.issued_by_user_id,
     revokedByUserId: row.revoked_by_user_id,
@@ -137,7 +188,28 @@ export function hasMcpScope(
   grantedScopes: readonly McpScope[],
   requiredScope: McpScope | "read"
 ): boolean {
+  if (requiredScope.startsWith("read.") && grantedScopes.includes("read")) {
+    return true;
+  }
   return grantedScopes.includes(requiredScope);
+}
+
+export function getMcpTokenAllowedFunnelIds(
+  token: Pick<McpAccessTokenRecord, "funnelScope">
+): string[] {
+  return normalizeFunnelScope(token.funnelScope).allowedFunnelIds;
+}
+
+export function isMcpTokenAllowedForFunnel(
+  token: Pick<McpAccessTokenRecord, "funnelScope">,
+  funnelId: string | null | undefined
+): boolean {
+  const normalizedFunnelId = String(funnelId ?? "").trim();
+  if (!normalizedFunnelId) {
+    return true;
+  }
+  const allowedFunnelIds = getMcpTokenAllowedFunnelIds(token);
+  return allowedFunnelIds.length === 0 || allowedFunnelIds.includes(normalizedFunnelId);
 }
 
 export function getMcpAccessTokenEffectiveStatus(
@@ -173,10 +245,13 @@ export async function issueMcpAccessToken(
     scopes: unknown;
     issuedByUserId: string;
     expiresAt?: unknown;
+    funnelScope?: unknown;
+    allowedFunnelIds?: unknown;
   }
 ): Promise<McpAccessTokenRecord & { token: string }> {
   const label = buildTokenLabel(input.label);
   const scopes = normalizeScopes(input.scopes);
+  const funnelScope = normalizeFunnelScopeInput(input);
   const tokenId = randomUUID();
   const tokenSecret = randomBytes(24).toString("base64url");
   const token = `npmcp_${tokenId.replace(/-/g, "")}.${tokenSecret}`;
@@ -191,16 +266,18 @@ export async function issueMcpAccessToken(
         token_prefix,
         secret_hash,
         scopes,
+        funnel_scope_json,
         status,
         issued_by_user_id,
         expires_at
       )
-      values ($1, $2, $3, $4, $5::jsonb, 'active', $6, $7)
+      values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, 'active', $7, $8)
       returning
         token_id,
         label,
         token_prefix,
         scopes,
+        funnel_scope_json,
         status,
         issued_by_user_id,
         revoked_by_user_id,
@@ -218,6 +295,7 @@ export async function issueMcpAccessToken(
       tokenPrefix,
       hashTokenSecret(token),
       JSON.stringify(scopes),
+      JSON.stringify(funnelScope),
       input.issuedByUserId,
       expiresAt,
     ]
@@ -236,6 +314,7 @@ export async function issueMcpAccessToken(
     payloadJson: {
       label,
       scopes,
+      funnelScope,
       tokenPrefix,
       expiresAt,
     },
@@ -255,6 +334,7 @@ export async function listMcpAccessTokens(pool: Pool): Promise<McpAccessTokenRec
         mat.label,
         mat.token_prefix,
         mat.scopes,
+        mat.funnel_scope_json,
         mat.status,
         mat.issued_by_user_id,
         mat.revoked_by_user_id,
@@ -300,6 +380,7 @@ export async function revokeMcpAccessToken(
         label,
         token_prefix,
         scopes,
+        funnel_scope_json,
         status,
         issued_by_user_id,
         revoked_by_user_id,
@@ -348,6 +429,7 @@ export async function deleteRevokedMcpAccessToken(
         label,
         token_prefix,
         scopes,
+        funnel_scope_json,
         status,
         issued_by_user_id,
         revoked_by_user_id,
@@ -387,6 +469,7 @@ export async function deleteRevokedMcpAccessToken(
     payloadJson: {
       label: row.label,
       tokenPrefix: row.token_prefix,
+      funnelScope: normalizeFunnelScope(row.funnel_scope_json),
       status: row.status,
     },
   });
@@ -405,6 +488,7 @@ export async function resolveMcpAccessTokenBySecret(
         label,
         token_prefix,
         scopes,
+        funnel_scope_json,
         status,
         issued_by_user_id,
         revoked_by_user_id,

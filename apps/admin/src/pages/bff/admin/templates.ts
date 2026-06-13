@@ -60,17 +60,25 @@ function resolveTemplateEditPath(
   );
 }
 
-function normalizeTemplateValidationPayload(
+const TEMPLATE_BOOLEAN_FIELDS = [
+  "isActive",
+  "selection_profile_auto_select_requires_no_noise",
+  "selection_profile_auto_select_requires_no_technical_veto",
+] as const;
+
+export function normalizeTemplateValidationPayload(
   payload: Record<string, unknown>
 ): Record<string, unknown> {
   const validationPayload = stripAdminMetaFields(payload, ["kind"]);
-  const isActive = validationPayload.isActive;
-  if (typeof isActive === "string") {
-    const normalized = isActive.trim().toLowerCase();
-    if (normalized === "true") {
-      validationPayload.isActive = true;
-    } else if (normalized === "false") {
-      validationPayload.isActive = false;
+  for (const field of TEMPLATE_BOOLEAN_FIELDS) {
+    const value = validationPayload[field];
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") {
+        validationPayload[field] = true;
+      } else if (normalized === "false") {
+        validationPayload[field] = false;
+      }
     }
   }
   return validationPayload;

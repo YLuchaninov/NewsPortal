@@ -1852,6 +1852,40 @@ async function main() {
       throw new Error("Scheduled digest settings did not compute the next run timestamp.");
     }
 
+    materializeDeterministicMvpMatch(env, {
+      docId,
+      userId,
+      userInterestId,
+      runId,
+    });
+    await waitFor(
+      "scheduled digest selected match seed",
+      async () =>
+        queryPostgres(
+          env,
+          `
+            select count(*)::text
+            from interest_match_results imr
+            join signal_candidates a on a.doc_id = imr.doc_id
+            left join final_selection_results fsr on fsr.doc_id = a.doc_id
+            left join system_feed_results sfr on sfr.doc_id = a.doc_id
+            where imr.user_id = ${sqlLiteral(userId)}
+              and imr.doc_id = ${sqlLiteral(docId)}
+              and imr.decision = 'notify'
+              and a.visibility_state = 'visible'
+              and (
+                case
+                  when fsr.doc_id is not null then coalesce(fsr.is_selected, false)
+                  else coalesce(sfr.eligible_for_feed, false)
+                end
+              ) = true;
+          `
+        ),
+      (value) => value === "1",
+      {
+        describeLastValue: (value) => `eligible selected-match count=${value || "<empty>"}`
+      }
+    );
     queryPostgres(
       env,
       `
@@ -1872,7 +1906,8 @@ async function main() {
         queryPostgres(
           env,
           `
-            select status
+            select
+              status || '|' || coalesce(metadata_json ->> 'itemCount', '') || '|' || coalesce(error_text, '')
             from digest_delivery_log
             where user_id = ${sqlLiteral(userId)}
               and digest_kind = 'scheduled_matches'
@@ -1880,7 +1915,13 @@ async function main() {
             limit 1;
           `
         ),
-      (value) => value === "sent"
+      (value) => String(value).split("|")[0] === "sent",
+      {
+        describeLastValue: (value) => {
+          const [status = "<none>", itemCount = "<unknown>", error = ""] = String(value || "").split("|");
+          return `status=${status}, itemCount=${itemCount || "<unknown>"}${error ? `, error=${error}` : ""}`;
+        }
+      }
     );
     await waitFor(
       "scheduled digest email",

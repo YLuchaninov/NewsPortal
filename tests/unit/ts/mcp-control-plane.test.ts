@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   deleteRevokedMcpAccessToken,
+  getMcpTokenAllowedFunnelIds,
   hasMcpScope,
   issueMcpAccessToken,
+  isMcpTokenAllowedForFunnel,
   listMcpAccessTokens,
   recordMcpRequestLog,
   revokeMcpAccessToken,
@@ -48,6 +50,9 @@ const WRITE_SEQUENCES_TOKEN = {
   updatedAt: "2026-04-23T10:00:00.000Z",
   recentRequestCount: 0,
 } as const;
+
+const FUNNEL_SCOPE_A = "11111111-1111-4111-8111-111111111111";
+const FUNNEL_SCOPE_B = "22222222-2222-4222-8222-222222222222";
 
 const WRITE_DISCOVERY_TOKEN = {
   tokenId: "token-write-discovery",
@@ -154,11 +159,12 @@ function createFakeMcpPool() {
           token_prefix: String(params[2]),
           secret_hash: String(params[3]),
           scopes: JSON.parse(String(params[4])),
+          funnel_scope_json: JSON.parse(String(params[5])),
           status: "active",
-          issued_by_user_id: String(params[5]),
+          issued_by_user_id: String(params[6]),
           revoked_by_user_id: null,
           revoked_at: null,
-          expires_at: params[6] ? new Date(String(params[6])) : null,
+          expires_at: params[7] ? new Date(String(params[7])) : null,
           last_used_at: null,
           last_used_ip: null,
           last_used_user_agent: null,
@@ -260,6 +266,34 @@ function createFakeMcpPool() {
   };
 }
 
+function createFakeDiscoveryFunnelWritePool() {
+  const state = {
+    auditRows: [] as unknown[][],
+    queries: [] as Array<{ sql: string; params: unknown[] }>,
+  };
+  return {
+    state,
+    calls: state.queries,
+    async query(sql: string, params: unknown[] = []) {
+      state.queries.push({ sql, params });
+      if (/from operator_funnels where funnel_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/from funnel_lanes where lane_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/from operator_funnel_plans where plan_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/insert into audit_log/i.test(sql)) {
+        state.auditRows.push(params);
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in fake discovery funnel write pool: ${sql}`);
+    },
+  };
+}
+
 function createFakeSystemInterestWritePool() {
   const state: Record<string, unknown> = {
     interestTemplateId: "",
@@ -276,6 +310,7 @@ function createFakeSystemInterestWritePool() {
       },
     },
     auditRows: [],
+    funnelBindings: [],
     clientQueries: [],
     poolQueries: [],
     released: false,
@@ -374,6 +409,20 @@ function createFakeSystemInterestWritePool() {
     },
     async query(sql: string, params: unknown[] = []) {
       (state.poolQueries as Array<unknown>).push({ sql, params });
+      if (/from operator_funnels where funnel_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/from funnel_lanes where lane_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/insert into funnel_system_interest_bindings/i.test(sql)) {
+        (state.funnelBindings as Array<unknown>).push(params);
+        return { rows: [] };
+      }
+      if (/insert into audit_log/i.test(sql)) {
+        (state.auditRows as Array<unknown>).push(params);
+        return { rows: [] };
+      }
       if (/from interest_templates it/i.test(sql)) {
         return {
           rows: [
@@ -402,6 +451,8 @@ function createFakeReindexPool() {
   const state = {
     clientQueries: [] as Array<{ sql: string; params: unknown[] }>,
     poolQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    auditRows: [] as unknown[][],
+    funnelReplayBindings: [] as unknown[][],
     released: false,
   };
   const client = {
@@ -420,7 +471,21 @@ function createFakeReindexPool() {
     },
     async query(sql: string, params: unknown[] = []) {
       state.poolQueries.push({ sql, params });
+      if (/from operator_funnels where funnel_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/from funnel_lanes where lane_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/from operator_funnel_plans where plan_id/i.test(sql)) {
+        return { rows: [{ count: 1 }] };
+      }
+      if (/insert into funnel_reindex_job_bindings/i.test(sql)) {
+        state.funnelReplayBindings.push(params);
+        return { rows: [] };
+      }
       if (/insert into audit_log/i.test(sql)) {
+        state.auditRows.push(params);
         return { rows: [] };
       }
       throw new Error(`Unexpected SQL in fake reindex pool: ${sql}`);
@@ -1403,6 +1468,46 @@ function createFakeDiscoveryPrefixPool() {
   };
 }
 
+function createFakeFunnelContentPool(options: { attributionRows?: Array<Record<string, unknown>> } = {}) {
+  const state = {
+    queries: [] as Array<{ sql: string; params: unknown[] }>,
+  };
+  const attributionRows = options.attributionRows ?? [
+    {
+      docId: "ea25c952-1111-4111-8111-111111111111",
+      title: "Scoped signal",
+      url: "https://example.test/scoped-signal",
+      funnelId: FUNNEL_SCOPE_A,
+      funnelName: "Scoped Funnel",
+      laneId: "22222222-2222-4222-8222-222222222222",
+      laneType: "hidden_intent",
+      finalDecision: "selected",
+      selectionReason: "llm_approved_signal",
+    },
+  ];
+  return {
+    state,
+    async query(sql: string, params: unknown[] = []) {
+      state.queries.push({ sql, params });
+      if (/from signal_candidates\s+where doc_id::text like/i.test(sql)) {
+        return {
+          rows:
+            params[0] === "ea25c952%"
+              ? [{ id: "ea25c952-1111-4111-8111-111111111111" }]
+              : [],
+        };
+      }
+      if (/with scoped/i.test(sql) && /select count\(\*\)::int as total from scoped/i.test(sql)) {
+        return { rows: [{ total: attributionRows.length }] };
+      }
+      if (/with scoped/i.test(sql) && /select \*\s+from scoped/i.test(sql)) {
+        return { rows: attributionRows };
+      }
+      throw new Error(`Unexpected SQL in fake funnel content pool: ${sql}`);
+    },
+  };
+}
+
 test("MCP token helpers issue, resolve, list, touch, revoke, and log request metadata", async () => {
   const pool = createFakeMcpPool();
 
@@ -1411,17 +1516,25 @@ test("MCP token helpers issue, resolve, list, touch, revoke, and log request met
     scopes: "read, write.sequences, write.destructive",
     issuedByUserId: "550e8400-e29b-41d4-a716-446655440000",
     expiresAt: "2026-05-01T00:00:00.000Z",
+    allowedFunnelIds: `${FUNNEL_SCOPE_A}, ${FUNNEL_SCOPE_B}`,
   });
 
   assert.match(issued.token, /^npmcp_[a-z0-9]+\.[A-Za-z0-9_-]+$/);
   assert.equal(issued.label, "Codex desktop");
   assert.deepEqual(issued.scopes, ["read", "write.sequences", "write.destructive"]);
+  assert.deepEqual(getMcpTokenAllowedFunnelIds(issued), [FUNNEL_SCOPE_A, FUNNEL_SCOPE_B]);
+  assert.equal(isMcpTokenAllowedForFunnel(issued, FUNNEL_SCOPE_A), true);
+  assert.equal(
+    isMcpTokenAllowedForFunnel(issued, "33333333-3333-4333-8333-333333333333"),
+    false
+  );
   assert.equal(hasMcpScope(issued.scopes, "read"), true);
   assert.equal(hasMcpScope(issued.scopes, "write.templates"), false);
 
   const resolved = await resolveMcpAccessTokenBySecret(pool, issued.token);
   assert.equal(resolved?.tokenId, issued.tokenId);
   assert.equal(resolved?.status, "active");
+  assert.deepEqual(resolved?.funnelScope?.allowedFunnelIds, [FUNNEL_SCOPE_A, FUNNEL_SCOPE_B]);
 
   const listed = await listMcpAccessTokens(pool);
   assert.equal(listed.length, 1);
@@ -3153,6 +3266,45 @@ test("MCP operator flow route returns strict routes without backend queries", as
   assert.equal(selectionRoute.signalVisibility, "hidden_intent");
   assert.equal(selectionRoute.hardGatePolicy, "forbidden_by_default");
   assert.equal(selectionRoute.mandatoryMarkerProofRequired, true);
+
+  const scopedSelectionRoute = (await executeMcpTool(
+    {
+      ...context,
+      token: {
+        ...WRITE_TEMPLATES_TOKEN,
+        funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A] },
+      },
+    },
+    "operator.flow.route",
+    {
+      domain: "selection",
+      objective: "increase_recall",
+    }
+  )) as Record<string, unknown>;
+  assert.deepEqual(scopedSelectionRoute.funnelScope, {
+    funnelId: FUNNEL_SCOPE_A,
+    laneId: null,
+    scopeRequiredForFollowThrough: true,
+  });
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          ...context,
+          token: {
+            ...WRITE_TEMPLATES_TOKEN,
+            funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A, FUNNEL_SCOPE_B] },
+          },
+        },
+        "operator.flow.route",
+        {
+          domain: "selection",
+          objective: "increase_recall",
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32004
+  );
   assert.equal(selectionRoute.mutationPolicy, "read-only advisory route; writes require existing scoped MCP/admin tools and read-back proof");
   assert.match(selectionSerialized, /operator\.selection\.dashboard/);
   assert.match(selectionSerialized, /signal_candidates\.residuals\.summary/);
@@ -3432,6 +3584,91 @@ test("MCP LLM budget report classifies provider 404 as endpoint error", async ()
   assert.match(serialized, /preflight\/provider failures/);
 });
 
+test("MCP LLM budget summary carries funnel read scope without claiming isolated budget caps", async () => {
+  const sdk = {
+    async getLlmBudgetSummary() {
+      return { globalMonthlyLimitUsd: 25 };
+    },
+  };
+  const pool = {
+    async query(sql: string, params: unknown[] = []) {
+      if (/from funnel_template_bindings ftb/i.test(sql)) {
+        assert.deepEqual(params, [FUNNEL_SCOPE_A]);
+        return {
+          rows: [
+            {
+              funnelName: "Enterprise buyer-intent",
+              laneName: null,
+              boundTemplateCount: 1,
+              reviewLogCount: 3,
+              reviewedDocCount: 2,
+              approveCount: 1,
+              rejectCount: 1,
+              uncertainCount: 1,
+              totalTokens: 1200,
+              estimatedCostUsd: 0.42,
+              lastReviewAt: "2026-06-12T10:00:00.000Z",
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected SQL in fake llm budget summary pool: ${sql}`);
+    },
+  };
+
+  const summary = (await executeMcpTool(
+    {
+      sdk: sdk as never,
+      pool,
+      token: {
+        ...WRITE_TEMPLATES_TOKEN,
+        funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A] },
+      },
+    },
+    "llm_budget.summary",
+    {}
+  )) as Record<string, unknown>;
+
+  assert.equal(summary.globalMonthlyLimitUsd, 25);
+  assert.deepEqual(summary.funnelScope, {
+    funnelId: FUNNEL_SCOPE_A,
+    laneId: null,
+    accountingMode: "global_budget_with_funnel_template_participation",
+    warning:
+      "LLM budget limits are global. Funnel scope shows bound template/review participation and must not be read as an isolated per-funnel budget cap.",
+    participation: {
+      funnelName: "Enterprise buyer-intent",
+      laneName: null,
+      boundTemplateCount: 1,
+      reviewLogCount: 3,
+      reviewedDocCount: 2,
+      approveCount: 1,
+      rejectCount: 1,
+      uncertainCount: 1,
+      totalTokens: 1200,
+      estimatedCostUsd: 0.42,
+      lastReviewAt: "2026-06-12T10:00:00.000Z",
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: sdk as never,
+          pool,
+          token: {
+            ...WRITE_TEMPLATES_TOKEN,
+            funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A, FUNNEL_SCOPE_B] },
+          },
+        },
+        "llm_budget.summary",
+        {}
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32004
+  );
+});
+
 test("MCP selection reindex planner builds bounded replay buckets and request templates", async () => {
   const dummySdk = createSignalOpsSdk({
     baseUrl: "http://api.example.test",
@@ -3448,7 +3685,16 @@ test("MCP selection reindex planner builds bounded replay buckets and request te
       token: WRITE_TEMPLATES_TOKEN,
     },
     "operator.selection.reindex_plan",
-    { chunkSize: 2, maxDocIds: 10, reason: "unit-test replay", includeSamples: true }
+    {
+      chunkSize: 2,
+      maxDocIds: 10,
+      reason: "unit-test replay",
+      includeSamples: true,
+      funnelId: "11111111-1111-4111-8111-111111111111",
+      laneId: "22222222-2222-4222-8222-222222222222",
+      funnelPlanId: "33333333-3333-4333-8333-333333333333",
+      planFingerprint: "unit-plan-fingerprint",
+    }
   )) as Record<string, unknown>;
 
   assert.equal(plan.readOnly, true);
@@ -3461,6 +3707,9 @@ test("MCP selection reindex planner builds bounded replay buckets and request te
   assert.match(JSON.stringify(plan), /skip/);
   assert.match(JSON.stringify(plan), /cccccccc-1111-4111-8111-111111111111/);
   assert.match(JSON.stringify(plan), /dddddddd-1111-4111-8111-111111111111/);
+  assert.match(JSON.stringify(plan), /funnelScope/);
+  assert.match(JSON.stringify(plan), /unit-plan-fingerprint/);
+  assert.match(JSON.stringify(plan), /verificationTarget/);
 });
 
 test("MCP operator funnel audit rejects unknown arguments at schema boundary", async () => {
@@ -3717,6 +3966,147 @@ test("MCP Discovery vNext write tools use strict schemas and vNext endpoints", a
   assert.equal(requests.length, 2, "invalid vNext write payloads should fail before backend fetch");
 });
 
+test("MCP Discovery vNext writes carry funnel provenance without leaking context fields to API", async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const sdk = createSignalOpsSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          vnext_run_id: "33333333-3333-4333-8333-333333333333",
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        }
+      );
+    }) as typeof fetch,
+  });
+  const pool = createFakeDiscoveryFunnelWritePool();
+  const laneId = "22222222-2222-4222-8222-222222222222";
+
+  const result = (await executeMcpTool(
+    {
+      sdk,
+      pool,
+      token: WRITE_DISCOVERY_TOKEN,
+    },
+    "discovery.runs.create",
+    {
+      funnelId: FUNNEL_SCOPE_A,
+      laneId,
+      changeMode: "manual_tuning",
+      configurationScope: "funnel",
+      verificationTarget: "source_health",
+      runKind: "candidate_acquisition",
+      triggerKind: "mcp",
+      request: { source: "unit-test" },
+      budget: {},
+    }
+  )) as Record<string, unknown>;
+
+  assert.match(requests[0]?.url ?? "", /\/maintenance\/discovery\/runs$/);
+  assert.equal(requests[0]?.body.funnelId, undefined);
+  assert.equal(requests[0]?.body.laneId, undefined);
+  assert.equal(requests[0]?.body.changeMode, undefined);
+  assert.equal(requests[0]?.body.verificationTarget, undefined);
+  assert.equal(requests[0]?.body.createdBy, WRITE_DISCOVERY_TOKEN.issuedByUserId);
+  assert.equal((result.funnelWriteContext as Record<string, unknown>).funnelId, FUNNEL_SCOPE_A);
+  assert.equal((result.funnelWriteContext as Record<string, unknown>).laneId, laneId);
+  assert.match(JSON.stringify(result.funnelReadBack), /operator\.funnel\.verify/);
+  assert.doesNotMatch(JSON.stringify(result.funnelReadBack), /operator\.report\.verify/);
+  assert.equal(pool.state.auditRows.length, 1);
+  assert.match(JSON.stringify(pool.state.auditRows), /mcp_funnel_write_context_recorded/);
+  assert.match(JSON.stringify(pool.state.auditRows), /discovery\.runs\.create/);
+});
+
+test("MCP Discovery vNext funnel-bound tokens require allowed funnel context", async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const sdk = createSignalOpsSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input, init) => {
+      requests.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const scopedToken = {
+    ...WRITE_DISCOVERY_TOKEN,
+    funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A] },
+  };
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        { sdk, pool: createFakeDiscoveryFunnelWritePool(), token: scopedToken },
+        "discovery.runs.create",
+        {
+          runKind: "candidate_acquisition",
+          triggerKind: "mcp",
+          request: {},
+          budget: {},
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32004 &&
+      error.message.includes("must pass funnelId")
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        { sdk, pool: createFakeDiscoveryFunnelWritePool(), token: scopedToken },
+        "discovery.runs.create",
+        {
+          funnelId: FUNNEL_SCOPE_B,
+          changeMode: "manual_tuning",
+          configurationScope: "funnel",
+          verificationTarget: "source_health",
+          runKind: "candidate_acquisition",
+          triggerKind: "mcp",
+          request: {},
+          budget: {},
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32004 &&
+      error.message.includes("not allowed to access the requested funnel")
+  );
+
+  const allowed = (await executeMcpTool(
+    { sdk, pool: createFakeDiscoveryFunnelWritePool(), token: scopedToken },
+    "discovery.runs.create",
+    {
+      funnelId: FUNNEL_SCOPE_A,
+      changeMode: "manual_tuning",
+      configurationScope: "funnel",
+      verificationTarget: "source_health",
+      runKind: "candidate_acquisition",
+      triggerKind: "mcp",
+      request: {},
+      budget: {},
+    }
+  )) as Record<string, unknown>;
+  assert.equal((allowed.funnelWriteContext as Record<string, unknown>).funnelId, FUNNEL_SCOPE_A);
+  assert.equal(requests.length, 1, "only the allowed scoped write should reach the backend");
+});
+
 test("MCP Discovery vNext read accepts artifact ids and rejects missing ids", async () => {
   const requests: string[] = [];
   const sdk = createSignalOpsSdk({
@@ -3853,6 +4243,60 @@ test("MCP sequence and content read tools accept report aliases and UUID prefixe
   assert.match(requestLog, /ea25c952-1111-4111-8111-111111111111/);
   assert.match(requestLog, /signal_candidate%3Aea25c952-1111-4111-8111-111111111111/);
   assert.match(requestLog, /eeeeeeee-1111-4111-8111-111111111111/);
+});
+
+test("MCP content reads honor funnel-bound token scope", async () => {
+  const requests: string[] = [];
+  const sdk = createSignalOpsSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ ok: true, doc_id: "ea25c952-1111-4111-8111-111111111111" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      });
+    }) as typeof fetch,
+  });
+  const scopedToken = {
+    ...WRITE_CHANNELS_TOKEN,
+    funnelScope: { allowedFunnelIds: [FUNNEL_SCOPE_A] },
+  };
+  const pool = createFakeFunnelContentPool();
+
+  const listResult = (await executeMcpTool(
+    { sdk, pool, token: scopedToken },
+    "signal_candidates.list",
+    { page: 1, pageSize: 10 }
+  )) as Record<string, unknown>;
+  assert.equal(listResult.total, 1);
+  assert.match(JSON.stringify(listResult), /Scoped Funnel/);
+  assert.equal(requests.length, 0, "funnel-scoped list should use DB-backed funnel content rows");
+  assert.match(JSON.stringify(pool.state.queries), /f\.funnel_id = any/);
+
+  const readResult = (await executeMcpTool(
+    { sdk, pool, token: scopedToken },
+    "signal_candidates.read",
+    { docId: "ea25c952" }
+  )) as Record<string, unknown>;
+  assert.match(JSON.stringify(readResult.funnelAttribution), /llm_approved_signal/);
+  assert.equal(requests.length, 1, "scoped read may fetch detail after DB attribution proof");
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool: createFakeFunnelContentPool({ attributionRows: [] }),
+          token: scopedToken,
+        },
+        "signal_candidates.read",
+        { docId: "ea25c952" }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32004
+  );
+  assert.equal(requests.length, 1, "out-of-scope read should be rejected before backend fetch");
 });
 
 test("MCP sequence write tools reject malformed UUID ids before backend fetch", async () => {
@@ -4071,6 +4515,98 @@ test("MCP system interest writes return persisted profile read-back verification
   assert.match(JSON.stringify(verification.candidateSignalsQualityWarnings), /buyer_need/);
   assert.match(JSON.stringify(result), /system_interests\.compile_status\.list/);
   assert.equal(pool.state.released, true);
+});
+
+test("MCP funnel-aware writes require scoped context when changeMode is supplied", async () => {
+  const sdk = createSignalOpsSdk({ baseUrl: "http://api.example.test" });
+  const pool = createFakeMcpPool();
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool,
+          token: WRITE_TEMPLATES_TOKEN,
+        },
+        "system_interests.create",
+        {
+          changeMode: "autopilot_setup",
+          verificationTarget: "selection",
+          payload: {
+            name: "Scoped interest",
+            positive_texts: ["buyer asks for implementation support"],
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      error.message.includes("requires funnelId")
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk,
+          pool,
+          token: WRITE_CHANNELS_TOKEN,
+        },
+        "channels.create",
+        {
+          changeMode: "manual_tuning",
+          verificationTarget: "source_health",
+          payload: {
+            providerType: "rss",
+            name: "Scoped RSS",
+            fetchUrl: "https://example.com/feed.xml",
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      error.message.includes("funnelId or configurationScope")
+  );
+});
+
+test("MCP scoped system interest writes return funnel read-back and audit context", async () => {
+  const pool = createFakeSystemInterestWritePool();
+  const sdk = createSignalOpsSdk({ baseUrl: "http://api.example.test" });
+  const funnelId = "11111111-1111-4111-8111-111111111111";
+  const laneId = "22222222-2222-4222-8222-222222222222";
+
+  const result = (await executeMcpTool(
+    {
+      sdk,
+      pool: pool as never,
+      token: WRITE_TEMPLATES_TOKEN,
+    },
+    "system_interests.create",
+    {
+      changeMode: "manual_tuning",
+      configurationScope: "funnel",
+      funnelId,
+      laneId,
+      verificationTarget: "selection",
+      payload: {
+        name: "Scoped interest",
+        positive_texts: ["buyer asks for implementation support"],
+        allowed_content_kinds: ["editorial"],
+      },
+    }
+  )) as Record<string, unknown>;
+
+  const funnelContext = result.funnelWriteContext as Record<string, unknown>;
+  assert.equal(funnelContext.funnelId, funnelId);
+  assert.equal(funnelContext.laneId, laneId);
+  assert.equal(funnelContext.changeMode, "manual_tuning");
+  assert.match(JSON.stringify(result.funnelReadBack), /operator\.funnel\.verify/);
+  assert.match(JSON.stringify(result.funnelReadBack), /operator\.report\.verify/);
+  assert.equal((pool.state.funnelBindings as unknown[]).length, 1);
+  assert.match(JSON.stringify(result.funnelBinding), /manual_tuning/);
+  assert.match(JSON.stringify(pool.state.auditRows), /mcp_funnel_write_context_recorded/);
 });
 
 test("MCP system interest writes reject camelCase and nested profile aliases", async () => {
@@ -4743,6 +5279,114 @@ test("MCP reindex backfill accepts bounded docId chunks and rejects runtime opti
         }
       ),
     (error) => error instanceof JsonRpcError && error.code === -32602
+  );
+});
+
+test("MCP reindex backfill binds bounded replay to funnel context", async () => {
+  const dummySdk = createSignalOpsSdk({
+    baseUrl: "http://api.example.test",
+    fetchImpl: (async () => {
+      throw new Error("fetch should not be called by maintenance.reindex.request");
+    }) as typeof fetch,
+  });
+  const pool = createFakeReindexPool();
+  const funnelId = "11111111-1111-4111-8111-111111111111";
+  const laneId = "22222222-2222-4222-8222-222222222222";
+  const funnelPlanId = "33333333-3333-4333-8333-333333333333";
+
+  const result = (await executeMcpTool(
+    {
+      sdk: dummySdk,
+      pool,
+      token: WRITE_SEQUENCES_TOKEN,
+    },
+    "maintenance.reindex.request",
+    {
+      funnelId,
+      laneId,
+      funnelPlanId,
+      planFingerprint: "unit-plan-fingerprint",
+      changeMode: "manual_tuning",
+      configurationScope: "funnel",
+      verificationTarget: "replay",
+      payload: {
+        indexName: "interest_centroids",
+        jobKind: "backfill",
+        options: {
+          docIds: ["aaaaaaaa-1111-4111-8111-111111111111"],
+          reason: "funnel-scoped bounded replay",
+        },
+      },
+    }
+  )) as Record<string, unknown>;
+
+  const reindexInsert = pool.state.clientQueries.find((entry) =>
+    /insert into public\.reindex_jobs/i.test(entry.sql)
+  );
+  assert.ok(reindexInsert, "reindex job insert should be recorded");
+  const optionsJson = JSON.parse(String(reindexInsert.params[3])) as Record<string, unknown>;
+  assert.deepEqual(optionsJson.docIds, ["aaaaaaaa-1111-4111-8111-111111111111"]);
+  assert.equal((optionsJson.funnelContext as Record<string, unknown>).funnelId, funnelId);
+  assert.equal((result.funnelWriteContext as Record<string, unknown>).funnelId, funnelId);
+  assert.equal((result.funnelReplayBinding as Record<string, unknown>).bound, true);
+  assert.equal((result.funnelReplayBinding as Record<string, unknown>).laneId, laneId);
+  assert.equal(pool.state.funnelReplayBindings.length, 1);
+  assert.match(JSON.stringify(pool.state.auditRows), /mcp_funnel_write_context_recorded/);
+  assert.match(JSON.stringify(result.funnelReadBack), /operator\.funnel\.verify/);
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool: createFakeReindexPool(),
+          token: {
+            ...WRITE_SEQUENCES_TOKEN,
+            funnelScope: { allowedFunnelIds: [funnelId] },
+          },
+        },
+        "maintenance.reindex.request",
+        {
+          funnelId: "44444444-4444-4444-8444-444444444444",
+          changeMode: "manual_tuning",
+          configurationScope: "funnel",
+          verificationTarget: "replay",
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+            options: {
+              docIds: ["aaaaaaaa-1111-4111-8111-111111111111"],
+            },
+          },
+        }
+      ),
+    (error) => error instanceof JsonRpcError && error.code === -32004
+  );
+
+  await assert.rejects(
+    () =>
+      executeMcpTool(
+        {
+          sdk: dummySdk,
+          pool: createFakeReindexPool(),
+          token: WRITE_SEQUENCES_TOKEN,
+        },
+        "maintenance.reindex.request",
+        {
+          funnelId,
+          changeMode: "manual_tuning",
+          configurationScope: "funnel",
+          verificationTarget: "replay",
+          payload: {
+            indexName: "interest_centroids",
+            jobKind: "backfill",
+          },
+        }
+      ),
+    (error) =>
+      error instanceof JsonRpcError &&
+      error.code === -32602 &&
+      error.message.includes("requires bounded payload.options.docIds")
   );
 });
 

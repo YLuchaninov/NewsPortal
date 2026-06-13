@@ -31,6 +31,13 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
         icon: "grid",
         summary: "Needs attention, recent work, and the fastest way into live tasks.",
       },
+      {
+        href: "/funnels",
+        label: "Funnels",
+        key: "funnels",
+        icon: "workflow",
+        summary: "Operate multi-funnel signal discovery, routing, plans, replay, and reports.",
+      },
     ],
   },
   {

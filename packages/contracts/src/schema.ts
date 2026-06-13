@@ -215,6 +215,7 @@ export const ADMIN_BFF_ACTION_PAYLOAD_SCHEMAS = {
   "content-analysis-policies": JSON_OBJECT_SCHEMA,
   "content-filter-policies": JSON_OBJECT_SCHEMA,
   discovery: JSON_OBJECT_SCHEMA,
+  funnels: JSON_OBJECT_SCHEMA,
   "ingress-adapters": JSON_OBJECT_SCHEMA,
   "mcp-tokens": JSON_OBJECT_SCHEMA,
   moderation: JSON_OBJECT_SCHEMA,

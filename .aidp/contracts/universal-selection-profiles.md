@@ -15,6 +15,8 @@ Selection semantics must be profile-driven instead of hidden inside templates, s
 - `final_selection_results` and bounded `system_feed_results` distinguish true `llmReviewPending` from cheap `semantic_hold`.
 - Historical backfill/repair records `selectionProfileSnapshot`, exposes profile summaries through maintenance reindex reads and reports separate selection replay/enrichment counters.
 - Operator/control-plane diagnostics expose advisory `signalVisibility`, `evidenceLaneType` and `hardGatePolicy` fields for selection tuning and report verification.
+- Funnel Autopilot 2.0 stores operator funnels, lanes, scoped bindings and staged plans as control-plane configuration. It adds attribution and guardrails around profile-driven selection without moving final selection ownership out of `final_selection_results`.
+- Worker final-selection writes attach `explain_json.funnelRuntimeAttribution` when active funnel bindings are observable for the evaluated system interests, source channel, `selection_review` template or bounded replay job. This attribution explains runtime participation; it does not make source membership or funnel membership sufficient semantic proof.
 
 ## Target decision model
 
@@ -48,10 +50,12 @@ Those concepts may exist only as profile-local definitions, optional facets, ope
 - Signal visibility (`explicit_marker`, `hidden_intent`, `mixed`, `unknown`) is advisory/profile-local context, not a domain enum in the generic engine.
 - Hard gate policy is profile-local: hidden/unknown signals default to empty hard lexical gates; explicit-marker gates require mandatory-marker proof; mixed signals require lane-like separation before hard gates.
 - `candidateSignals` group names may be conceptual labels, but cues must be literal observable fragments that can appear in candidate text.
+- Funnel lanes are configuration boundaries around profiles, sources and templates. They may scope source roles and LLM review templates per funnel, but source health or source membership is never sufficient semantic proof.
+- Only LLM templates with purpose `selection_review` may influence automatic selection. Extraction, classification and scoring templates may enrich or route evidence but must not create selected outcomes.
 
 ## Explainability
 
-Every profile decision must explain what matched, what failed, what evidence was missing, what forbidden evidence fired, why outcome is accept/reject/hold and whether optional LLM override was used.
+Every profile decision must explain what matched, what failed, what evidence was missing, what forbidden evidence fired, why outcome is accept/reject/hold and whether optional LLM override was used. Funnel-enabled final-selection explain must also expose the runtime funnel/lane/source-role/template/replay attribution when those bindings contributed to the evaluated row.
 
 ## Failure modes
 
@@ -66,7 +70,7 @@ Every profile decision must explain what matched, what failed, what evidence was
 ## Proof expectations
 
 - Profile config/model changes: migration proof, unit/typecheck, admin write/read proof.
-- Runtime policy changes: targeted worker proof for hold vs LLM pending plus final-selection projection proof.
+- Runtime policy changes: targeted worker proof for hold vs LLM pending plus final-selection projection proof. Funnel runtime attribution changes also need worker proof that `final_selection_results.explain_json` carries the binding evidence without changing selected/rejected/gray-zone semantics.
 - Operator/explain changes: targeted API/admin tests for `selectionMode`, summaries, diagnostics and guidance.
 - Backfill/replay changes: proof that `selectionProfileSnapshot` and selection/enrichment replay counters are captured and exposed.
 

@@ -1,0 +1,248 @@
+---
+import {
+  auditOperatorFunnelOverlap,
+  buildOperatorFunnelAutoplan,
+  FUNNEL_LANE_TYPES,
+  FUNNEL_ROUTING_MODES,
+  readOperatorFunnel,
+  verifyOperatorFunnel,
+} from "@signalops/control-plane";
+import AdminShell from "../../../layouts/AdminShell.astro";
+import { buildAdminActionToken } from "../../../lib/server/admin-action";
+import { resolveAdminSession } from "../../../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../../../lib/server/browser-flow";
+import { getPool } from "../../../lib/server/db";
+import {
+  ADMIN_BACKGROUND_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_SECTION_CARD_CLASS,
+} from "../../../lib/admin-ui-classes";
+
+export const prerender = false;
+
+type R = Record<string, unknown>;
+
+const allowedSections = new Set(["plan", "lanes", "sources", "rules", "replay", "reports", "overlap"]);
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const funnelId = String(Astro.params.funnelId ?? "");
+const section = String(Astro.params.section ?? "plan");
+if (!allowedSections.has(section)) {
+  return Astro.redirect(appPath(`/funnels/${funnelId}`));
+}
+
+const pool = getPool();
+const funnel = await readOperatorFunnel(pool, funnelId);
+if (!funnel) {
+  return Astro.redirect(appPath("/funnels"));
+}
+const goal = String(funnel.goal ?? "");
+const lanes = Array.isArray(funnel.lanes) ? (funnel.lanes as R[]) : [];
+const sources = Array.isArray(funnel.sources) ? (funnel.sources as R[]) : [];
+const interests = Array.isArray(funnel.systemInterests) ? (funnel.systemInterests as R[]) : [];
+const templates = Array.isArray(funnel.templates) ? (funnel.templates as R[]) : [];
+const funnelActionPath = appPath("/bff/admin/funnels");
+const funnelActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: funnelActionPath,
+  scope: "funnels",
+});
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+const planPreview = section === "plan" && goal
+  ? await buildOperatorFunnelAutoplan(pool, { idea: goal, funnelId, operatorExperience: "novice" })
+  : null;
+const verification = section === "reports" || section === "replay"
+  ? await verifyOperatorFunnel(pool, { funnelId, includeSamples: false })
+  : null;
+const overlap = section === "overlap"
+  ? await auditOperatorFunnelOverlap(pool, { funnelIds: [funnelId], includeSamples: false })
+  : null;
+const title = section[0]?.toUpperCase() + section.slice(1);
+const jsonText = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
+---
+
+<AdminShell title={`${title} — ${String(funnel.name)}`} session={session} flash={flash} activeNav="funnels">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <a href={appPath("/funnels")} class="hover:text-foreground">Funnels</a>
+      <span>/</span>
+      <a href={appPath(`/funnels/${funnelId}`)} class="hover:text-foreground">{String(funnel.name)}</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">{title}</span>
+    </nav>
+  </Fragment>
+
+  <div class="space-y-6">
+    <section class={ADMIN_HERO_CARD_CLASS}>
+      <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Funnel section</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight">{title}</h1>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{String(funnel.name)} · {String(funnel.status)}</p>
+    </section>
+
+    {section === "plan" && planPreview && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-base font-semibold">Autopilot plan preview</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Fingerprint {planPreview.planFingerprint.slice(0, 12)} · live state {planPreview.liveStateHash.slice(0, 12)}</p>
+          </div>
+          <form method="post" action={funnelActionPath} class="shrink-0">
+            <input type="hidden" name="adminActionToken" value={funnelActionToken} />
+            <input type="hidden" name="intent" value="stage_plan_from_goal" />
+            <input type="hidden" name="funnelId" value={funnelId} />
+            <input type="hidden" name="idea" value={goal} />
+            <input type="hidden" name="redirectTo" value={appPath(`/funnels/${funnelId}/lanes`)} />
+            <button class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90" type="submit">
+              Stage lanes
+            </button>
+          </form>
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {planPreview.lanes.map((lane) => (
+            <div class={ADMIN_BACKGROUND_TILE_CLASS}>
+              <p class="text-sm font-semibold">{lane.name}</p>
+              <p class="mt-1 text-xs text-muted-foreground">{lane.laneType} · {lane.routingMode}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {section === "lanes" && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 class="text-base font-semibold">Lane routing</h2>
+            <p class="mt-1 text-sm text-muted-foreground">{lanes.length} configured lane{lanes.length === 1 ? "" : "s"}</p>
+          </div>
+          <a href={appPath(`/funnels/${funnelId}/plan`)} class="inline-flex h-9 items-center justify-center rounded-md border border-input px-3 text-sm font-medium hover:bg-accent">
+            Plan preview
+          </a>
+        </div>
+        {lanes.length === 0 ? (
+          <div class="mt-5 rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+            No staged lanes yet.
+          </div>
+        ) : (
+          <div class="mt-5 space-y-4">
+            {lanes.map((lane) => (
+              <form method="post" action={funnelActionPath} class={`${ADMIN_BACKGROUND_TILE_CLASS} grid gap-4`}>
+                <input type="hidden" name="adminActionToken" value={funnelActionToken} />
+                <input type="hidden" name="intent" value="update_lane" />
+                <input type="hidden" name="funnelId" value={funnelId} />
+                <input type="hidden" name="laneId" value={String(lane.laneId)} />
+                <input type="hidden" name="redirectTo" value={currentPath} />
+                <div class="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.6fr)_minmax(220px,0.7fr)_auto] lg:items-end">
+                  <label class="block">
+                    <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Name</span>
+                    <input name="name" value={String(lane.name)} class="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                  </label>
+                  <label class="block">
+                    <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Type</span>
+                    <select name="laneType" class="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      {FUNNEL_LANE_TYPES.map((laneType) => (
+                        <option value={laneType} selected={laneType === String(lane.laneType)}>{laneType}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Routing</span>
+                    <select name="routingMode" class="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      {FUNNEL_ROUTING_MODES.map((routingMode) => (
+                        <option value={routingMode} selected={routingMode === String(lane.routingMode)}>{routingMode}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90" type="submit">
+                    Save
+                  </button>
+                </div>
+                <div class="grid gap-3 lg:grid-cols-2">
+                  <label class="block">
+                    <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Policy JSON</span>
+                    <textarea name="policyJson" rows="9" class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring">{jsonText(lane.policy)}</textarea>
+                  </label>
+                  <label class="block">
+                    <span class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Evidence Contract JSON</span>
+                    <textarea name="evidenceContractJson" rows="9" class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring">{jsonText(lane.evidenceContract)}</textarea>
+                  </label>
+                </div>
+              </form>
+            ))}
+          </div>
+        )}
+      </section>
+    )}
+
+    {section === "sources" && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Source bindings</h2>
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          {sources.map((source) => (
+            <a href={appPath(`/channels/${String(source.channelId)}/edit`)} class={ADMIN_BACKGROUND_TILE_CLASS}>
+              <p class="text-sm font-semibold">{String(source.name)}</p>
+              <p class="mt-1 text-xs text-muted-foreground">{String(source.providerType)} · {String(source.sourceRole)}</p>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    {section === "rules" && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Manual tuning rules</h2>
+        <div class="mt-4 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 class="text-sm font-semibold">System interests</h3>
+            <div class="mt-3 space-y-2">
+              {interests.map((interest) => (
+                <a href={appPath(`/templates/interests/${String(interest.interestTemplateId)}/edit`)} class="block rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
+                  {String(interest.name)}
+                </a>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold">LLM templates</h3>
+            <div class="mt-3 space-y-2">
+              {templates.map((template) => (
+                <a href={appPath(`/templates/llm/${String(template.promptTemplateId)}/edit`)} class="block rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
+                  {String(template.name)} · {String(template.purpose)}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
+
+    {(section === "replay" || section === "reports") && verification && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">{section === "replay" ? "Replay readiness" : "Funnel report"}</h2>
+        <pre class="mt-4 overflow-x-auto rounded-md bg-background p-4 text-xs">{JSON.stringify(verification, null, 2)}</pre>
+      </section>
+    )}
+
+    {section === "overlap" && overlap && (
+      <section class={ADMIN_SECTION_CARD_CLASS}>
+        <h2 class="text-base font-semibold">Overlap audit</h2>
+        <pre class="mt-4 overflow-x-auto rounded-md bg-background p-4 text-xs">{JSON.stringify(overlap, null, 2)}</pre>
+      </section>
+    )}
+  </div>
+</AdminShell>

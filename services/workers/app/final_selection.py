@@ -593,10 +593,6 @@ def summarize_final_selection_result(
         total=total,
         filter_reason_counts=normalized_filter_reason_counts,
     )
-    item_level_candidate_signal = (
-        (candidate_signal_uplift > 0 or candidate_signal_eligible > 0)
-        and normalized_candidate_signal_tier in {"buyer_intent", "project_intent"}
-    )
     clean_item_level_match = (
         candidate_signal_strong_match > 0
         and normalized_candidate_signal_tier in {"buyer_intent", "project_intent"}

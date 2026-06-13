@@ -1,5 +1,7 @@
 import { MCP_TEMPLATE_ARGUMENT_SCHEMAS } from "@signalops/contracts";
 import {
+  bindSystemInterestToFunnel,
+  bindTemplateToFunnel,
   deleteTemplateWithAudit,
   saveTemplateFromPayload,
   setTemplateActiveStateWithAudit,
@@ -10,12 +12,17 @@ import {
   createReadTool,
   createWriteTool,
   JsonRpcError,
+  mcpFunnelWriteContextPayload,
   pagingSchema,
+  readMcpFunnelWriteContext,
   readPageArgs,
   readPayload,
   readBooleanFlag,
   readRequiredUuidString,
   requireDestructiveConfirmation,
+  shouldAuditMcpFunnelWriteContext,
+  withMcpFunnelWriteContext,
+  writeMcpMutationAudit,
   type McpToolDefinition
 } from "./shared";
 
@@ -886,17 +893,43 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.templates",
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.systemInterestCreate,
     async ({ pool, token }, args) => {
+      const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+        toolName: "system_interests.create",
+        riskKind: "selection",
+        selectionImpacting: true,
+      });
       const payload = {
         ...readSystemInterestPayload(args),
         kind: "interest",
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
-      return withTemplateReadBack(
+      const entityId = result.entityId;
+      const funnelBinding = funnelContext.funnelId
+        ? await bindSystemInterestToFunnel(pool, token.issuedByUserId, {
+            funnelId: funnelContext.funnelId,
+            laneId: funnelContext.laneId,
+            interestTemplateId: entityId,
+            bindingRole: funnelContext.changeMode ?? "manual_tuning",
+          })
+        : null;
+      if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+        await writeMcpMutationAudit(pool, token, {
+          actionType: "mcp_funnel_write_context_recorded",
+          entityType: "interest_template",
+          entityId,
+          payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+        });
+      }
+      const response = await withTemplateReadBack(
         pool,
         result as unknown as Record<string, unknown>,
         "system_interests.read",
         "interestTemplateId",
         payload
+      );
+      return withMcpFunnelWriteContext(
+        { ...response, ...(funnelBinding ? { funnelBinding } : {}) },
+        funnelContext
       );
     }
   ),
@@ -906,17 +939,43 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.templates",
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.systemInterestUpdate,
     async ({ pool, token }, args) => {
+      const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+        toolName: "system_interests.update",
+        riskKind: "selection",
+        selectionImpacting: true,
+      });
       const payload = {
         ...readSystemInterestPayload(args),
         kind: "interest",
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
-      return withTemplateReadBack(
+      const entityId = result.entityId;
+      const funnelBinding = funnelContext.funnelId
+        ? await bindSystemInterestToFunnel(pool, token.issuedByUserId, {
+            funnelId: funnelContext.funnelId,
+            laneId: funnelContext.laneId,
+            interestTemplateId: entityId,
+            bindingRole: funnelContext.changeMode ?? "manual_tuning",
+          })
+        : null;
+      if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+        await writeMcpMutationAudit(pool, token, {
+          actionType: "mcp_funnel_write_context_recorded",
+          entityType: "interest_template",
+          entityId,
+          payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+        });
+      }
+      const response = await withTemplateReadBack(
         pool,
         result as unknown as Record<string, unknown>,
         "system_interests.read",
         "interestTemplateId",
         payload
+      );
+      return withMcpFunnelWriteContext(
+        { ...response, ...(funnelBinding ? { funnelBinding } : {}) },
+        funnelContext
       );
     }
   ),
@@ -981,16 +1040,42 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.templates",
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.llmTemplateCreate,
     async ({ pool, token }, args) => {
+      const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+        toolName: "llm_templates.create",
+        riskKind: "llm_review",
+        selectionImpacting: true,
+      });
       const payload = {
         ...readLlmTemplatePayload(args),
         kind: "llm",
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
-      return withTemplateReadBack(
+      const entityId = result.entityId;
+      const funnelBinding = funnelContext.funnelId
+        ? await bindTemplateToFunnel(pool, token.issuedByUserId, {
+            funnelId: funnelContext.funnelId,
+            laneId: funnelContext.laneId,
+            promptTemplateId: entityId,
+            bindingRole: funnelContext.changeMode ?? "manual_tuning",
+          })
+        : null;
+      if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+        await writeMcpMutationAudit(pool, token, {
+          actionType: "mcp_funnel_write_context_recorded",
+          entityType: "llm_template",
+          entityId,
+          payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+        });
+      }
+      const response = await withTemplateReadBack(
         pool,
         result as unknown as Record<string, unknown>,
         "llm_templates.read",
         "promptTemplateId"
+      );
+      return withMcpFunnelWriteContext(
+        { ...response, ...(funnelBinding ? { funnelBinding } : {}) },
+        funnelContext
       );
     }
   ),
@@ -1000,16 +1085,42 @@ export const TEMPLATE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "write.templates",
     MCP_TEMPLATE_ARGUMENT_SCHEMAS.llmTemplateUpdate,
     async ({ pool, token }, args) => {
+      const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+        toolName: "llm_templates.update",
+        riskKind: "llm_review",
+        selectionImpacting: true,
+      });
       const payload = {
         ...readLlmTemplatePayload(args),
         kind: "llm",
       };
       const result = await saveTemplateFromPayload(pool, token.issuedByUserId, payload);
-      return withTemplateReadBack(
+      const entityId = result.entityId;
+      const funnelBinding = funnelContext.funnelId
+        ? await bindTemplateToFunnel(pool, token.issuedByUserId, {
+            funnelId: funnelContext.funnelId,
+            laneId: funnelContext.laneId,
+            promptTemplateId: entityId,
+            bindingRole: funnelContext.changeMode ?? "manual_tuning",
+          })
+        : null;
+      if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+        await writeMcpMutationAudit(pool, token, {
+          actionType: "mcp_funnel_write_context_recorded",
+          entityType: "llm_template",
+          entityId,
+          payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+        });
+      }
+      const response = await withTemplateReadBack(
         pool,
         result as unknown as Record<string, unknown>,
         "llm_templates.read",
         "promptTemplateId"
+      );
+      return withMcpFunnelWriteContext(
+        { ...response, ...(funnelBinding ? { funnelBinding } : {}) },
+        funnelContext
       );
     }
   ),

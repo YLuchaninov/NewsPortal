@@ -4,6 +4,7 @@ export * from "./channel-bottlenecks";
 export * from "./channel-bulk-onboarding";
 export * from "./channel-providers";
 export * from "./channels";
+export * from "./funnels";
 export * from "./mcp-tokens";
 export * from "./reindex";
 export * from "./source-families";

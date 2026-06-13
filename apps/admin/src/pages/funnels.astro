@@ -1,0 +1,163 @@
+---
+import { listOperatorFunnels } from "@signalops/control-plane";
+import AdminShell from "../layouts/AdminShell.astro";
+import { buildAdminActionToken } from "../lib/server/admin-action";
+import { resolveAdminSession } from "../lib/server/auth";
+import {
+  buildAdminSignInPath,
+  readFlash,
+  resolveAdminAppPath,
+  resolveAdminCurrentPath,
+} from "../lib/server/browser-flow";
+import { getPool } from "../lib/server/db";
+import {
+  ADMIN_COMPACT_METRIC_TILE_CLASS,
+  ADMIN_HERO_CARD_CLASS,
+  ADMIN_TABLE_ACTIONS_HEADER_CLASS,
+  ADMIN_TABLE_HEADER_CLASS,
+} from "../lib/admin-ui-classes";
+
+export const prerender = false;
+
+const session = await resolveAdminSession(Astro.request);
+const appPath = (target = "/") => resolveAdminAppPath(Astro.request, target);
+if (!session) {
+  return Astro.redirect(
+    buildAdminSignInPath(Astro.request, resolveAdminCurrentPath(Astro.request))
+  );
+}
+
+const flash = readFlash(Astro.url);
+const pool = getPool();
+const funnels = await listOperatorFunnels(pool, {
+  status: Astro.url.searchParams.get("status"),
+  page: Number(Astro.url.searchParams.get("page") ?? 1),
+  pageSize: 25,
+});
+const activeCount = funnels.items.filter((funnel) => funnel.status === "active").length;
+const draftCount = funnels.items.filter((funnel) => funnel.status === "draft").length;
+const selectedCount = funnels.items.reduce((sum, funnel) => sum + funnel.selectedCount, 0);
+const funnelActionPath = appPath("/bff/admin/funnels");
+const funnelActionToken = buildAdminActionToken({
+  request: Astro.request,
+  session,
+  targetPath: funnelActionPath,
+  scope: "funnels",
+});
+const currentPath = `${Astro.url.pathname}${Astro.url.search}`;
+---
+
+<AdminShell title="Funnels — Admin" session={session} flash={flash} activeNav="funnels">
+  <Fragment slot="header-title">
+    <nav class="flex items-center gap-1 text-sm text-muted-foreground">
+      <a href={appPath("/")} class="hover:text-foreground">Dashboard</a>
+      <span>/</span>
+      <span class="font-medium text-foreground">Funnels</span>
+    </nav>
+  </Fragment>
+
+  <Fragment slot="header-actions">
+    <a href={appPath("/funnels/new")} class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+      New funnel
+    </a>
+  </Fragment>
+
+  <div class="space-y-6">
+    <div class={`flex flex-col gap-4 ${ADMIN_HERO_CARD_CLASS} lg:flex-row lg:items-end lg:justify-between`}>
+      <div class="max-w-3xl">
+        <p class="text-xs font-medium uppercase tracking-[0.2em] text-primary/80">Funnel Autopilot 2.0</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight">Funnels</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+          Funnel-first operations connect goals, lanes, system interests, sources, LLM review, replay and reports without replacing the expert manual surfaces.
+        </p>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Total</p>
+          <p class="mt-1 text-2xl font-semibold">{funnels.total}</p>
+        </div>
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Active</p>
+          <p class="mt-1 text-2xl font-semibold text-emerald-500">{activeCount}</p>
+        </div>
+        <div class={ADMIN_COMPACT_METRIC_TILE_CLASS}>
+          <p class="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Selected</p>
+          <p class="mt-1 text-2xl font-semibold">{selectedCount}</p>
+        </div>
+      </div>
+    </div>
+
+    <section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div class="border-b border-border px-5 py-4">
+        <h2 class="text-base font-semibold">Funnel catalog</h2>
+        <p class="mt-1 text-sm text-muted-foreground">{draftCount} draft funnel{draftCount === 1 ? "" : "s"} on this page</p>
+      </div>
+      {funnels.items.length === 0 ? (
+        <div class="px-6 py-14 text-center">
+          <p class="text-base font-medium">No funnels yet</p>
+          <a href={appPath("/funnels/new")} class="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            Create funnel
+          </a>
+        </div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="admin-table w-full min-w-[980px] text-sm">
+            <thead>
+              <tr class="border-b border-border bg-muted/30">
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Funnel</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Bindings</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Selection</th>
+                <th class={ADMIN_TABLE_HEADER_CLASS}>Status</th>
+                <th class={ADMIN_TABLE_ACTIONS_HEADER_CLASS}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {funnels.items.map((funnel) => (
+                <tr class="border-b border-border last:border-b-0">
+                  <td class="px-5 py-4 align-top">
+                    <a href={appPath(`/funnels/${funnel.funnelId}`)} class="font-semibold text-foreground hover:text-primary">
+                      {funnel.name}
+                    </a>
+                    <p class="mt-1 line-clamp-2 max-w-xl text-sm leading-6 text-muted-foreground">{funnel.goal || "No goal recorded."}</p>
+                  </td>
+                  <td class="px-5 py-4 align-top text-sm text-muted-foreground">
+                    <div>{funnel.laneCount} lanes</div>
+                    <div>{funnel.interestCount} interests</div>
+                    <div>{funnel.sourceCount} sources</div>
+                    <div>{funnel.templateCount} templates</div>
+                  </td>
+                  <td class="px-5 py-4 align-top">
+                    <div class="font-medium text-foreground">{funnel.selectedCount} selected</div>
+                    <div class="text-sm text-muted-foreground">{funnel.grayCount} gray / {funnel.rejectedCount} rejected</div>
+                  </td>
+                  <td class="px-5 py-4 align-top">
+                    <span class="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{funnel.status}</span>
+                  </td>
+                  <td class="px-5 py-4 align-top text-right">
+                    <div class="flex justify-end gap-2">
+                      <a href={appPath(`/funnels/${funnel.funnelId}`)} class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium hover:bg-accent">
+                        Open
+                      </a>
+                      {funnel.status !== "archived" && funnel.name !== "Legacy / Unassigned" && (
+                        <form method="post" action={funnelActionPath}>
+                          <input type="hidden" name="adminActionToken" value={funnelActionToken} />
+                          <input type="hidden" name="intent" value="archive" />
+                          <input type="hidden" name="funnelId" value={funnel.funnelId} />
+                          <input type="hidden" name="confirm" value="true" />
+                          <input type="hidden" name="redirectTo" value={currentPath} />
+                          <button class="inline-flex h-8 items-center justify-center rounded-md border border-input px-3 text-xs font-medium text-muted-foreground hover:bg-accent" type="submit">
+                            Archive
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  </div>
+</AdminShell>

@@ -57,6 +57,26 @@ function payloadEnvelopeSchema(
   };
 }
 
+const funnelContextArgumentSchema = {
+  funnelId: stringSchema,
+  laneId: stringSchema,
+  changeMode: {
+    type: "string",
+    enum: ["autopilot_setup", "manual_tuning", "expert_override"],
+  },
+  configurationScope: {
+    type: "string",
+    enum: ["funnel", "shared", "global"],
+  },
+  funnelPlanId: stringSchema,
+  planFingerprint: stringSchema,
+  operator_override_reason: stringSchema,
+  verificationTarget: {
+    type: "string",
+    enum: ["selection", "source_health", "llm_review", "replay"],
+  },
+} satisfies Record<string, JsonSchema>;
+
 const discoveryArtifactPayloadSchema = {
   type: "object",
   required: ["artifactType", "payload"],
@@ -195,15 +215,15 @@ export const MCP_DISCOVERY_PAYLOAD_SCHEMAS = {
 } as const satisfies Record<string, JsonSchema>;
 
 export const MCP_DISCOVERY_ARGUMENT_SCHEMAS = {
-  runCreate: payloadEnvelopeSchema(discoveryRunPayloadSchema),
-  artifactCreate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema),
-  artifactValidate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema),
-  policyActivate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema),
-  policyValidate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema),
-  feedbackSubmit: payloadEnvelopeSchema(discoveryFeedbackPayloadSchema),
-  replayStart: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.replayStart),
-  rollbackPrepare: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackPrepare),
-  rollbackApply: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackApply),
+  runCreate: payloadEnvelopeSchema(discoveryRunPayloadSchema, funnelContextArgumentSchema),
+  artifactCreate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema, funnelContextArgumentSchema),
+  artifactValidate: payloadEnvelopeSchema(discoveryArtifactPayloadSchema, funnelContextArgumentSchema),
+  policyActivate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema, funnelContextArgumentSchema),
+  policyValidate: payloadEnvelopeSchema(discoveryPolicyPayloadSchema, funnelContextArgumentSchema),
+  feedbackSubmit: payloadEnvelopeSchema(discoveryFeedbackPayloadSchema, funnelContextArgumentSchema),
+  replayStart: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.replayStart, funnelContextArgumentSchema),
+  rollbackPrepare: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackPrepare, funnelContextArgumentSchema),
+  rollbackApply: payloadEnvelopeSchema(MCP_DISCOVERY_PAYLOAD_SCHEMAS.rollbackApply, funnelContextArgumentSchema),
 } as const satisfies Record<string, JsonSchema>;
 
 const sequenceCreatePayloadSchema = {
@@ -586,8 +606,20 @@ export const MCP_TEMPLATE_PAYLOAD_SCHEMAS = {
 } as const satisfies Record<string, JsonSchema>;
 
 export const MCP_TEMPLATE_ARGUMENT_SCHEMAS = {
-  systemInterestCreate: payloadEnvelopeSchema(MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestCreate),
-  systemInterestUpdate: payloadEnvelopeSchema(MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestUpdate),
-  llmTemplateCreate: payloadEnvelopeSchema(MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateCreate),
-  llmTemplateUpdate: payloadEnvelopeSchema(MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateUpdate),
+  systemInterestCreate: payloadEnvelopeSchema(
+    MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestCreate,
+    funnelContextArgumentSchema
+  ),
+  systemInterestUpdate: payloadEnvelopeSchema(
+    MCP_TEMPLATE_PAYLOAD_SCHEMAS.systemInterestUpdate,
+    funnelContextArgumentSchema
+  ),
+  llmTemplateCreate: payloadEnvelopeSchema(
+    MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateCreate,
+    funnelContextArgumentSchema
+  ),
+  llmTemplateUpdate: payloadEnvelopeSchema(
+    MCP_TEMPLATE_PAYLOAD_SCHEMAS.llmTemplateUpdate,
+    funnelContextArgumentSchema
+  ),
 } as const satisfies Record<string, JsonSchema>;

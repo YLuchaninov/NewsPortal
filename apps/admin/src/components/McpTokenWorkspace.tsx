@@ -27,6 +27,9 @@ export interface McpTokenRecord {
   label: string;
   tokenPrefix: string;
   scopes: string[];
+  funnelScope?: {
+    allowedFunnelIds?: string[];
+  };
   status: "active" | "revoked";
   expiresAt: string | null;
   lastUsedAt: string | null;
@@ -52,6 +55,7 @@ export function McpTokenWorkspace({
   const [label, setLabel] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<string[]>(["read"]);
+  const [allowedFunnelIds, setAllowedFunnelIds] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [submitting, setSubmitting] = useState(false);
@@ -96,6 +100,7 @@ export function McpTokenWorkspace({
         label,
         expiresAt,
         scopes: selectedScopes.join(","),
+        allowedFunnelIds,
       });
       const tokenRecord = response.tokenRecord as McpTokenRecord | undefined;
       const tokenValue = readText(response.token, "");
@@ -106,6 +111,7 @@ export function McpTokenWorkspace({
       setCreatedToken(tokenValue);
       setLabel("");
       setExpiresAt("");
+      setAllowedFunnelIds("");
       setSelectedScopes(["read"]);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to issue MCP token.");
@@ -238,6 +244,14 @@ export function McpTokenWorkspace({
                   })}
                 </div>
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Allowed funnel IDs</label>
+                <Input
+                  value={allowedFunnelIds}
+                  onChange={(event) => setAllowedFunnelIds(event.target.value)}
+                  placeholder="UUIDs separated by commas or spaces"
+                />
+              </div>
               <Button
                 type="button"
                 disabled={submitting || !label.trim() || selectedScopes.length === 0}
@@ -326,6 +340,14 @@ export function McpTokenWorkspace({
                           className="inline-flex rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground"
                         >
                           {scope}
+                        </span>
+                      ))}
+                      {(token.funnelScope?.allowedFunnelIds ?? []).map((funnelId) => (
+                        <span
+                          key={`${token.tokenId}:${funnelId}`}
+                          className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] text-primary"
+                        >
+                          funnel {funnelId.slice(0, 8)}
                         </span>
                       ))}
                     </div>

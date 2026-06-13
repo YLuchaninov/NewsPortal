@@ -1,5 +1,6 @@
 import {
   hasMcpScope,
+  isMcpTokenAllowedForFunnel,
   writeAuditLog,
   type McpAccessTokenRecord,
   type McpScope,
@@ -45,8 +46,26 @@ export interface McpToolDefinition {
   handler: (context: McpToolContext, args: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface McpFunnelWriteContext {
+  toolName: string;
+  riskKind: "selection" | "source_health" | "llm_review" | "replay";
+  changeMode: "autopilot_setup" | "manual_tuning" | "expert_override" | null;
+  configurationScope: "funnel" | "shared" | "global" | null;
+  funnelId: string | null;
+  laneId: string | null;
+  funnelPlanId: string | null;
+  planFingerprint: string | null;
+  operatorOverrideReason: string | null;
+  verificationTarget: "selection" | "source_health" | "llm_review" | "replay" | null;
+  warnings: Array<Record<string, unknown>>;
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const FUNNEL_CHANGE_MODES = ["autopilot_setup", "manual_tuning", "expert_override"] as const;
+const FUNNEL_CONFIGURATION_SCOPES = ["funnel", "shared", "global"] as const;
+const FUNNEL_VERIFICATION_TARGETS = ["selection", "source_health", "llm_review", "replay"] as const;
 
 export function readPageArgs(args: Record<string, unknown>) {
   return {
@@ -82,6 +101,301 @@ export function readPayload(args: Record<string, unknown>): Record<string, unkno
       expectedShape: "JSON object",
     },
   });
+}
+
+function readOptionalEnumValue<T extends readonly string[]>(
+  value: unknown,
+  allowedValues: T,
+  path: string
+): T[number] | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+  if ((allowedValues as readonly string[]).includes(normalized)) {
+    return normalized as T[number];
+  }
+  throw new JsonRpcError(-32602, `${path} must be one of: ${allowedValues.join(", ")}.`, {
+    statusCode: 400,
+    data: {
+      path,
+      canonicalFields: [
+        "changeMode",
+        "configurationScope",
+        "funnelId",
+        "laneId",
+        "funnelPlanId",
+        "planFingerprint",
+        "operator_override_reason",
+        "verificationTarget",
+      ],
+    },
+  });
+}
+
+function readOptionalUuidContext(value: unknown, path: string): string | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+  if (!UUID_RE.test(normalized)) {
+    throw new JsonRpcError(-32602, `${path} must be a UUID.`, {
+      statusCode: 400,
+      data: { path },
+    });
+  }
+  return normalized;
+}
+
+export async function readMcpFunnelWriteContext(
+  pool: Pool,
+  token: McpAccessTokenRecord,
+  args: Record<string, unknown>,
+  options: {
+    toolName: string;
+    riskKind: McpFunnelWriteContext["riskKind"];
+    selectionImpacting?: boolean;
+  }
+): Promise<McpFunnelWriteContext> {
+  const changeMode = readOptionalEnumValue(args.changeMode, FUNNEL_CHANGE_MODES, "changeMode");
+  const configurationScope = readOptionalEnumValue(
+    args.configurationScope,
+    FUNNEL_CONFIGURATION_SCOPES,
+    "configurationScope"
+  );
+  const funnelId = readOptionalUuidContext(args.funnelId, "funnelId");
+  const laneId = readOptionalUuidContext(args.laneId, "laneId");
+  const funnelPlanId = readOptionalUuidContext(args.funnelPlanId, "funnelPlanId");
+  const planFingerprint = String(args.planFingerprint ?? "").trim() || null;
+  const operatorOverrideReason = String(args.operator_override_reason ?? "").trim() || null;
+  const verificationTarget = readOptionalEnumValue(
+    args.verificationTarget,
+    FUNNEL_VERIFICATION_TARGETS,
+    "verificationTarget"
+  );
+  const warnings: Array<Record<string, unknown>> = [];
+  const scoped = Boolean(funnelId || configurationScope === "shared" || configurationScope === "global");
+
+  requireMcpTokenFunnelAccess(token, funnelId, "funnelId");
+
+  if (changeMode === "autopilot_setup" && !funnelId) {
+    throw new JsonRpcError(
+      -32602,
+      "changeMode=autopilot_setup requires funnelId so setup writes stay funnel-scoped.",
+      {
+        statusCode: 400,
+        data: {
+          path: "funnelId",
+          canonicalFields: ["funnelId", "laneId", "funnelPlanId", "planFingerprint"],
+        },
+      }
+    );
+  }
+  if (changeMode && !scoped) {
+    throw new JsonRpcError(
+      -32602,
+      "Funnel-aware writes require funnelId or configurationScope=shared|global.",
+      {
+        statusCode: 400,
+        data: {
+          path: "funnelId",
+          canonicalFields: ["funnelId", "configurationScope"],
+        },
+      }
+    );
+  }
+  if (changeMode && !verificationTarget) {
+    throw new JsonRpcError(-32602, "Funnel-aware writes require verificationTarget.", {
+      statusCode: 400,
+      data: {
+        path: "verificationTarget",
+        canonicalFields: ["verificationTarget"],
+      },
+    });
+  }
+  if (changeMode === "expert_override" && !operatorOverrideReason) {
+    throw new JsonRpcError(
+      -32602,
+      "changeMode=expert_override requires operator_override_reason.",
+      {
+        statusCode: 400,
+        data: {
+          path: "operator_override_reason",
+          canonicalFields: ["operator_override_reason"],
+        },
+      }
+    );
+  }
+  if (funnelId) {
+    const funnel = await pool.query<{ count: number }>(
+      `select count(*)::int as count from operator_funnels where funnel_id = $1`,
+      [funnelId]
+    );
+    if (Number(funnel.rows[0]?.count ?? 0) !== 1) {
+      throw new JsonRpcError(-32602, "funnelId was not found.", {
+        statusCode: 404,
+        data: { path: "funnelId" },
+      });
+    }
+  }
+  if (laneId) {
+    const params = funnelId ? [laneId, funnelId] : [laneId];
+    const lane = await pool.query<{ count: number }>(
+      funnelId
+        ? `select count(*)::int as count from funnel_lanes where lane_id = $1 and funnel_id = $2`
+        : `select count(*)::int as count from funnel_lanes where lane_id = $1`,
+      params
+    );
+    if (Number(lane.rows[0]?.count ?? 0) !== 1) {
+      throw new JsonRpcError(-32602, "laneId was not found in the requested funnel scope.", {
+        statusCode: 404,
+        data: { path: "laneId" },
+      });
+    }
+  }
+  if (funnelPlanId) {
+    const params = funnelId ? [funnelPlanId, funnelId] : [funnelPlanId];
+    const plan = await pool.query<{ count: number }>(
+      funnelId
+        ? `select count(*)::int as count from operator_funnel_plans where plan_id = $1 and funnel_id = $2`
+        : `select count(*)::int as count from operator_funnel_plans where plan_id = $1`,
+      params
+    );
+    if (Number(plan.rows[0]?.count ?? 0) !== 1) {
+      throw new JsonRpcError(-32602, "funnelPlanId was not found in the requested funnel scope.", {
+        statusCode: 404,
+        data: { path: "funnelPlanId" },
+      });
+    }
+  }
+  if (!changeMode && options.selectionImpacting === true && !scoped) {
+    warnings.push({
+      severity: "warning",
+      code: "legacy_unscoped_mcp_write",
+      message:
+        "This legacy MCP write is allowed for backward compatibility, but Funnel Autopilot clients should pass changeMode plus funnelId or configurationScope=shared|global.",
+      canonicalFields: [
+        "changeMode",
+        "configurationScope",
+        "funnelId",
+        "laneId",
+        "funnelPlanId",
+        "planFingerprint",
+        "verificationTarget",
+      ],
+    });
+  }
+  if (changeMode === "autopilot_setup" && (!funnelPlanId || !planFingerprint)) {
+    warnings.push({
+      severity: "warning",
+      code: "autopilot_write_without_staged_plan_reference",
+      message:
+        "Autopilot setup writes should carry funnelPlanId and planFingerprint from operator.funnel.stage_plan for stale-plan protection.",
+    });
+  }
+
+  return {
+    toolName: options.toolName,
+    riskKind: options.riskKind,
+    changeMode,
+    configurationScope: configurationScope ?? (funnelId ? "funnel" : null),
+    funnelId,
+    laneId,
+    funnelPlanId,
+    planFingerprint,
+    operatorOverrideReason,
+    verificationTarget,
+    warnings,
+  };
+}
+
+export function requireMcpTokenFunnelAccess(
+  token: McpAccessTokenRecord,
+  funnelId: string | null | undefined,
+  path = "funnelId"
+): void {
+  const normalizedFunnelId = String(funnelId ?? "").trim();
+  if (!normalizedFunnelId || isMcpTokenAllowedForFunnel(token, normalizedFunnelId)) {
+    return;
+  }
+  throw new JsonRpcError(
+    -32004,
+    "MCP token is not allowed to access the requested funnel.",
+    {
+      statusCode: 403,
+      data: {
+        path,
+        funnelId: normalizedFunnelId,
+        requiredAction:
+          "Use a token bound to this funnel, an unrestricted operator token, or the admin UI to adjust token funnel scope.",
+      },
+    }
+  );
+}
+
+export function mcpFunnelWriteContextPayload(
+  context: McpFunnelWriteContext
+): Record<string, unknown> {
+  return {
+    toolName: context.toolName,
+    riskKind: context.riskKind,
+    changeMode: context.changeMode,
+    configurationScope: context.configurationScope,
+    funnelId: context.funnelId,
+    laneId: context.laneId,
+    funnelPlanId: context.funnelPlanId,
+    planFingerprint: context.planFingerprint,
+    operatorOverrideReason: context.operatorOverrideReason,
+    verificationTarget: context.verificationTarget,
+    warnings: context.warnings,
+  };
+}
+
+export function shouldAuditMcpFunnelWriteContext(context: McpFunnelWriteContext): boolean {
+  return Boolean(
+    context.changeMode ||
+      context.funnelId ||
+      context.laneId ||
+      context.configurationScope ||
+      context.funnelPlanId ||
+      context.planFingerprint ||
+      context.operatorOverrideReason ||
+      context.verificationTarget
+  );
+}
+
+export function withMcpFunnelWriteContext(
+  response: Record<string, unknown>,
+  context: McpFunnelWriteContext
+): Record<string, unknown> {
+  const nextReadBack = Array.isArray(response.nextReadBack) ? [...response.nextReadBack] : [];
+  const funnelReadBack: Array<Record<string, unknown>> = [];
+  if (context.funnelId) {
+    const funnelVerify = {
+      tool: "operator.funnel.verify",
+      arguments: { funnelId: context.funnelId, includeSamples: true },
+    };
+    nextReadBack.push(funnelVerify);
+    funnelReadBack.push(funnelVerify);
+    if (context.verificationTarget === "selection") {
+      const selectionReportVerify = {
+        tool: "operator.report.verify",
+        arguments: {
+          reportKind: "selection",
+          entityIds: { funnelIds: [context.funnelId] },
+          includeSamples: true,
+        },
+      };
+      nextReadBack.push(selectionReportVerify);
+      funnelReadBack.push(selectionReportVerify);
+    }
+  }
+  return {
+    ...response,
+    funnelWriteContext: mcpFunnelWriteContextPayload(context),
+    ...(funnelReadBack.length > 0 ? { funnelReadBack } : {}),
+    ...(nextReadBack.length > 0 ? { nextReadBack } : {}),
+  };
 }
 
 export function withActorDefault(

@@ -4,7 +4,22 @@ import {
   validateJsonSchema,
   type JsonSchema,
 } from "@signalops/contracts";
-import { buildProviderShapeValidation, getSourceFamilyCoverageWithPool } from "@signalops/control-plane";
+import {
+  auditOperatorFunnelOverlap,
+  archiveOperatorFunnel,
+  buildOperatorFunnelAutoplan,
+  buildProviderShapeValidation,
+  createOperatorFunnel,
+  getMcpTokenAllowedFunnelIds,
+  listOperatorFunnels,
+  readOperatorFunnel,
+  getSourceFamilyCoverageWithPool,
+  stageOperatorFunnelPlan,
+  updateOperatorFunnel,
+  validateOperatorFunnelPlan,
+  verifyOperatorFunnel,
+  type FunnelStatus,
+} from "@signalops/control-plane";
 
 import { ADMIN_MCP_TOOLS } from "./tools/admin-tools";
 import { CHANNEL_MCP_TOOLS } from "./tools/channels-tools";
@@ -25,6 +40,7 @@ import {
   readPayload,
   readRequiredString,
   requireDestructiveConfirmation,
+  requireMcpTokenFunnelAccess,
   requireScope,
   writeMcpMutationAudit,
   type McpToolContext,
@@ -94,6 +110,7 @@ const operatorReportVerifySchema = {
         endpointIds: { type: "array", items: { type: "string" } },
         contractIds: { type: "array", items: { type: "string" } },
         docIds: { type: "array", items: { type: "string" } },
+        funnelIds: { type: "array", items: { type: "string" } },
         domainPrefix: { type: "string" },
       },
       additionalProperties: false,
@@ -199,6 +216,8 @@ const operatorFlowRouteSchema = {
     residualBucket: { type: "string" },
     reportKind: { type: "string" },
     includeSamples: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -297,6 +316,8 @@ const operatorTuningRecommendSchema = {
     },
     sinceHours: { type: "number" },
     includeSamples: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -317,6 +338,8 @@ const operatorEffectVerifySchema = {
     baselineWindowHours: { type: "number" },
     comparisonWindowHours: { type: "number" },
     includeSamples: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -342,9 +365,11 @@ const operatorFunnelAuditSchema = {
 
 const operatorFunnelAutoplanSchema = {
   type: "object",
-  required: ["objective"],
   properties: {
     objective: { type: "string" },
+    idea: { type: "string" },
+    funnelId: { type: "string" },
+    operatorExperience: { type: "string", enum: ["novice", "expert"] },
     excludedOutcomes: { type: "array", items: { type: "string" } },
     regions: { type: "array", items: { type: "string" } },
     languages: { type: "array", items: { type: "string" } },
@@ -352,6 +377,101 @@ const operatorFunnelAutoplanSchema = {
     domainPrefix: { type: "string" },
     maxNewChannels: { type: "number" },
     timeboxHours: { type: "number" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsListSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: ["draft", "active", "paused", "archived"] },
+    page: { type: "number" },
+    pageSize: { type: "number" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsReadSchema = {
+  type: "object",
+  required: ["funnelId"],
+  properties: {
+    funnelId: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsCreateSchema = {
+  type: "object",
+  required: ["name"],
+  properties: {
+    name: { type: "string" },
+    goal: { type: "string" },
+    status: { type: "string", enum: ["draft", "active", "paused", "archived"] },
+    createdFromIdeaJson: { type: "object", additionalProperties: true },
+    defaultPolicyJson: { type: "object", additionalProperties: true },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsUpdateSchema = {
+  type: "object",
+  required: ["funnelId"],
+  properties: {
+    funnelId: { type: "string" },
+    name: { type: "string" },
+    goal: { type: "string" },
+    status: { type: "string", enum: ["draft", "active", "paused", "archived"] },
+    defaultPolicyJson: { type: "object", additionalProperties: true },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsArchiveSchema = {
+  type: "object",
+  required: ["funnelId", "confirm"],
+  properties: {
+    funnelId: { type: "string" },
+    confirm: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelValidatePlanSchema = {
+  type: "object",
+  required: ["plan"],
+  properties: {
+    plan: { type: "object", additionalProperties: true },
+    expectedLiveStateHash: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelStagePlanSchema = {
+  type: "object",
+  required: ["plan"],
+  properties: {
+    funnelId: { type: "string" },
+    plan: { type: "object", additionalProperties: true },
+    expectedLiveStateHash: { type: "string" },
+    expiresAt: { type: "string" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelVerifySchema = {
+  type: "object",
+  properties: {
+    funnelId: { type: "string" },
+    includeSamples: { type: "boolean" },
+  },
+  additionalProperties: false,
+} satisfies JsonSchema;
+
+const operatorFunnelsOverlapAuditSchema = {
+  type: "object",
+  properties: {
+    funnelIds: { type: "array", items: { type: "string" } },
     includeSamples: { type: "boolean" },
   },
   additionalProperties: false,
@@ -374,13 +494,18 @@ const operatorSelectionPrecisionAuditSchema = {
     docIds: { type: "array", items: { type: "string" } },
     pageSize: { type: "number" },
     includeSamples: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
 
 const emptyReadSchema = {
   type: "object",
-  properties: {},
+  properties: {
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
+  },
   additionalProperties: false,
 } satisfies JsonSchema;
 
@@ -392,6 +517,14 @@ const operatorSelectionReindexPlanSchema = {
     maxDocIds: { type: "number" },
     reason: { type: "string" },
     includeSamples: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
+    funnelPlanId: { type: "string" },
+    planFingerprint: { type: "string" },
+    changeMode: {
+      type: "string",
+      enum: ["autopilot_setup", "manual_tuning", "expert_override"],
+    },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -404,12 +537,142 @@ const discoverySourceFamiliesCoverageSchema = {
   additionalProperties: false,
 } satisfies JsonSchema;
 
+function requireUnrestrictedFunnelCreateToken(
+  token: McpToolContext["token"],
+  toolName: string
+): void {
+  if (getMcpTokenAllowedFunnelIds(token).length === 0) {
+    return;
+  }
+  throw new JsonRpcError(
+    -32004,
+    `${toolName} requires an unrestricted MCP token because it creates a new funnel outside the token's existing funnel scope.`,
+    {
+      statusCode: 403,
+      data: {
+        code: "funnel_bound_token_cannot_create_funnel",
+        requiredAction:
+          "Use an unrestricted operator token or create the funnel in admin, then issue a token bound to that funnel.",
+      },
+    }
+  );
+}
+
+function withReadFunnelScope(
+  token: McpToolContext["token"],
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const funnelId = readOptionalString(args.funnelId);
+  const allowedFunnelIds = getMcpTokenAllowedFunnelIds(token);
+  if (funnelId) {
+    requireMcpTokenFunnelAccess(token, funnelId);
+    return args;
+  }
+  if (allowedFunnelIds.length === 1) {
+    return { ...args, funnelId: allowedFunnelIds[0] };
+  }
+  if (allowedFunnelIds.length > 1) {
+    throw new JsonRpcError(
+      -32004,
+      "This MCP token is bound to multiple funnels; pass funnelId for a scoped operator read.",
+      {
+        statusCode: 403,
+        data: {
+          path: "funnelId",
+          allowedFunnelIds,
+          requiredAction:
+            "Pass the funnelId to avoid accidentally reading global operator diagnostics.",
+        },
+      }
+    );
+  }
+  return args;
+}
+
 const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   createReadTool(
     "operator.flow.route",
     "Route an operator session to the correct advisory flow, intent, required read-back, blocked actions, and proof gates before recommendations, writes, or final claims.",
     operatorFlowRouteSchema,
-    async (_context, args) => buildOperatorFlowRoute(args)
+    async ({ token }, args) => buildOperatorFlowRoute(withReadFunnelScope(token, args))
+  ),
+  createReadTool(
+    "operator.funnels.list",
+    "List Funnel Autopilot 2.0 funnels with lane, binding and selection summary counts. Existing read tokens remain valid; future clients may request read.funnels scope.",
+    operatorFunnelsListSchema,
+    async ({ pool, token }, args) =>
+      listOperatorFunnels(pool, {
+        status: readOptionalString(args.status),
+        allowedFunnelIds: getMcpTokenAllowedFunnelIds(token),
+        ...readPageArgs(args),
+      })
+  ),
+  createReadTool(
+    "operator.funnels.read",
+    "Read one Funnel Autopilot 2.0 funnel with lanes, system-interest bindings, source bindings and template bindings.",
+    operatorFunnelsReadSchema,
+    async ({ pool, token }, args) => {
+      const funnelId = readRequiredString(args.funnelId, "funnelId");
+      requireMcpTokenFunnelAccess(token, funnelId);
+      const funnel = await readOperatorFunnel(pool, funnelId);
+      if (!funnel) {
+        throw new JsonRpcError(-32602, "funnelId was not found.", {
+          statusCode: 404,
+          data: { path: "funnelId" },
+        });
+      }
+      return funnel;
+    }
+  ),
+  createWriteTool(
+    "operator.funnels.create",
+    "Create a Funnel Autopilot 2.0 funnel shell. Use operator.funnel.autoplan and operator.funnel.stage_plan for guarded setup of lanes, interests, templates, sources and replay.",
+    "write.funnels",
+    operatorFunnelsCreateSchema,
+    async ({ pool, token }, args) => {
+      requireUnrestrictedFunnelCreateToken(token, "operator.funnels.create");
+      return createOperatorFunnel(pool, token.issuedByUserId, {
+        name: readRequiredString(args.name, "name"),
+        goal: readOptionalString(args.goal) ?? "",
+        status: (readOptionalString(args.status) ?? "draft") as FunnelStatus,
+        createdFromIdeaJson: (args.createdFromIdeaJson as Record<string, unknown> | undefined) ?? {},
+        defaultPolicyJson: (args.defaultPolicyJson as Record<string, unknown> | undefined) ?? {},
+      });
+    }
+  ),
+  createWriteTool(
+    "operator.funnels.update",
+    "Update Funnel Autopilot 2.0 funnel metadata. This does not mutate lane bindings, source bindings, templates, interests or replay jobs.",
+    "write.funnels",
+    operatorFunnelsUpdateSchema,
+    async ({ pool, token }, args) => {
+      const funnelId = readRequiredString(args.funnelId, "funnelId");
+      requireMcpTokenFunnelAccess(token, funnelId);
+      return updateOperatorFunnel(pool, token.issuedByUserId, {
+        funnelId,
+        name: readOptionalString(args.name) ?? undefined,
+        goal: readOptionalString(args.goal) ?? undefined,
+        status: readOptionalString(args.status) as FunnelStatus | undefined,
+        defaultPolicyJson: args.defaultPolicyJson as Record<string, unknown> | undefined,
+      });
+    }
+  ),
+  createWriteTool(
+    "operator.funnels.archive",
+    "Archive a Funnel Autopilot 2.0 funnel without deleting shared sources, templates, interests or historical reports.",
+    "write.funnels",
+    operatorFunnelsArchiveSchema,
+    async ({ pool, token }, args) => {
+      if (!readBooleanFlag(args.confirm, "confirm")) {
+        throw new JsonRpcError(-32602, "confirm=true is required to archive a funnel.", {
+          statusCode: 400,
+          data: { path: "confirm" },
+        });
+      }
+      const funnelId = readRequiredString(args.funnelId, "funnelId");
+      requireMcpTokenFunnelAccess(token, funnelId);
+      return archiveOperatorFunnel(pool, token.issuedByUserId, funnelId);
+    }
   ),
   createReadTool(
     "operator.system.health",
@@ -427,13 +690,13 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "operator.tuning.recommend",
     "Recommend bounded fine-tuning changes without mutating anything. Returns choices, expected effect, verification plan, and suggested guarded tool calls.",
     operatorTuningRecommendSchema,
-    async (context, args) => recommendOperatorTuning(context, args)
+    async (context, args) => recommendOperatorTuning(context, withReadFunnelScope(context.token, args))
   ),
   createReadTool(
     "operator.effect.verify",
     "Compare before/after operational metrics for a recent change. This is read-only effect verification, not causal proof.",
     operatorEffectVerifySchema,
-    async (context, args) => verifyOperatorEffect(context, args)
+    async (context, args) => verifyOperatorEffect(context, withReadFunnelScope(context.token, args))
   ),
   createReadTool(
     "operator.funnel.audit",
@@ -443,9 +706,79 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
   ),
   createReadTool(
     "operator.funnel.autoplan",
-    "Read-only coverage-first funnel planner. Builds source-family, polling, repair, negative-control, and selection-tuning guidance without disabling noisy working sources.",
+    "Read-only Funnel Autopilot planner. With idea/funnelId it builds Funnel Autopilot 2.0 lanes and guarded plan drafts; without idea it preserves the existing coverage-first source-family planner.",
     operatorFunnelAutoplanSchema,
-    async (context, args) => buildFunnelAutoplan(context, args)
+    async (context, args) => {
+      requireMcpTokenFunnelAccess(context.token, readOptionalString(args.funnelId));
+      if (
+        readOptionalString(args.idea) ||
+        readOptionalString(args.funnelId) ||
+        readOptionalString(args.operatorExperience)
+      ) {
+        return buildOperatorFunnelAutoplan(context.pool, args);
+      }
+      return buildFunnelAutoplan(context, args);
+    }
+  ),
+  createReadTool(
+    "operator.funnel.validate_plan",
+    "Validate a Funnel Autopilot 2.0 plan before any MCP/admin writes. Blocks stale plans, unsafe hidden gates, mixed-without-split, context-only selection, and bad selection_review contracts.",
+    operatorFunnelValidatePlanSchema,
+    async ({ pool }, args) =>
+      validateOperatorFunnelPlan(pool, {
+        plan: args.plan as Record<string, unknown>,
+        expectedLiveStateHash: readOptionalString(args.expectedLiveStateHash),
+      })
+  ),
+  createWriteTool(
+    "operator.funnel.stage_plan",
+    "Stage a validated Funnel Autopilot 2.0 plan. This does not apply system interests, templates, channels or replay jobs; it records planFingerprint/liveStateHash for guarded follow-through.",
+    "write.funnels",
+    operatorFunnelStagePlanSchema,
+    async ({ pool, token }, args) => {
+      const funnelId = readOptionalString(args.funnelId);
+      if (funnelId) {
+        requireMcpTokenFunnelAccess(token, funnelId);
+      } else {
+        requireUnrestrictedFunnelCreateToken(token, "operator.funnel.stage_plan");
+      }
+      return stageOperatorFunnelPlan(pool, token.issuedByUserId, {
+        funnelId,
+        plan: args.plan as Record<string, unknown>,
+        expectedLiveStateHash: readOptionalString(args.expectedLiveStateHash),
+        expiresAt: readOptionalString(args.expiresAt),
+      });
+    }
+  ),
+  createReadTool(
+    "operator.funnel.verify",
+    "Verify Funnel Autopilot 2.0 state for one funnel or all funnels: bindings, selected/gray/rejected counts, selected reasons and next safe actions.",
+    operatorFunnelVerifySchema,
+    async ({ pool, token }, args) => {
+      const funnelId = readOptionalString(args.funnelId);
+      requireMcpTokenFunnelAccess(token, funnelId);
+      return verifyOperatorFunnel(pool, {
+        funnelId,
+        includeSamples: args.includeSamples === true,
+        allowedFunnelIds: getMcpTokenAllowedFunnelIds(token),
+      });
+    }
+  ),
+  createReadTool(
+    "operator.funnels.overlap.audit",
+    "Read-only audit for multi-funnel overlap and shared system-interest bindings. Use before changing shared/manual tuning surfaces.",
+    operatorFunnelsOverlapAuditSchema,
+    async ({ pool, token }, args) => {
+      const funnelIds = readStringArray(args.funnelIds);
+      for (const funnelId of funnelIds) {
+        requireMcpTokenFunnelAccess(token, funnelId);
+      }
+      return auditOperatorFunnelOverlap(pool, {
+        funnelIds,
+        allowedFunnelIds: getMcpTokenAllowedFunnelIds(token),
+        includeSamples: args.includeSamples === true,
+      });
+    }
   ),
   createReadTool(
     "operator.funnel.iteration.recommend",
@@ -457,19 +790,22 @@ const OPERATOR_INTELLIGENCE_MCP_TOOLS: readonly McpToolDefinition[] = [
     "operator.selection.precision_audit",
     "Read-only selected-content precision audit. Buckets selected rows into strong/probable/context/noise outcomes without creating a separate public selected gate.",
     operatorSelectionPrecisionAuditSchema,
-    async (context, args) => buildSelectionPrecisionAudit(context, args)
+    async (context, args) => buildSelectionPrecisionAudit(context, withReadFunnelScope(context.token, args))
   ),
   createReadTool(
     "operator.selection.dashboard",
     "Read-only count dashboard that separates raw signal_candidate observations from selected/public lead signals. Use this when signal_candidate totals appear inconsistent with selected signal yield.",
     emptyReadSchema,
-    async (context) => buildSelectionDashboard(context)
+    async (context, args) => buildSelectionDashboard(context, withReadFunnelScope(context.token, args))
   ),
   createReadTool(
     "operator.selection.reindex_plan",
     "Read-only bounded historical replay planner for final selection. Builds weak_selected, buyer_hold, and context_only docId buckets plus maintenance.reindex.request templates with retroNotifications=skip.",
     operatorSelectionReindexPlanSchema,
-    async (context, args) => buildSelectionReindexPlan(context, args)
+    async (context, args) => {
+      requireMcpTokenFunnelAccess(context.token, readOptionalString(args.funnelId));
+      return buildSelectionReindexPlan(context, args);
+    }
   ),
   createReadTool(
     "discovery.source_families.coverage",
@@ -488,7 +824,20 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
     async (context, args) => {
       const { pool } = context;
       const reportKind = readRequiredString(args.reportKind, "reportKind");
-      const entityIds = readEntityIds(args);
+      const requestedEntityIds = readEntityIds(args);
+      const tokenAllowedFunnelIds = getMcpTokenAllowedFunnelIds(context.token);
+      const requestedFunnelIds = readStringArray(requestedEntityIds.funnelIds);
+      const effectiveFunnelIds =
+        reportKind === "selection" && requestedFunnelIds.length === 0 && tokenAllowedFunnelIds.length > 0
+          ? tokenAllowedFunnelIds
+          : requestedFunnelIds;
+      for (const funnelId of effectiveFunnelIds) {
+        requireMcpTokenFunnelAccess(context.token, funnelId, "entityIds.funnelIds");
+      }
+      const entityIds =
+        reportKind === "selection" && effectiveFunnelIds.length > 0
+          ? { ...requestedEntityIds, funnelIds: effectiveFunnelIds }
+          : requestedEntityIds;
       const includeSamples = args.includeSamples === true;
       const warnings: string[] = [];
       const flowContext = {
@@ -505,7 +854,32 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
       };
 
       if ((OPERATING_REPORT_KINDS as readonly string[]).includes(reportKind) || reportKind === "selection") {
-        return buildOperationalReportVerification(context, reportKind, entityIds, includeSamples, flowContext);
+        const report = await buildOperationalReportVerification(
+          context,
+          reportKind,
+          entityIds,
+          includeSamples,
+          flowContext
+        );
+        const funnelIds = reportKind === "selection" ? effectiveFunnelIds : [];
+        if (funnelIds.length === 0) {
+          return report;
+        }
+        return {
+          ...report,
+          funnelScope: {
+            funnelIds,
+            verifications: await Promise.all(
+              funnelIds.map((funnelId) =>
+                verifyOperatorFunnel(pool, {
+                  funnelId,
+                  includeSamples,
+                  allowedFunnelIds: tokenAllowedFunnelIds,
+                })
+              )
+            ),
+          },
+        };
       }
 
       if (reportKind === "channel_onboarding") {
@@ -806,6 +1180,7 @@ const OPERATOR_REPORT_MCP_TOOLS: readonly McpToolDefinition[] = [
                  matched_filter_count as "matchedFilterCount",
                  no_match_filter_count as "noMatchFilterCount",
                  gray_zone_filter_count as "grayZoneFilterCount",
+                 explain_json -> 'funnelRuntimeAttribution' as "funnelRuntimeAttribution",
                  updated_at as "updatedAt"
           from final_selection_results
           where cardinality($1::text[]) = 0 or doc_id::text = any($1::text[])

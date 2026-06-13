@@ -1,5 +1,6 @@
 import {
   applyChannelBulkOnboardingWithPool,
+  bindSourceChannelToFunnel,
   ChannelBottleneckNotFoundError,
   deleteChannelWithAudit,
   explainChannelBottleneckWithPool,
@@ -22,13 +23,17 @@ import {
   createReadTool,
   createWriteTool,
   JsonRpcError,
+  mcpFunnelWriteContextPayload,
   readPageArgs,
   readPayload,
   readBooleanFlag,
+  readMcpFunnelWriteContext,
   requireDestructiveConfirmation,
   readOptionalInteger,
   readOptionalString,
   readRequiredString,
+  shouldAuditMcpFunnelWriteContext,
+  withMcpFunnelWriteContext,
   writeMcpMutationAudit,
   type McpToolDefinition
 } from "./shared";
@@ -75,6 +80,15 @@ const channelMutationSchema = {
   required: ["payload"],
   properties: {
     payload: channelPayloadSchema,
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
+    changeMode: { type: "string", enum: ["autopilot_setup", "manual_tuning", "expert_override"] },
+    configurationScope: { type: "string", enum: ["funnel", "shared", "global"] },
+    funnelPlanId: { type: "string" },
+    planFingerprint: { type: "string" },
+    operator_override_reason: { type: "string" },
+    verificationTarget: { type: "string", enum: ["selection", "source_health", "llm_review", "replay"] },
+    sourceRole: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -106,6 +120,15 @@ const bulkOnboardApplySchema = {
     overrideReason: { type: "string" },
     mode: { type: "string", enum: ["strict", "allow_overrides"] },
     includeExisting: { type: "boolean" },
+    funnelId: { type: "string" },
+    laneId: { type: "string" },
+    changeMode: { type: "string", enum: ["autopilot_setup", "manual_tuning", "expert_override"] },
+    configurationScope: { type: "string", enum: ["funnel", "shared", "global"] },
+    funnelPlanId: { type: "string" },
+    funnelPlanFingerprint: { type: "string" },
+    operator_override_reason: { type: "string" },
+    verificationTarget: { type: "string", enum: ["selection", "source_health", "llm_review", "replay"] },
+    sourceRole: { type: "string" },
   },
   additionalProperties: false,
 } satisfies JsonSchema;
@@ -607,10 +630,38 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     channelMutationSchema,
     async ({ pool, token }, args) => {
       try {
-        return await saveChannelFromPayload(
+        const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+          toolName: "channels.create",
+          riskKind: "source_health",
+          selectionImpacting: true,
+        });
+        const result = await saveChannelFromPayload(
           pool,
           token.issuedByUserId,
           readCreateChannelPayload(args)
+        );
+        const channelId = result.channelId ?? "";
+        const funnelBinding =
+          funnelContext.funnelId && channelId
+            ? await bindSourceChannelToFunnel(pool, token.issuedByUserId, {
+                funnelId: funnelContext.funnelId,
+                laneId: funnelContext.laneId,
+                channelId,
+                sourceRole: readOptionalString(args.sourceRole),
+                bindingRole: funnelContext.changeMode ?? "manual_tuning",
+              })
+            : null;
+        if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+          await writeMcpMutationAudit(pool, token, {
+            actionType: "mcp_funnel_write_context_recorded",
+            entityType: "source_channel",
+            entityId: channelId,
+            payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+          });
+        }
+        return withMcpFunnelWriteContext(
+          { ...(result as unknown as Record<string, unknown>), ...(funnelBinding ? { funnelBinding } : {}) },
+          funnelContext
         );
       } catch (error) {
         return asMcpInvalidRequest(error, "channels.create");
@@ -624,7 +675,16 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     bulkOnboardApplySchema,
     async ({ pool, token }, args) => {
       try {
-        return await applyChannelBulkOnboardingWithPool(
+        const funnelContextArgs = {
+          ...args,
+          planFingerprint: args.funnelPlanFingerprint,
+        };
+        const funnelContext = await readMcpFunnelWriteContext(pool, token, funnelContextArgs, {
+          toolName: "channels.bulk_onboard.apply",
+          riskKind: "source_health",
+          selectionImpacting: true,
+        });
+        const result = await applyChannelBulkOnboardingWithPool(
           pool,
           token.issuedByUserId,
           readSourcesArray(args),
@@ -635,6 +695,35 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
             mode: readBulkOnboardingMode(args.mode),
             includeExisting: args.includeExisting === true,
           }
+        );
+        const channelIds = [...result.createdChannelIds, ...result.updatedChannelIds];
+        const funnelBindings =
+          funnelContext.funnelId && channelIds.length > 0
+            ? await Promise.all(
+                channelIds.map((channelId) =>
+                  bindSourceChannelToFunnel(pool, token.issuedByUserId, {
+                    funnelId: funnelContext.funnelId as string,
+                    laneId: funnelContext.laneId,
+                    channelId,
+                    sourceRole: readOptionalString(args.sourceRole),
+                    bindingRole: funnelContext.changeMode ?? "manual_tuning",
+                  })
+                )
+              )
+            : [];
+        if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+          await writeMcpMutationAudit(pool, token, {
+            actionType: "mcp_funnel_write_context_recorded",
+            entityType: "source_channel_bulk_onboarding",
+            payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+          });
+        }
+        return withMcpFunnelWriteContext(
+          {
+            ...(result as unknown as Record<string, unknown>),
+            ...(funnelBindings.length > 0 ? { funnelBindings } : {}),
+          },
+          funnelContext
         );
       } catch (error) {
         return asMcpInvalidRequest(error, "channels.bulk_onboard.apply");
@@ -739,10 +828,38 @@ export const CHANNEL_MCP_TOOLS: readonly McpToolDefinition[] = [
     channelMutationSchema,
     async ({ pool, token }, args) => {
       try {
-        return await saveChannelFromPayload(
+        const funnelContext = await readMcpFunnelWriteContext(pool, token, args, {
+          toolName: "channels.update",
+          riskKind: "source_health",
+          selectionImpacting: true,
+        });
+        const result = await saveChannelFromPayload(
           pool,
           token.issuedByUserId,
           await readResolvedChannelPayload(pool, args, { requireChannelId: true })
+        );
+        const channelId = result.channelId ?? "";
+        const funnelBinding =
+          funnelContext.funnelId && channelId
+            ? await bindSourceChannelToFunnel(pool, token.issuedByUserId, {
+                funnelId: funnelContext.funnelId,
+                laneId: funnelContext.laneId,
+                channelId,
+                sourceRole: readOptionalString(args.sourceRole),
+                bindingRole: funnelContext.changeMode ?? "manual_tuning",
+              })
+            : null;
+        if (shouldAuditMcpFunnelWriteContext(funnelContext)) {
+          await writeMcpMutationAudit(pool, token, {
+            actionType: "mcp_funnel_write_context_recorded",
+            entityType: "source_channel",
+            entityId: channelId,
+            payloadJson: mcpFunnelWriteContextPayload(funnelContext),
+          });
+        }
+        return withMcpFunnelWriteContext(
+          { ...(result as unknown as Record<string, unknown>), ...(funnelBinding ? { funnelBinding } : {}) },
+          funnelContext
         );
       } catch (error) {
         return asMcpInvalidRequest(error, "channels.update");
