@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from services.indexer.app.config import IndexerConfig
-from services.indexer.app.store import (
+from signalops.indexer.config import IndexerConfig
+from signalops.indexer.store import (
     INTEREST_CENTROIDS_INDEX_NAME,
     INTEREST_CENTROIDS_REBUILD_COMMAND,
     _build_index_consistency_result,

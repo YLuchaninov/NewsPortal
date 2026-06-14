@@ -1,6 +1,6 @@
 /* global console, process */
 
-import { rm } from "node:fs/promises";
+import { rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,7 +10,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 const services = {
   relay: {
-    root: "services/relay",
+    root: "runtime/node/services/relay",
     entries: {
       "main.mjs": "src/main.ts",
       "cli/migrate.mjs": "src/cli/migrate.ts",
@@ -18,7 +18,7 @@ const services = {
     external: ["bullmq", "fastify", "ioredis", "pg"],
   },
   fetchers: {
-    root: "services/fetchers",
+    root: "runtime/node/services/fetchers",
     entries: {
       "main.mjs": "src/main.ts",
       "cli/signal-candidate-yield-diagnostics.mjs": "src/cli/signal-candidate-yield-diagnostics.ts",
@@ -41,7 +41,7 @@ const services = {
     ],
   },
   mcp: {
-    root: "services/mcp",
+    root: "runtime/node/services/mcp",
     entries: {
       "main.mjs": "src/main.ts",
     },
@@ -85,7 +85,7 @@ function externalPatterns(names) {
 async function buildService(name) {
   const service = services[name];
   const serviceRoot = path.join(repoRoot, service.root);
-  const outdir = path.join(serviceRoot, "dist");
+  const outdir = path.join(repoRoot, "build/node/services", name);
 
   await rm(outdir, { recursive: true, force: true });
 
@@ -105,9 +105,13 @@ async function buildService(name) {
     });
   }
 
+  const dependencyLink = path.join(outdir, "node_modules");
+  const dependencyTarget = path.relative(outdir, path.join(serviceRoot, "node_modules"));
+  await symlink(dependencyTarget, dependencyLink, "dir");
+
   console.log(
     `Built ${name}: ${Object.keys(service.entries)
-      .map((entry) => path.posix.join(service.root, "dist", entry))
+      .map((entry) => path.posix.join("build/node/services", name, entry))
       .join(", ")}`
   );
 }

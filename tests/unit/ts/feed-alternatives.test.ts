@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { planFeedAlternativesForDiscovery } from "../../../services/fetchers/src/feed-alternatives.ts";
+import { planFeedAlternativesForDiscovery } from "../../../runtime/node/services/fetchers/src/feed-alternatives.ts";
 
 test("planFeedAlternativesForDiscovery validates HTML alternate feeds and keeps unprobed paths separate", async () => {
   const originalFetch = globalThis.fetch;

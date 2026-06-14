@@ -2,8 +2,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-from services.workers.app.task_engine.adapters.fetchers_rss_probe import FetchersRssProbeAdapter
-from services.workers.app.task_engine.adapters import build_live_discovery_runtime
+from signalops.workers.task_engine.adapters.fetchers_rss_probe import FetchersRssProbeAdapter
+from signalops.workers.task_engine.adapters import build_live_discovery_runtime
 
 
 class _FakeUrlopenResponse:
@@ -58,7 +58,7 @@ class FetchersRssProbeAdapterTests(unittest.TestCase):
 
         with (
             patch(
-                "services.workers.app.task_engine.adapters.fetchers_rss_probe.urlopen",
+                "signalops.workers.task_engine.adapters.fetchers_rss_probe.urlopen",
                 fake_urlopen,
             ),
             patch.dict(
@@ -82,7 +82,7 @@ class FetchersRssProbeAdapterTests(unittest.TestCase):
             return _FakeUrlopenResponse({"not_probed_feeds": []})
 
         with patch(
-            "services.workers.app.task_engine.adapters.fetchers_rss_probe.urlopen",
+            "signalops.workers.task_engine.adapters.fetchers_rss_probe.urlopen",
             fake_urlopen,
         ):
             with self.assertRaisesRegex(TypeError, "probed_feeds"):

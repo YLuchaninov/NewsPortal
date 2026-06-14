@@ -5,8 +5,8 @@ from tests.unit.python.support.stubs import install_worker_runtime_import_stubs
 
 install_worker_runtime_import_stubs()
 
-from services.workers.app import main as worker_main
-from services.workers.app import reindex_backfill_runtime
+from signalops.workers import main as worker_main
+from signalops.workers import reindex_backfill_runtime
 
 
 class WorkerHardFilterTests(unittest.TestCase):

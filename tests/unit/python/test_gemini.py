@@ -3,13 +3,13 @@ import unittest
 import sys
 from unittest.mock import patch
 
-if "services.workers.app.gemini" in sys.modules and not hasattr(
-    sys.modules["services.workers.app.gemini"],
+if "signalops.workers.gemini" in sys.modules and not hasattr(
+    sys.modules["signalops.workers.gemini"],
     "_estimate_cost_usd",
 ):
-    del sys.modules["services.workers.app.gemini"]
+    del sys.modules["signalops.workers.gemini"]
 
-from services.workers.app.gemini import (
+from signalops.workers.gemini import (
     _estimate_cost_usd,
     _read_usage_metadata,
     _resolve_price_card,
@@ -123,7 +123,7 @@ class GeminiTests(unittest.TestCase):
             self.assertEqual(timeout, 30)
             return _FakeGeminiResponse(response_payload)
 
-        with patch("services.workers.app.gemini.urlopen", fake_urlopen):
+        with patch("signalops.workers.gemini.urlopen", fake_urlopen):
             with patch.dict(
                 "os.environ",
                 {
@@ -174,7 +174,7 @@ class GeminiTests(unittest.TestCase):
             self.assertEqual(timeout, 30)
             return _FakeGeminiResponse(response_payload)
 
-        with patch("services.workers.app.gemini.urlopen", fake_urlopen):
+        with patch("signalops.workers.gemini.urlopen", fake_urlopen):
             with patch.dict(
                 "os.environ",
                 {

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pollEmailImapProviderChannel } from "../../../services/fetchers/src/fetcher-email-imap-poller.ts";
+import { pollEmailImapProviderChannel } from "../../../runtime/node/services/fetchers/src/fetcher-email-imap-poller.ts";
 import type {
   ChannelPollCompletion,
   PersistSignalCandidateInput,
   SourceChannelRow,
-} from "../../../services/fetchers/src/fetcher-persistence.ts";
+} from "../../../runtime/node/services/fetchers/src/fetcher-persistence.ts";
 
 function buildChannel(configJson: unknown): SourceChannelRow {
   return {

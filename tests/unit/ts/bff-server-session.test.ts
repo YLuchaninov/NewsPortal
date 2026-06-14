@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   buildBffSessionResponse,
   jsonBffSessionResponse,
-} from "../../../packages/bff-server/src/index.ts";
+} from "../../../runtime/node/packages/bff-server/src/index.ts";
 
 test("shared BFF session response keeps web and admin JSON shape stable", async () => {
   const session = {

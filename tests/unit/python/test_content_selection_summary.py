@@ -1,6 +1,6 @@
 import unittest
 
-from services.api.app.content_selection_summary import (
+from signalops.api.content_selection_summary import (
     ABSENT_CANDIDATE_RECOVERY_SUMMARY,
     resolve_candidate_recovery_summary,
 )

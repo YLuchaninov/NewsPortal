@@ -6,7 +6,7 @@ from tests.unit.python.support.stubs import install_gemini_stub, install_psycopg
 install_psycopg_stub()
 install_gemini_stub()
 
-from services.api.app import main as api_main
+from signalops.api import main as api_main
 
 
 class ApiZeroShotOperatorSurfaceTests(unittest.TestCase):

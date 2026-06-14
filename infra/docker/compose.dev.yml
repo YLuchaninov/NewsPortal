@@ -15,10 +15,14 @@ services:
   postgres:
     env_file:
       - ../../.env.dev
+    ports:
+      - "55432:5432"
 
   redis:
     env_file:
       - ../../.env.dev
+    ports:
+      - "56379:6379"
 
   migrate:
     env_file:
@@ -27,6 +31,8 @@ services:
   relay:
     env_file:
       - ../../.env.dev
+    ports:
+      - "${RELAY_PORT:-4000}:4000"
     volumes:
       - ../../infra/scripts:/workspace/infra/scripts:ro
       - ../../infra/fixtures:/workspace/infra/fixtures:ro
@@ -53,15 +59,29 @@ services:
   api:
     env_file:
       - ../../.env.dev
+    ports:
+      - "${API_PORT:-8000}:8000"
 
   web:
     env_file:
       - ../../.env.dev
+    ports:
+      - "${WEB_PORT:-4321}:4321"
 
   admin:
     env_file:
       - ../../.env.dev
+    ports:
+      - "${ADMIN_PORT:-4322}:4322"
 
   mcp:
     env_file:
       - ../../.env.dev
+    ports:
+      - "${MCP_PORT:-4300}:4300"
+
+  nginx:
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro

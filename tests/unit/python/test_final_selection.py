@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.final_selection import (
+from signalops.workers.final_selection import (
     apply_document_candidate_signal_uplift,
     summarize_final_selection_result,
 )

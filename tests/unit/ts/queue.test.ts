@@ -34,7 +34,7 @@ import {
   isSequenceManagedOutboxEvent,
   isReindexOutboxEvent,
   buildOutboxEventQueueMap
-} from "../../../packages/contracts/src/queue.ts";
+} from "../../../runtime/node/packages/contracts/src/queue.ts";
 
 test("default outbox queue map keeps only non-sequence relay fanout", () => {
   const queueMap = buildOutboxEventQueueMap();

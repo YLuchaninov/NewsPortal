@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPublicRedactedSignalCard } from "../../../apps/web/src/lib/server/public-redacted-content.ts";
+import { buildPublicRedactedSignalCard } from "../../../runtime/node/apps/web/src/lib/server/public-redacted-content.ts";
 
 test("public redacted signal card serialization excludes source-identifying fields", () => {
   const card = buildPublicRedactedSignalCard(

@@ -5,7 +5,7 @@ from tests.unit.python.support.stubs import SubscriptableAsyncCursor, install_ps
 
 install_psycopg_stub(async_cursor=SubscriptableAsyncCursor)
 
-from services.workers.app.canonical_documents import (
+from signalops.workers.canonical_documents import (
     resolve_observation_duplicate_kind,
     resolve_observation_state,
 )

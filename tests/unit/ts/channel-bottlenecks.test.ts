@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   explainChannelBottleneckWithPool,
   summarizeChannelBottlenecksWithPool,
-} from "../../../packages/control-plane/src/channel-bottlenecks.ts";
+} from "../../../runtime/node/packages/control-plane/src/channel-bottlenecks.ts";
 
 test("channel bottleneck explain flags legacy DDGS internal bridge URLs without disabling channels", async () => {
   const pool = {

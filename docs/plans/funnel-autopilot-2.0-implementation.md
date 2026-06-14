@@ -69,7 +69,7 @@ Default routing by signal type:
 
 ## Shared Control Plane
 
-Implement the funnel service in `packages/control-plane` and reuse it from MCP and admin. Do not duplicate funnel business logic in Astro pages or MCP handlers.
+Implement the funnel service in `runtime/node/packages/control-plane` and reuse it from MCP and admin. Do not duplicate funnel business logic in Astro pages or MCP handlers.
 
 Required service operations:
 

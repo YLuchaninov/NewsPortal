@@ -5,15 +5,15 @@ from dataclasses import replace
 from itertools import count
 from typing import Any
 
-from services.workers.app.task_engine.context import ContextManager
-from services.workers.app.task_engine.exceptions import TaskExecutionError
-from services.workers.app.task_engine.executor import SequenceExecutor
-from services.workers.app.task_engine.models import (
+from signalops.workers.task_engine.context import ContextManager
+from signalops.workers.task_engine.exceptions import TaskExecutionError
+from signalops.workers.task_engine.executor import SequenceExecutor
+from signalops.workers.task_engine.models import (
     SequenceDefinition,
     SequenceRunRecord,
     TaskDefinition,
 )
-from services.workers.app.task_engine.plugins import TaskPlugin, TaskPluginRegistry
+from signalops.workers.task_engine.plugins import TaskPlugin, TaskPluginRegistry
 
 
 class EmitPlugin(TaskPlugin):

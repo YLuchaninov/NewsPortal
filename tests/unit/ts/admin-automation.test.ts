@@ -11,7 +11,7 @@ import {
   isSequenceRunRetryable,
   resolveSequenceAdminIntent,
   resolveSequenceOperatorSummary,
-} from "../../../apps/admin/src/lib/server/automation.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/automation.ts";
 
 test("buildSequenceCreateApiPayload normalizes create fields for the maintenance API", () => {
   const payload = buildSequenceCreateApiPayload(

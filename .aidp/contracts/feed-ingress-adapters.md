@@ -10,7 +10,7 @@ Feed parsing and discovery normalization are fetchers-owned. Workers may orchest
 
 Fetchers feed/website probe endpoints are untrusted URL boundaries. Probe targets and final redirect URLs must pass the fetchers URL guard before any network result is trusted: only `http`/`https`, no credentials, no malformed/protocol-relative/overlong URLs, and no localhost/private/link-local/reserved IP literals. Batch probe endpoints must dedupe URLs and cap each request batch.
 
-The canonical parser module is `services/fetchers/src/feed-parser/index.ts` plus its owner helpers. Do not recreate internal compatibility re-export files for old feed-parser import paths.
+The canonical parser module is `runtime/node/services/fetchers/src/feed-parser/index.ts` plus its owner helpers. Do not recreate internal compatibility re-export files for old feed-parser import paths.
 
 ## Strategy set
 

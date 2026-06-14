@@ -5,7 +5,7 @@ import {
   ClientActionError,
   createClientActionError,
   reportClientError,
-} from "../../../packages/ui/src/lib/client-errors.ts";
+} from "../../../runtime/node/packages/ui/src/lib/client-errors.ts";
 
 test("reportClientError shows friendly toast text and logs technical details", () => {
   const toastCalls: Array<{ message: string; duration?: number }> = [];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runWithConcurrency } from "../../../services/fetchers/src/scheduler.ts";
+import { runWithConcurrency } from "../../../runtime/node/services/fetchers/src/scheduler.ts";
 
 test("runWithConcurrency keeps item order and respects the concurrency ceiling", async () => {
   let inFlight = 0;

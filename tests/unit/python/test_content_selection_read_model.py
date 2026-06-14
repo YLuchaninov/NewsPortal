@@ -4,7 +4,7 @@ from tests.unit.python.support.stubs import install_psycopg_stub
 
 install_psycopg_stub()
 
-from services.api.app import content_selection_read_model as read_model
+from signalops.api import content_selection_read_model as read_model
 
 
 class ContentSelectionReadModelTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyDuplicatePreflightInputs } from "../../../services/fetchers/src/fetchers.ts";
+import { classifyDuplicatePreflightInputs } from "../../../runtime/node/services/fetchers/src/fetchers.ts";
 
 test("classifyDuplicatePreflightInputs drops items with known external ids", () => {
   const decisions = classifyDuplicatePreflightInputs(

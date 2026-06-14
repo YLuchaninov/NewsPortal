@@ -7,16 +7,16 @@ import {
   ingressAdapterKeyToLegacyRssStrategy,
   legacyApiAdapterKeyToIngressAdapterKey,
   legacyRssStrategyToIngressAdapterKey,
-} from "../../../packages/contracts/src/ingress-adapters";
-import { parseApiChannelConfig } from "../../../packages/contracts/src/source";
+} from "../../../runtime/node/packages/contracts/src/ingress-adapters";
+import { parseApiChannelConfig } from "../../../runtime/node/packages/contracts/src/source";
 import {
   applyResolvedIngressAdapterToChannel,
   buildIngressAdapterProviderMetrics,
   resolveIngressAdapterForChannel,
   type ResolvedIngressAdapter,
-} from "../../../services/fetchers/src/ingress-adapters/resolver";
-import { dryRunIngressAdapter } from "../../../services/fetchers/src/ingress-adapters/dry-run";
-import type { SourceChannelRow } from "../../../services/fetchers/src/fetcher-persistence";
+} from "../../../runtime/node/services/fetchers/src/ingress-adapters/resolver";
+import { dryRunIngressAdapter } from "../../../runtime/node/services/fetchers/src/ingress-adapters/dry-run";
+import type { SourceChannelRow } from "../../../runtime/node/services/fetchers/src/fetcher-persistence";
 
 function channel(overrides: Partial<SourceChannelRow>): SourceChannelRow {
   return {

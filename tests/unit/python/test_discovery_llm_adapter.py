@@ -8,7 +8,8 @@ from tests.unit.python.support.stubs import install_psycopg_stub
 
 install_psycopg_stub()
 
-from services.workers.app.task_engine.adapters.llm_analyzer import (
+from signalops.workers.task_engine.adapters.llm_analyzer import (
+    DEFAULT_DISCOVERY_PROVIDER_TYPES,
     GeminiLlmAnalyzerAdapter,
 )
 
@@ -28,6 +29,12 @@ class _FakeHttpResponse:
 
 
 class DiscoveryLlmAdapterTests(unittest.TestCase):
+    def test_default_provider_types_exclude_future_hidden_youtube(self) -> None:
+        self.assertEqual(
+            DEFAULT_DISCOVERY_PROVIDER_TYPES,
+            ["rss", "website", "api", "email_imap"],
+        )
+
     def test_adapter_uses_discovery_model_fallback_and_zero_cost_without_api_key(self) -> None:
         adapter = GeminiLlmAnalyzerAdapter()
 
@@ -97,7 +104,7 @@ class DiscoveryLlmAdapterTests(unittest.TestCase):
                 clear=False,
             ),
             patch(
-                "services.workers.app.task_engine.adapters.llm_analyzer.urlopen",
+                "signalops.workers.task_engine.adapters.llm_analyzer.urlopen",
                 side_effect=fake_urlopen,
             ),
         ):

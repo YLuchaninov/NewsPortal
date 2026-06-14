@@ -120,6 +120,40 @@ Mailpit доступен на `http://127.0.0.1:8025/`. Используйте �
 
 Web push и Telegram требуют отдельного env и не должны случайно включаться в обычный локальный проход.
 
+## Public Beta single-host pass
+
+Для Public Beta используйте [Public Beta Readiness](../beta-readiness.md) как главный contract.
+
+Минимальный beta operator path:
+
+1. Скопируйте `.env.prod.example` в `.env.prod` на beta host и замените placeholders.
+2. Положите TLS files в `data/tls/fullchain.pem` и `data/tls/privkey.pem`.
+3. Проверьте env and route exposure:
+
+   ```sh
+   pnpm check:prod-env
+   pnpm check:beta-route-exposure
+   ```
+
+4. Если на host уже есть данные, сделайте backup:
+
+   ```sh
+   pnpm ops:beta backup
+   ```
+
+5. Поднимите beta stack:
+
+   ```sh
+   pnpm ops:beta up
+   pnpm ops:beta status
+   ```
+
+6. Перед claim beta-ready запустите:
+
+   ```sh
+   pnpm release:beta:verify
+   ```
+
 ## Нормальное завершение
 
 Остановить stack без удаления volumes:

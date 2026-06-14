@@ -5,7 +5,7 @@ import {
   resolveSignalCandidateOperatorGuidance,
   resolveSignalCandidateOperatorState,
   resolveSignalCandidateSelectionDiagnostics,
-} from "../../../apps/admin/src/lib/server/operator-surfaces.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/operator-surfaces.ts";
 
 test("resolveSignalCandidateOperatorState prefers final-selection truth over compatibility badges", () => {
   const state = resolveSignalCandidateOperatorState({

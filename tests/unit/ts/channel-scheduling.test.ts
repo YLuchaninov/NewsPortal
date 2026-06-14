@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseChannelSchedulePatchInput } from "../../../apps/admin/src/lib/server/channel-scheduling.ts";
+import { parseChannelSchedulePatchInput } from "../../../runtime/node/apps/admin/src/lib/server/channel-scheduling.ts";
 
 test("parseChannelSchedulePatchInput accepts provider-wide schedule patches", () => {
   const patch = parseChannelSchedulePatchInput({
@@ -43,5 +43,16 @@ test("parseChannelSchedulePatchInput requires either providerType or channel ids
         pollIntervalSeconds: "300"
       }),
     /requires channelIds or providerType/
+  );
+});
+
+test("parseChannelSchedulePatchInput rejects future-hidden providers", () => {
+  assert.throws(
+    () =>
+      parseChannelSchedulePatchInput({
+        providerType: "youtube",
+        pollIntervalSeconds: "300"
+      }),
+    /Unsupported providerType "youtube"/
   );
 });

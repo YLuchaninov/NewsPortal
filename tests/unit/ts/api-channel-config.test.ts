@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseApiChannelConfig } from "../../../packages/contracts/src/source.ts";
+import { parseApiChannelConfig } from "../../../runtime/node/packages/contracts/src/source.ts";
 
 test("parseApiChannelConfig preserves default single-page GET behavior", () => {
   const config = parseApiChannelConfig({});

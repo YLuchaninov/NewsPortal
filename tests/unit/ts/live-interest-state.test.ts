@@ -5,7 +5,7 @@ import {
   buildInterestPageState,
   replaceLiveInterestRecords,
   resolveInterestRepairState,
-} from "../../../apps/web/src/lib/live-interest-state.ts";
+} from "../../../runtime/node/apps/web/src/lib/live-interest-state.ts";
 
 test("replaceLiveInterestRecords reflects queued to compiled and queued to failed transitions", () => {
   const previous = [

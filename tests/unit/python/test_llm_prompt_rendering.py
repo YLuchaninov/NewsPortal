@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.prompting import render_llm_prompt_template
+from signalops.workers.prompting import render_llm_prompt_template
 
 
 class LlmPromptRenderingTests(unittest.TestCase):

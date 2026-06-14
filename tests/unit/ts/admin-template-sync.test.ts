@@ -6,7 +6,7 @@ import {
   saveInterestTemplate,
   syncInterestTemplateCriterion,
   syncInterestTemplateSelectionProfile,
-} from "../../../apps/admin/src/lib/server/admin-templates";
+} from "../../../runtime/node/packages/control-plane/src/admin-templates.ts";
 
 type QueryResponse = { rows: any[] };
 

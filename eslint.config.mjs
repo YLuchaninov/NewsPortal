@@ -5,16 +5,16 @@ import astro from "eslint-plugin-astro";
 import globals from "globals";
 
 const sourceGlobs = [
-  "apps/**/*.{astro,ts,tsx}",
-  "packages/**/*.ts",
-  "services/**/*.{ts,tsx}",
+  "runtime/node/apps/**/*.{astro,ts,tsx}",
+  "runtime/node/packages/**/*.ts",
+  "runtime/node/services/**/*.{ts,tsx}",
   "infra/scripts/**/*.{js,mjs,ts}"
 ];
 
 const tsGlobs = [
-  "apps/**/*.{ts,tsx}",
-  "packages/**/*.ts",
-  "services/**/*.{ts,tsx}",
+  "runtime/node/apps/**/*.{ts,tsx}",
+  "runtime/node/packages/**/*.ts",
+  "runtime/node/services/**/*.{ts,tsx}",
   "infra/scripts/**/*.ts"
 ];
 

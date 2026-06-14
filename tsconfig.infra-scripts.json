@@ -6,13 +6,13 @@
     "moduleResolution": "Bundler",
     "paths": {
       "@signalops/contracts": [
-        "packages/contracts/src/index.ts"
+        "runtime/node/packages/contracts/src/index.ts"
       ],
       "@signalops/contracts/*": [
-        "packages/contracts/src/*"
+        "runtime/node/packages/contracts/src/*"
       ],
       "bullmq": [
-        "services/relay/node_modules/bullmq"
+        "runtime/node/services/relay/node_modules/bullmq"
       ]
     }
   },

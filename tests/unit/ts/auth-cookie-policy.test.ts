@@ -4,15 +4,15 @@ import test from "node:test";
 import {
   readCookieSecurePolicy,
   shouldMarkCookieSecure,
-} from "../../../packages/config/src/index.ts";
+} from "../../../runtime/node/packages/config/src/index.ts";
 import {
   buildAdminSessionCookie,
   buildExpiredAdminSessionCookie,
-} from "../../../apps/admin/src/lib/server/auth.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/auth.ts";
 import {
   buildExpiredSessionCookie,
   buildWebAuthCookies,
-} from "../../../apps/web/src/lib/server/auth.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/auth.ts";
 
 function withCookieSecurePolicy<T>(
   value: string | undefined,

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
 
-import { LiveReindexJobsSection } from "../../../apps/admin/src/components/LiveReindexJobsSection.tsx";
-import type { AdminReindexJobSnapshot } from "../../../apps/admin/src/lib/live-updates.ts";
+import { LiveReindexJobsSection } from "../../../runtime/node/apps/admin/src/components/LiveReindexJobsSection.tsx";
+import type { AdminReindexJobSnapshot } from "../../../runtime/node/apps/admin/src/lib/live-updates.ts";
 
 type CreateElement = (
   type: unknown,
@@ -12,7 +12,7 @@ type CreateElement = (
 ) => unknown;
 
 const requireFromAdmin = createRequire(
-  new URL("../../../apps/admin/package.json", import.meta.url)
+  new URL("../../../runtime/node/apps/admin/package.json", import.meta.url)
 );
 const React = requireFromAdmin("react") as { createElement: CreateElement };
 const { renderToStaticMarkup } = requireFromAdmin("react-dom/server") as {

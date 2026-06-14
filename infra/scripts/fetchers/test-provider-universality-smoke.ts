@@ -5,16 +5,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import type { Pool } from "pg";
 
-import { loadFetchersConfig } from "../../../services/fetchers/src/config";
-import { createPgPool } from "../../../services/fetchers/src/db";
-import { pollEmailImapProviderChannel } from "../../../services/fetchers/src/fetcher-email-imap-poller";
+import { loadFetchersConfig } from "../../../runtime/node/services/fetchers/src/config";
+import { createPgPool } from "../../../runtime/node/services/fetchers/src/db";
+import { pollEmailImapProviderChannel } from "../../../runtime/node/services/fetchers/src/fetcher-email-imap-poller";
 import type {
   ChannelPollCompletion,
   CursorMap,
   PersistSignalCandidateInput,
   SourceChannelRow
-} from "../../../services/fetchers/src/fetcher-persistence";
-import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
+} from "../../../runtime/node/services/fetchers/src/fetcher-persistence";
+import { RssFetcherService } from "../../../runtime/node/services/fetchers/src/fetchers";
 
 interface FetchRunRow {
   outcomeKind: string;

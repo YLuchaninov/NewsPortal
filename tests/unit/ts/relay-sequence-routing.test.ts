@@ -7,13 +7,13 @@ import {
   LLM_REVIEW_REQUESTED_EVENT,
   RESOURCE_INGEST_REQUESTED_EVENT,
   SEQUENCE_QUEUE
-} from "../../../packages/contracts/src/queue.ts";
-import { OutboxRelay } from "../../../services/relay/src/relay.ts";
-import { loadRelayConfig } from "../../../services/relay/src/config.ts";
+} from "../../../runtime/node/packages/contracts/src/queue.ts";
+import { OutboxRelay } from "../../../runtime/node/services/relay/src/relay.ts";
+import { loadRelayConfig } from "../../../runtime/node/services/relay/src/config.ts";
 import type {
   RelaySqlClient,
   SequenceRoutingRepository
-} from "../../../services/relay/src/sequence-routing.ts";
+} from "../../../runtime/node/services/relay/src/sequence-routing.ts";
 
 interface PendingOutboxRow {
   event_id: string;

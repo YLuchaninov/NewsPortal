@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseApiChannelConfig } from "../../../packages/contracts/src/source.ts";
-import { fetchApiAdapterItems } from "../../../services/fetchers/src/api-adapter-registry.ts";
-import { fetchDirectDdgsSearchPayload } from "../../../services/fetchers/src/ddgs-direct-search.ts";
-import type { SourceChannelRow } from "../../../services/fetchers/src/fetcher-persistence.ts";
+import { parseApiChannelConfig } from "../../../runtime/node/packages/contracts/src/source.ts";
+import { fetchApiAdapterItems } from "../../../runtime/node/services/fetchers/src/api-adapter-registry.ts";
+import { fetchDirectDdgsSearchPayload } from "../../../runtime/node/services/fetchers/src/ddgs-direct-search.ts";
+import type { SourceChannelRow } from "../../../runtime/node/services/fetchers/src/fetcher-persistence.ts";
 
 function channel(fetchUrl: string): SourceChannelRow {
   return {

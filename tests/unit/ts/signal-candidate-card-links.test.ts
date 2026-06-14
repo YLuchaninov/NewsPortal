@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   resolveInternalContentHref,
   resolveSafeContentHref
-} from "../../../apps/web/src/components/ContentItemCard.tsx";
+} from "../../../runtime/node/apps/web/src/components/ContentItemCard.tsx";
 
 test("resolveSafeContentHref accepts browser-safe content URLs", () => {
   assert.equal(

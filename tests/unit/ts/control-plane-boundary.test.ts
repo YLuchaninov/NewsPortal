@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const CONTROL_PLANE_SRC = join(process.cwd(), "packages/control-plane/src");
+const CONTROL_PLANE_SRC = join(process.cwd(), "runtime/node/packages/control-plane/src");
 
 async function listTypeScriptFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });

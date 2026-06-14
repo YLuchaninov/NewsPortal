@@ -7,7 +7,7 @@ import {
   classifySourceFamily,
   classifySourceLifecycleLabel,
   getSourceFamilyCoverageWithPool,
-} from "../../../packages/control-plane/src/source-families.ts";
+} from "../../../runtime/node/packages/control-plane/src/source-families.ts";
 
 test("source family classifier separates query RSS, marketplace, search, and forums", () => {
   assert.equal(

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
+import { createSignalOpsSdk } from "../../../runtime/node/packages/sdk/src/index.ts";
 
 test("listSystemSelectedContentItems sends pagination, sort, and search params", async () => {
   let requestedUrl = "";

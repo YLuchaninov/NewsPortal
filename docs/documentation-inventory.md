@@ -12,9 +12,9 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 | `docs/product/README.md` | product docs index | Human-facing navigation. |
 | `docs/product/architecture/architecture-overview.md` | architecture overview | Compact system map and current boundaries. |
 | `docs/product/architecture/product-blueprint.md` | product architecture truth | Explains durable product decisions without replacing `.aidp/blueprint.md`. |
+| `docs/product/architecture/repository-taxonomy.md` | repository structure contract | Human-facing source/test/proof/infra/generated artifact taxonomy. |
 | `docs/product/architecture/nonstandard-technical-decisions.md` | research/decision note | External analogs and rationale for non-standard local decisions, including explicit/hidden/mixed signal lanes. |
 | `docs/discovery_vnext_blueprint.md` | active source specification | Current vNext-only Discovery model. |
-| `docs/ingress-adapter-catalog-plan.md` | implementation/design note | Retained plan with current-status note; active runtime truth is catalog + binding. |
 
 ## Active Operator Docs
 
@@ -34,7 +34,7 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 
 | Path | Classification | Notes |
 | --- | --- | --- |
-| `docs/product/operator/examples/EXAMPLES.md` | active example bundle | Primary human-facing RSS/template/system-interest examples, including explicit/hidden/mixed signal handling. |
+| `docs/product/operator/examples/EXAMPLES.md` | active example index | Short index to active example entry points; not an acceptance gate. |
 | `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md` | active website testing handbook | Current website/resource/projection verification guide. |
 | `docs/product/data-scripts/README.md` | active asset index | Defines JSON asset role and limits. |
 | `docs/product/data-scripts/*.json` | reference JSON assets | Manual import/reference assets, not runtime truth. |
@@ -44,8 +44,10 @@ This inventory classifies repository documentation after the Discovery vNext, ta
 | Path | Classification | Notes |
 | --- | --- | --- |
 | `docs/product/operator/old_examples/README.md` | archive index | Explains old example status. |
+| `docs/product/operator/old_examples/EXAMPLES.archive.md` | historical example bundle | Old bundle prose retained for comparison only. |
 | `docs/product/operator/old_examples/WEBSITE_SOURCE_EXAMPLES.md` | historical example-only reference | Dated live URL examples; use active website testing doc first. |
-| `docs/product/operator/old_examples/outsource_balanced_templates.md` | historical companion note | Old outsourcing template companion; active Example C is in `EXAMPLES.md`. |
+| `docs/product/operator/old_examples/outsource_balanced_templates.md` | historical companion note | Old outsourcing template companion. |
+| `docs/archive/ingress-adapter-catalog-plan.md` | historical implementation/design note | Retained design notes; active runtime truth is catalog + binding. |
 
 ## AIDP Runtime Docs
 

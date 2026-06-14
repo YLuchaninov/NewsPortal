@@ -10,7 +10,7 @@ const result = spawnSync(
     stdio: "inherit",
     env: {
       ...process.env,
-      PYTHONPATH: `tests/unit/python:.${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}`,
+      PYTHONPATH: `runtime/python/src:tests/unit/python:.${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}`,
     },
   },
 );

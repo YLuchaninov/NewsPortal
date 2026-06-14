@@ -16,7 +16,7 @@ WORKDIR /workspace
 ARG PYTHON_APP_UID=10001
 ARG PYTHON_APP_GID=10001
 
-ENV PYTHONPATH=/workspace \
+ENV PYTHONPATH=/workspace/runtime/python/src:/workspace \
     MODEL_CACHE_DIR=/workspace/data/models \
     HNSW_INDEX_ROOT=/workspace/data/indices \
     HNSW_SNAPSHOT_ROOT=/workspace/data/snapshots
@@ -29,15 +29,12 @@ COPY infra/docker/python.requirements.txt /tmp/python.requirements.txt
 RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels -r /tmp/python.requirements.txt \
     && rm -rf /tmp/wheels /tmp/python.requirements.txt
 
-COPY --chown=signalops:signalops services/__init__.py services/__init__.py
-COPY --chown=signalops:signalops services/api services/api
-COPY --chown=signalops:signalops services/indexer services/indexer
-COPY --chown=signalops:signalops services/ml services/ml
-COPY --chown=signalops:signalops services/workers services/workers
+COPY --chown=signalops:signalops runtime/python/src runtime/python/src
+COPY --chown=signalops:signalops runtime/node/packages/contracts/src/source/provider-capabilities.json runtime/node/packages/contracts/src/source/provider-capabilities.json
 
 RUN mkdir -p /workspace/data/models /workspace/data/indices /workspace/data/snapshots /workspace/data/logs \
     && chown -R signalops:signalops /workspace
 
 USER signalops
 
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "signalops.workers.main"]

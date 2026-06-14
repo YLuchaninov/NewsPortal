@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.criteria_review_policy import (
+from signalops.workers.criteria_review_policy import (
     build_runtime_review_state,
     is_candidate_recovery_protected,
     should_queue_criterion_llm_review,

@@ -1,0 +1,27 @@
+{
+  "name": "@signalops/control-plane",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./admin-templates": "./src/admin-templates.ts",
+    "./api-channels": "./src/api-channels.ts",
+    "./channel-providers": "./src/channel-providers.ts",
+    "./email-imap-channels": "./src/email-imap-channels.ts",
+    "./ingress-adapter-bindings": "./src/ingress-adapter-bindings.ts",
+    "./mcp-tokens": "./src/mcp-tokens.ts",
+    "./outbox": "./src/outbox.ts",
+    "./rss-channels": "./src/rss-channels.ts",
+    "./source-channel-form": "./src/source-channel-form.ts",
+    "./source-channels": "./src/source-channels.ts",
+    "./website-channels": "./src/website-channels.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@signalops/contracts": "workspace:*",
+    "pg": "8.20.0"
+  }
+}

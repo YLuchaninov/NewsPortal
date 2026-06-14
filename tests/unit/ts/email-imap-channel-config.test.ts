@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseEmailImapChannelConfig } from "../../../packages/contracts/src/source.ts";
+import { parseEmailImapChannelConfig } from "../../../runtime/node/packages/contracts/src/source.ts";
 
 test("parseEmailImapChannelConfig applies bounded IMAP hardening defaults", () => {
   assert.deepEqual(parseEmailImapChannelConfig({}), {

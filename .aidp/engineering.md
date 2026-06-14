@@ -98,7 +98,7 @@ SignalOps должен развиваться как профессиональ�
 
 - high cohesion: модуль имеет одну понятную причину меняться и один основной уровень абстракции;
 - low coupling: модуль знает минимум о чужих data shapes, env, SQL details, queues and UI assumptions;
-- explicit contracts: межсервисные и cross-package boundaries проходят через `packages/contracts`, `packages/control-plane`, server modules или deep contracts, а не через устные договоренности;
+- explicit contracts: межсервисные и cross-package boundaries проходят через `runtime/node/packages/contracts`, `runtime/node/packages/control-plane`, server modules или deep contracts, а не через устные договоренности;
 - information hiding: изменяемые решения прячутся за маленькими interfaces/functions, а не протекают во все call sites;
 - bounded context: source ingestion, selection, personalization, discovery, auth/session, delivery and runtime/indexing остаются разными domains;
 - evolvability: новое поведение добавляется через narrow extension points, adapters или cohesive modules, а не через расширение монолитного dispatcher;
@@ -167,10 +167,10 @@ Imports should express architecture, not convenience.
 Правила:
 
 - Apps may depend on shared packages and their local server modules; shared packages must not import app code.
-- `packages/contracts` owns shared vocabulary and must remain low-level; it should not import runtime services, UI or app-specific modules.
-- `packages/control-plane` may orchestrate declared admin/MCP write flows, but it must not become a hidden database bypass for unrelated surfaces.
-- Node services (`fetchers`, `relay`, `mcp`) must not import each other's internal modules; shared cross-service vocabulary belongs in `packages/contracts`, `packages/config` or an explicit package boundary.
-- Python runtime services should keep `services/api`, `services/workers`, `services/ml` and `services/indexer` responsibilities visible; cross-imports must be narrow and justified by the active item.
+- `runtime/node/packages/contracts` owns shared vocabulary and must remain low-level; it should not import runtime services, UI or app-specific modules.
+- `runtime/node/packages/control-plane` may orchestrate declared admin/MCP write flows, but it must not become a hidden database bypass for unrelated surfaces.
+- Node services (`fetchers`, `relay`, `mcp`) must not import each other's internal modules; shared cross-service vocabulary belongs in `runtime/node/packages/contracts`, `runtime/node/packages/config` or an explicit package boundary.
+- Python runtime services should keep `runtime/python/src/signalops/api`, `runtime/python/src/signalops/workers`, `runtime/python/src/signalops/ml` and `runtime/python/src/signalops/indexer` responsibilities visible; cross-imports must be narrow and justified by the active item.
 - UI components must not import database clients, service internals, server secrets or queue/runtime modules.
 - If an import direction feels convenient but crosses ownership, introduce a narrower interface, move vocabulary to the correct package, or keep the behavior local.
 
@@ -183,7 +183,7 @@ God object/module запрещен. В этом репозитории это о
 - Новый код не должен увеличивать уже крупные orchestration hotspots без явного extraction plan.
 - Если touched file уже больше примерно 800 строк или содержит несколько unrelated responsibilities, добавляй новое cohesive behavior в отдельный module, helper или package boundary, если это не ломает scope.
 - Если touched file больше примерно 1500 строк, любое нетривиальное добавление должно либо вынести локальную ответственность, либо записать в `.aidp/work.md`, почему extraction отложен.
-- Existing pressure zones, обнаруженные source audit: `services/api/app/main.py`, `services/workers/app/main.py`, `services/workers/app/discovery_orchestrator.py`, `services/fetchers/src/web-ingestion.ts`, `services/fetchers/src/fetchers.ts`, `services/mcp/src/tools.ts`, large admin pages and compose/live proof scripts. Их не надо рефакторить без active item, но нельзя использовать как оправдание для дальнейшего роста.
+- Existing pressure zones, обнаруженные source audit: `runtime/python/src/signalops/api/main.py`, `runtime/python/src/signalops/workers/main.py`, `runtime/python/src/signalops/workers/discovery_orchestrator.py`, `runtime/node/services/fetchers/src/web-ingestion.ts`, `runtime/node/services/fetchers/src/fetchers.ts`, `runtime/node/services/mcp/src/tools.ts`, large admin pages and compose/live proof scripts. Их не надо рефакторить без active item, но нельзя использовать как оправдание для дальнейшего роста.
 - Не создавай static/container classes или namespace objects только ради группировки functions/constants; используй module scope and named exports.
 - Не добавляй broad `utils`, `helpers`, `common`, `manager`, `service` modules без узкого имени и declared responsibility.
 - Оркестратор может координировать steps, но не должен владеть внутренней business logic каждого step.
@@ -195,7 +195,7 @@ Magic numbers and magic strings запрещены, кроме очевидны�
 Правила:
 
 - Domain numbers должны быть named constants с units in name: `*_MS`, `*_SECONDS`, `*_LIMIT`, `*_BATCH_SIZE`, `*_CONCURRENCY`, `*_RETRY_*`.
-- Runtime-tunable values должны читаться в config modules (`packages/config`, service-specific `config.ts`/`config.py`, `.env.example`) and validated/coerced once.
+- Runtime-tunable values должны читаться в config modules (`runtime/node/packages/config`, service-specific `config.ts`/`config.py`, `.env.example`) and validated/coerced once.
 - Значения timeout, retry, concurrency, batch size, poll interval, token budget, page size and cost limit не должны быть разбросаны по call sites.
 - Constants in TypeScript use module-level `CONSTANT_CASE` when they are durable constants; Python constants use module-level upper snake case.
 - String enums, event names, queue names, channel types, provider types, status values and route-level state machines belong in typed contracts or local narrow enums/unions.
@@ -253,10 +253,10 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 
 ## Структура репозитория
 
-- `apps/web` и `apps/admin` — Astro SSR apps с React islands, shared UI и server-side BFF modules.
-- `services/fetchers`, `services/relay`, `services/mcp` — Node/TypeScript services.
-- `services/api`, `services/workers`, `services/ml`, `services/indexer` — Python runtime/tooling.
-- `packages/contracts`, `packages/config`, `packages/sdk`, `packages/control-plane`, `packages/ui` — workspace packages.
+- `runtime/node/apps/web` и `runtime/node/apps/admin` — Astro SSR apps с React islands, shared UI и server-side BFF modules.
+- `runtime/node/services/fetchers`, `runtime/node/services/relay`, `runtime/node/services/mcp` — Node/TypeScript services.
+- `runtime/python/src/signalops/api`, `runtime/python/src/signalops/workers`, `runtime/python/src/signalops/ml`, `runtime/python/src/signalops/indexer` — Python runtime/tooling.
+- `runtime/node/packages/contracts`, `runtime/node/packages/config`, `runtime/node/packages/sdk`, `runtime/node/packages/control-plane`, `runtime/node/packages/ui` — workspace packages.
 - `database/migrations` — ordered SQL truth.
 - `infra/docker`, `infra/nginx`, `infra/scripts`, `infra/fixtures` — delivery, proof tooling and test fixtures.
 - `tests/unit/ts` и `tests/unit/python` — deterministic unit proof.
@@ -270,7 +270,7 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - Unit/regression tests живут в `tests/**`.
 - Executable smoke/proof harnesses живут в `infra/scripts/**`.
 - Test fixtures живут в `infra/fixtures/**`.
-- Production source trees `apps/**/src`, `packages/**/src`, `services/**/src` и `services/**/app` не должны содержать tracked `test`, `spec`, `smoke`, `fixture`, `mock` или `stub` files/directories.
+- Production source trees `runtime/node/apps/**/src`, `runtime/node/packages/**/src`, `runtime/node/services/**/src` и `runtime/python/src/signalops/**` не должны содержать tracked `test`, `spec`, `smoke`, `fixture`, `mock` или `stub` files/directories.
 - Public `pnpm test:*` commands may call harnesses under `infra/scripts/**`, but service runtime packages must not depend on harness files being present in production images.
 - Dev/test compose may mount `tests/**`, `infra/scripts/**` and `infra/fixtures/**` explicitly. Production Dockerfiles must not copy these paths.
 - Test layout changes must update `pnpm check:test-layout`, `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/verification.md` and `.aidp/os.yaml` when command/path truth changes.
@@ -279,9 +279,9 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 ## Дисциплина границ
 
 - UI components should not own persistence semantics. Put server/database behavior in BFF server modules, API/control-plane modules or service code.
-- Admin write orchestration should prefer `packages/control-plane` or existing admin server modules over duplicate SQL.
-- Queue event names and payload shape belong in `packages/contracts/src/queue.ts`.
-- Source/channel config contracts belong in `packages/contracts/src/source.ts` and provider-specific fetcher modules.
+- Admin write orchestration should prefer `runtime/node/packages/control-plane` or existing admin server modules over duplicate SQL.
+- Queue event names and payload shape belong in `runtime/node/packages/contracts/src/queue.ts`.
+- Source/channel config contracts belong in `runtime/node/packages/contracts/src/source.ts` and provider-specific fetcher modules.
 - Python workers own processing semantics; relay owns dispatch/routing only.
 - Fetchers own acquisition and raw/resource persistence, not downstream selection semantics.
 - API read/maintenance surfaces should expose materialized PostgreSQL truth rather than recompute hidden business logic per request.
@@ -294,17 +294,17 @@ For these triggers, `.aidp/work.md` must record the architecture decision, trade
 - Keep Astro server-side modules explicit; avoid leaking browser-only code into server paths or server secrets into client code.
 - Preserve strict TypeScript expectations from `tsconfig.base.json`.
 - Keep shared contract exports stable and typed when other services consume them.
-- Use existing UI primitives in `packages/ui` for product screens; avoid raw browser-default controls where the app already has a design-system primitive.
+- Use existing UI primitives in `runtime/node/packages/ui` for product screens; avoid raw browser-default controls where the app already has a design-system primitive.
 - Keep package imports aligned with workspace ownership: UI primitives stay presentation-focused, contracts stay runtime-neutral, and SDK/control-plane exports stay stable for consumers.
 
 ## Python discipline
 
-- Keep `services/api` read/maintenance API concerns separate from `services/workers` processing concerns.
-- Keep ML/compiler helpers in `services/ml` when they are shared by worker/indexing paths.
+- Keep `runtime/python/src/signalops/api` read/maintenance API concerns separate from `runtime/python/src/signalops/workers` processing concerns.
+- Keep ML/compiler helpers in `runtime/python/src/signalops/ml` when they are shared by worker/indexing paths.
 - Worker smoke harnesses under `infra/scripts/workers/**` may create deterministic fixtures, but cleanup or residual tracking is part of the work.
 - Prefer explicit SQL and data-shape handling over hidden global state.
 - For indexing/rebuild tools, treat HNSW/snapshot outputs as derived artifacts.
-- Cross-service imports from Python code must remain narrow and justified; shared ML/compiler behavior belongs in `services/ml`, while API routes and worker processors keep separate runtime concerns.
+- Cross-service imports from Python code must remain narrow and justified; shared ML/compiler behavior belongs in `runtime/python/src/signalops/ml`, while API routes and worker processors keep separate runtime concerns.
 
 ## Database and migrations
 
@@ -372,7 +372,7 @@ If a subsystem requires more detail than this compact core can hold, create or u
 - Treating generated output as primary source truth.
 - Adding broad env surface without documenting proof and safe defaults.
 - Adding dependencies or lockfile churn without declared owner and review.
-- Creating cross-service imports that bypass `packages/contracts`, `packages/config`, `packages/control-plane` or a declared server module.
+- Creating cross-service imports that bypass `runtime/node/packages/contracts`, `runtime/node/packages/config`, `runtime/node/packages/control-plane` or a declared server module.
 - Removing compatibility adapters without a recorded deprecation/removal trigger.
 - Leaving hidden persistent test residue.
 - Shipping test/proof harnesses or fixtures inside production images.

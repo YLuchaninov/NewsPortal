@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseNotificationChannelConfig } from "../../../apps/web/src/lib/server/notification-channels.ts";
+import { parseNotificationChannelConfig } from "../../../runtime/node/apps/web/src/lib/server/notification-channels.ts";
 
 test("parseNotificationChannelConfig validates web push subscriptions", () => {
   const config = parseNotificationChannelConfig(

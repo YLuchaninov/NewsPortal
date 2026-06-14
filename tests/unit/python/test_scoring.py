@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from services.workers.app.scoring import (
+from signalops.workers.scoring import (
     compute_cluster_same_event_score,
     compute_criterion_final_score,
     compute_criterion_meta_score,

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import { loadRelayConfig } from "../../../services/relay/src/config";
-import { createPgPool } from "../../../services/relay/src/db";
-import { applyPendingMigrations } from "../../../services/relay/src/migrations";
+import { loadRelayConfig } from "../../../runtime/node/services/relay/src/config";
+import { createPgPool } from "../../../runtime/node/services/relay/src/db";
+import { applyPendingMigrations } from "../../../runtime/node/services/relay/src/migrations";
 
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll("\"", "\"\"")}"`;

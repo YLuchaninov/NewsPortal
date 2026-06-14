@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   sanitizeOptionalPositiveInt,
   sanitizeOptionalTimestamptzInput
-} from "../../../services/fetchers/src/enrichment";
+} from "../../../runtime/node/services/fetchers/src/enrichment";
 
 test("sanitizeOptionalPositiveInt keeps only strictly positive integers", () => {
   assert.equal(sanitizeOptionalPositiveInt(12.2), 12);

@@ -14,28 +14,28 @@ from tests.unit.python.support.stubs import (
 
 install_psycopg_stub(connection=SubscriptableConnection, json_wrapper=JsonValueWrapper)
 
-from services.workers.app.task_engine import TaskPluginRegistry, register_builtin_plugins
-from services.workers.app.task_engine.exceptions import TaskExecutionError
-from services.workers.app.task_engine.plugin_contracts import TaskPluginOutputCaps
-from services.workers.app.task_engine.pipeline_signal_candidate_plugins import (
+from signalops.workers.task_engine import TaskPluginRegistry, register_builtin_plugins
+from signalops.workers.task_engine.exceptions import TaskExecutionError
+from signalops.workers.task_engine.plugin_contracts import TaskPluginOutputCaps
+from signalops.workers.task_engine.pipeline_signal_candidate_plugins import (
     EmbedSignalCandidatePlugin,
     LlmReviewPlugin,
     MatchInterestsPlugin,
 )
-from services.workers.app.task_engine.pipeline_enrichment_plugins import (
+from signalops.workers.task_engine.pipeline_enrichment_plugins import (
     SignalCandidateExtractPlugin,
     ResourceExtractPlugin,
 )
-from services.workers.app.task_engine.pipeline_maintenance_plugins import (
+from signalops.workers.task_engine.pipeline_maintenance_plugins import (
     FeedbackIngestPlugin,
     InterestCompilePlugin,
     ReindexPlugin,
 )
-from services.workers.app.task_engine.pipeline_legacy import (
+from signalops.workers.task_engine.pipeline_legacy import (
     DIRECT_PROCESSOR_HANDLERS,
     load_legacy_handler,
 )
-from services.workers.app.task_engine.plugins import (
+from signalops.workers.task_engine.plugins import (
     TaskPlugin,
     validate_plugin_output_contract,
 )
@@ -172,7 +172,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = EmbedSignalCandidatePlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -294,10 +294,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
             return _FakeUrlopenResponse('{"status":"enriched","enrichmentState":"enriched"}')
 
         with patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
+            "signalops.workers.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=fake_urlopen,
         ), patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
+            "signalops.workers.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             result = plugin._request_enrichment(
                 {
@@ -316,10 +316,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         plugin = SignalCandidateExtractPlugin()
 
         with patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
+            "signalops.workers.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=URLError(ConnectionRefusedError("Connection refused")),
         ), patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
+            "signalops.workers.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             with self.assertRaises(TaskExecutionError) as context:
                 plugin._request_enrichment(
@@ -347,10 +347,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
             return _FakeUrlopenResponse('{"status":"enriched","resourceKind":"editorial"}')
 
         with patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
+            "signalops.workers.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=fake_urlopen,
         ), patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
+            "signalops.workers.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             result = plugin._request_enrichment(
                 {
@@ -376,10 +376,10 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client.urlopen",
+            "signalops.workers.task_engine.pipeline_fetchers_client.urlopen",
             side_effect=http_error,
         ), patch(
-            "services.workers.app.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
+            "signalops.workers.task_engine.pipeline_fetchers_client._sleep_fetchers_internal_retry"
         ) as sleep_mock:
             with self.assertRaises(RuntimeError) as context:
                 plugin._request_enrichment(
@@ -406,7 +406,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = MatchInterestsPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -454,7 +454,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = LlmReviewPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -510,7 +510,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = InterestCompilePlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -551,7 +551,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = FeedbackIngestPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -585,7 +585,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = ReindexPlugin()
         with patch(
-            "services.workers.app.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(

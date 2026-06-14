@@ -2,11 +2,11 @@ import unittest
 import uuid
 from typing import Any
 
-from services.workers.app.selection_write_repository import (
+from signalops.workers.selection_write_repository import (
     persist_criterion_review_resolution,
     upsert_final_selection_result,
 )
-from services.workers.app.worker_queues import SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT
+from signalops.workers.worker_queues import SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT
 
 
 class _Cursor:
@@ -182,6 +182,12 @@ class SelectionWriteRepositoryTests(unittest.IsolatedAsyncioTestCase):
             result["explain_json"]["funnelRuntimeAttribution"]["source"],
             "worker.final_selection_results",
         )
+        aggregate_sql = next(
+            sql for sql, _params in cursor.executed if "candidate_signal_auto_select_count" in sql
+        )
+        self.assertNotIn("evidenceLedUplift", aggregate_sql)
+        self.assertIn("autoSelectMinPositiveGroups", aggregate_sql)
+        self.assertIn("autoSelectMinCueHits", aggregate_sql)
 
     async def test_criterion_review_dispatch_uses_explicit_event_constant(self) -> None:
         cursor = _Cursor()

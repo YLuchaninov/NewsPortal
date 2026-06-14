@@ -120,10 +120,12 @@ project:
     - "**/__pycache__/**"
     - "__pycache__/"
     - "**/.astro/**"
-    - "apps/*/.astro/"
+    - "runtime/node/apps/*/.astro/"
     - "**/dist/**"
-    - "apps/*/dist/"
-    - "services/*/dist/"
+    - "build/**"
+    - "build/"
+    - "runtime/node/apps/*/dist/"
+    - "runtime/node/services/*/dist/"
     - "**/node_modules/**"
     - "**/node_modules/"
     - data/indices/**
@@ -141,13 +143,13 @@ project:
   queue_transport: Redis + BullMQ
   local_runtime: Docker Compose через infra/docker/compose.yml и infra/docker/compose.dev.yml
   runtime_surfaces:
-  - Astro web app apps/web на порту 4321
-  - Astro admin app apps/admin на порту 4322
-  - FastAPI read/debug/maintenance API services/api на порту 8000
-  - Node fetchers service services/fetchers на порту 4100
-  - Node outbox relay services/relay на порту 4000
-  - Node MCP control-plane service services/mcp на порту 4300
-  - Python worker runtime services/workers
+  - Astro web app runtime/node/apps/web на порту 4321
+  - Astro admin app runtime/node/apps/admin на порту 4322
+  - FastAPI read/debug/maintenance API runtime/python/src/signalops/api на порту 8000
+  - Node fetchers service runtime/node/services/fetchers на порту 4100
+  - Node outbox relay runtime/node/services/relay на порту 4000
+  - Node MCP control-plane service runtime/node/services/mcp на порту 4300
+  - Python worker runtime runtime/python/src/signalops/workers
   - PostgreSQL на host port 55432 в local compose
   - Redis на host port 56379 в local compose
   - nginx local front door на host port 8080
@@ -161,12 +163,12 @@ project:
   - package.json root scripts
   - pnpm-workspace.yaml workspace packages
   - database/migrations ordered SQL migrations
-  - services/api/app/main.py FastAPI app
-  - services/workers/app/main.py worker app
-  - services/fetchers/src/main.ts fetchers service
-  - services/relay/src/main.ts relay service
-  - services/mcp/src/main.ts MCP service
-  - apps/web/src/pages and apps/admin/src/pages Astro routes
+  - runtime/python/src/signalops/api/main.py FastAPI app
+  - runtime/python/src/signalops/workers/main.py worker app
+  - runtime/node/services/fetchers/src/main.ts fetchers service
+  - runtime/node/services/relay/src/main.ts relay service
+  - runtime/node/services/mcp/src/main.ts MCP service
+  - runtime/node/apps/web/src/pages and runtime/node/apps/admin/src/pages Astro routes
 capabilities:
   build: true
   lint: true
@@ -191,14 +193,18 @@ commands:
   dev_logs: pnpm dev:mvp:internal:logs
   check_scaffold: pnpm check:scaffold
   check_compliance: pnpm check:compliance
+  check_beta_route_exposure: pnpm check:beta-route-exposure
+  check_control_plane_ownership: pnpm check:control-plane-ownership
   check_dependency_compliance: pnpm check:dependency-compliance
   check_supply_chain_inventory: pnpm check:supply-chain-inventory
   check_env_sync: pnpm check:env-sync
+  check_prod_env: pnpm check:prod-env
   check_production_image_contents: pnpm check:production-image-contents
   check_python_image_size: pnpm check:python-image-size
   check_runtime_image_sizes: pnpm check:runtime-image-sizes
   check_runtime_artifacts: pnpm check:runtime-artifacts
   check_secret_leaks: pnpm check:secret-leaks
+  check_repo_taxonomy: pnpm check:repo-taxonomy
   check_test_layout: pnpm check:test-layout
   build: pnpm build
   build_node_runtime: pnpm build:node-runtime
@@ -209,13 +215,15 @@ commands:
   unit_tests: pnpm unit_tests
   unit_tests_ts: pnpm unit_tests:ts
   unit_tests_py: pnpm unit_tests:py
-  integration_tests: pnpm integration_tests
+  internal_mvp_smoke: pnpm test:mvp:internal
   product_local_core: pnpm test:product:local:core
   product_local_full: pnpm test:product:local:full
   product_local_cleanup: pnpm test:product:local:cleanup
-  product_mega_flow_compose: pnpm test:product:mega-flow:compose
-  product_total_live_compose: pnpm test:product:total-live:compose
+  product_beta_readiness: pnpm test:product:beta-readiness
+  diagnostic_product_total_live: pnpm diagnostic:product:total-live
   release_verify: pnpm release:verify
+  release_beta_verify: pnpm release:beta:verify
+  ops_beta: pnpm ops:beta
   smoke: pnpm test:mvp:internal
   relay_tests: pnpm test:relay
   relay_compose: pnpm test:relay:compose
@@ -237,7 +245,6 @@ commands:
   discovery_enabled_compose: pnpm test:discovery-enabled:compose
   discovery_enabled_smoke: pnpm test:discovery-enabled:smoke
   mcp_compose: pnpm test:mcp:compose
-  mcp_http_matrix: pnpm test:mcp:http:matrix
   mcp_http_auth: pnpm test:mcp:http:auth
   mcp_http_reads: pnpm test:mcp:http:reads
   mcp_http_writes: pnpm test:mcp:http:writes
@@ -773,10 +780,12 @@ monitoring_contract:
   - "**/__pycache__/**"
   - "__pycache__/"
   - "**/.astro/**"
-  - "apps/*/.astro/"
+  - "runtime/node/apps/*/.astro/"
   - "**/dist/**"
-  - "apps/*/dist/"
-  - "services/*/dist/"
+  - "build/**"
+  - "build/"
+  - "runtime/node/apps/*/dist/"
+  - "runtime/node/services/*/dist/"
   - "**/node_modules/**"
   - "**/node_modules/"
   - data/indices/**

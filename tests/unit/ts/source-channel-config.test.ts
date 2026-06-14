@@ -11,7 +11,7 @@ import {
   parseSourceChannelConfig,
   parseWebsiteChannelConfig,
   resolveSourceChannelAuthorizationHeader,
-} from "../../../packages/contracts/src/source.ts";
+} from "../../../runtime/node/packages/contracts/src/source.ts";
 
 test("parseSourceChannelConfig dispatches provider configs without changing parser output", () => {
   const rssInput = {
@@ -57,7 +57,10 @@ test("parseSourceChannelConfig dispatches provider configs without changing pars
     },
   };
   assert.deepEqual(parseSourceChannelConfig("api", apiInput), parseApiChannelConfig(apiInput));
-  assert.deepEqual(parseSourceChannelConfig("youtube", apiInput), parseApiChannelConfig(apiInput));
+  assert.throws(
+    () => parseSourceChannelConfig("youtube", apiInput),
+    /future-hidden|unsupported/i
+  );
 
   const emailInput = {
     host: "imap.example.org",

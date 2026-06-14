@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.selection_profiles import (
+from signalops.workers.selection_profiles import (
     build_selection_profile_runtime_explain,
     coerce_selection_profile_runtime,
     resolve_profile_gray_zone_decision,

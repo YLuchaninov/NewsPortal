@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from services.workers.app.task_engine.adapters.url_validator import FetchersUrlValidatorAdapter
+from signalops.workers.task_engine.adapters.url_validator import FetchersUrlValidatorAdapter
 
 
 class _FakeUrlopenResponse:
@@ -45,7 +45,7 @@ class FetchersUrlValidatorAdapterTests(unittest.TestCase):
 
         with (
             patch(
-                "services.workers.app.task_engine.adapters.url_validator.urlopen",
+                "signalops.workers.task_engine.adapters.url_validator.urlopen",
                 fake_urlopen,
             ),
             patch.dict(
@@ -67,7 +67,7 @@ class FetchersUrlValidatorAdapterTests(unittest.TestCase):
             return _FakeUrlopenResponse({"not_validated_urls": []})
 
         with patch(
-            "services.workers.app.task_engine.adapters.url_validator.urlopen",
+            "signalops.workers.task_engine.adapters.url_validator.urlopen",
             fake_urlopen,
         ):
             with self.assertRaisesRegex(TypeError, "validated_urls"):

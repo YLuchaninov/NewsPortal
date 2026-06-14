@@ -6,7 +6,7 @@ import {
   normalizeContentAnalysisBackfillPayload,
   readEntityIds,
   readStringArray,
-} from "../../../services/mcp/src/tools/content-analysis-helpers.ts";
+} from "../../../runtime/node/services/mcp/src/tools/content-analysis-helpers.ts";
 
 test("content analysis helper normalizes bounded backfill list fields", () => {
   assert.deepEqual(

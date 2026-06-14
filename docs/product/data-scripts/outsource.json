@@ -36579,7 +36579,7 @@
     "preferContentEncoded": true,
     "isActive": true,
     "name": "[H15] Corteza — Low-Code Apps",
-    "fetchUrl": "https://forum.cortezaproject.org/c/low-code-apps/11.rss"
+    "fetchUrl": "https://forum.cortezaproject.org/c/low-code-runtime/node/apps/11.rss"
   },
   {
     "language": "en",

@@ -8,29 +8,30 @@ ENV SIGNALOPS_APP_BASE_URL=$SIGNALOPS_APP_BASE_URL
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./
-COPY packages/bff-server/package.json packages/bff-server/package.json
-COPY packages/bff-server/tsconfig.json packages/bff-server/tsconfig.json
-COPY packages/bff-server/src packages/bff-server/src
-COPY packages/config/package.json packages/config/package.json
-COPY packages/config/tsconfig.json packages/config/tsconfig.json
-COPY packages/config/src packages/config/src
-COPY packages/content-safety/package.json packages/content-safety/package.json
-COPY packages/content-safety/tsconfig.json packages/content-safety/tsconfig.json
-COPY packages/content-safety/src packages/content-safety/src
-COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/contracts/tsconfig.json packages/contracts/tsconfig.json
-COPY packages/contracts/src packages/contracts/src
-COPY packages/sdk/package.json packages/sdk/package.json
-COPY packages/sdk/tsconfig.json packages/sdk/tsconfig.json
-COPY packages/sdk/src packages/sdk/src
-COPY packages/ui/package.json packages/ui/package.json
-COPY packages/ui/tsconfig.json packages/ui/tsconfig.json
-COPY packages/ui/src packages/ui/src
-COPY apps/web/package.json apps/web/package.json
-COPY apps/web/astro.config.mjs apps/web/astro.config.mjs
-COPY apps/web/tsconfig.json apps/web/tsconfig.json
-COPY apps/web/public apps/web/public
-COPY apps/web/src apps/web/src
+COPY infra/tooling/link-node-runtime-deps.mjs infra/tooling/link-node-runtime-deps.mjs
+COPY runtime/node/packages/bff-server/package.json runtime/node/packages/bff-server/package.json
+COPY runtime/node/packages/bff-server/tsconfig.json runtime/node/packages/bff-server/tsconfig.json
+COPY runtime/node/packages/bff-server/src runtime/node/packages/bff-server/src
+COPY runtime/node/packages/config/package.json runtime/node/packages/config/package.json
+COPY runtime/node/packages/config/tsconfig.json runtime/node/packages/config/tsconfig.json
+COPY runtime/node/packages/config/src runtime/node/packages/config/src
+COPY runtime/node/packages/content-safety/package.json runtime/node/packages/content-safety/package.json
+COPY runtime/node/packages/content-safety/tsconfig.json runtime/node/packages/content-safety/tsconfig.json
+COPY runtime/node/packages/content-safety/src runtime/node/packages/content-safety/src
+COPY runtime/node/packages/contracts/package.json runtime/node/packages/contracts/package.json
+COPY runtime/node/packages/contracts/tsconfig.json runtime/node/packages/contracts/tsconfig.json
+COPY runtime/node/packages/contracts/src runtime/node/packages/contracts/src
+COPY runtime/node/packages/sdk/package.json runtime/node/packages/sdk/package.json
+COPY runtime/node/packages/sdk/tsconfig.json runtime/node/packages/sdk/tsconfig.json
+COPY runtime/node/packages/sdk/src runtime/node/packages/sdk/src
+COPY runtime/node/packages/ui/package.json runtime/node/packages/ui/package.json
+COPY runtime/node/packages/ui/tsconfig.json runtime/node/packages/ui/tsconfig.json
+COPY runtime/node/packages/ui/src runtime/node/packages/ui/src
+COPY runtime/node/apps/web/package.json runtime/node/apps/web/package.json
+COPY runtime/node/apps/web/astro.config.mjs runtime/node/apps/web/astro.config.mjs
+COPY runtime/node/apps/web/tsconfig.json runtime/node/apps/web/tsconfig.json
+COPY runtime/node/apps/web/public runtime/node/apps/web/public
+COPY runtime/node/apps/web/src runtime/node/apps/web/src
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @signalops/web build
@@ -48,20 +49,20 @@ ENV SIGNALOPS_APP_BASE_URL=$SIGNALOPS_APP_BASE_URL
 RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/bff-server/package.json packages/bff-server/package.json
-COPY packages/config/package.json packages/config/package.json
-COPY packages/content-safety/package.json packages/content-safety/package.json
-COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/sdk/package.json packages/sdk/package.json
-COPY packages/ui/package.json packages/ui/package.json
-COPY apps/web/package.json apps/web/package.json
+COPY runtime/node/packages/bff-server/package.json runtime/node/packages/bff-server/package.json
+COPY runtime/node/packages/config/package.json runtime/node/packages/config/package.json
+COPY runtime/node/packages/content-safety/package.json runtime/node/packages/content-safety/package.json
+COPY runtime/node/packages/contracts/package.json runtime/node/packages/contracts/package.json
+COPY runtime/node/packages/sdk/package.json runtime/node/packages/sdk/package.json
+COPY runtime/node/packages/ui/package.json runtime/node/packages/ui/package.json
+COPY runtime/node/apps/web/package.json runtime/node/apps/web/package.json
 
 RUN pnpm install --frozen-lockfile --prod --filter @signalops/web...
 
-COPY --from=builder --chown=node:node /workspace/apps/web/dist apps/web/dist
+COPY --from=builder --chown=node:node /workspace/build/node/apps/web build/node/apps/web
 
 RUN chown -R node:node /workspace
 
 USER node
 
-CMD ["node", "apps/web/dist/server/entry.mjs"]
+CMD ["node", "build/node/apps/web/server/entry.mjs"]

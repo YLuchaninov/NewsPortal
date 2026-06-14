@@ -2,9 +2,9 @@
 
 ## Свежесть
 
-- Последняя проверка по реальности репозитория: 2026-04-24
+- Последняя проверка по реальности репозитория: 2026-06-14
 - Проверил: Codex
-- Следующий trigger пересмотра: изменение архитектуры ingest/selection/discovery/runtime surfaces, команд root QA или delivery baseline.
+- Следующий trigger пересмотра: изменение архитектуры ingest/selection/discovery/runtime surfaces, команд root QA, beta compose/nginx или delivery baseline.
 
 ## Назначение системы
 
@@ -28,23 +28,23 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 
 ### Runtime-поверхности
 
-- `apps/web` — Astro SSR web app, пользовательские страницы и BFF routes.
-- `apps/admin` — Astro SSR admin app, operator/admin UI и same-origin BFF writes.
-- `services/api` — FastAPI read/debug/maintenance API.
-- `services/fetchers` — Node/TypeScript ingest runtime для RSS, website/http, external API и IMAP-polled email feeds.
-- `services/relay` — Node/TypeScript outbox relay, migrations и routing tests.
-- `services/workers` — Python BullMQ workers для normalize, dedup, embed, clustering, filtering, final selection, notifications, discovery и sequence engine.
-- `services/ml` — shared Python ML/feature extraction/compiler logic.
-- `services/indexer` — HNSW rebuild/check tooling.
-- `services/mcp` — Node MCP control-plane service для operator tooling.
+- `runtime/node/apps/web` — Astro SSR web app, пользовательские страницы и BFF routes.
+- `runtime/node/apps/admin` — Astro SSR admin app, operator/admin UI и same-origin BFF writes.
+- `runtime/python/src/signalops/api` — FastAPI read/debug/maintenance API.
+- `runtime/node/services/fetchers` — Node/TypeScript ingest runtime для RSS, website/http, external API и IMAP-polled email feeds.
+- `runtime/node/services/relay` — Node/TypeScript outbox relay, migrations и routing tests.
+- `runtime/python/src/signalops/workers` — Python BullMQ workers для normalize, dedup, embed, clustering, filtering, final selection, notifications, discovery и sequence engine.
+- `runtime/python/src/signalops/ml` — shared Python ML/feature extraction/compiler logic.
+- `runtime/python/src/signalops/indexer` — HNSW rebuild/check tooling.
+- `runtime/node/services/mcp` — Node MCP control-plane service для operator tooling.
 
 ### Общие пакеты
 
-- `packages/contracts` — TypeScript contracts для health/auth/source/content/queue/user/system-interest boundaries.
-- `packages/config` — shared config helpers.
-- `packages/sdk` — typed SDK surface для API/control-plane consumers.
-- `packages/control-plane` — admin/control-plane orchestration shared by admin and MCP.
-- `packages/ui` — shared React/Radix/lucide UI primitives.
+- `runtime/node/packages/contracts` — TypeScript contracts для health/auth/source/content/queue/user/system-interest boundaries.
+- `runtime/node/packages/config` — shared config helpers.
+- `runtime/node/packages/sdk` — typed SDK surface для API/control-plane consumers.
+- `runtime/node/packages/control-plane` — admin/control-plane orchestration shared by admin and MCP.
+- `runtime/node/packages/ui` — shared React/Radix/lucide UI primitives.
 
 ### Delivery/runtime baseline
 
@@ -52,8 +52,17 @@ SignalOps — локальный MVP polyglot content-platform monorepo для �
 - `infra/docker/compose.dev.yml` — dev overlay with `.env.dev` and Mailpit.
 - `infra/docker/*.Dockerfile` — service images.
 - `infra/nginx/default.conf` — local single-host front door.
+- `infra/nginx/beta.conf` + `infra/docker/compose.prod.yml` — Public Beta single-host front door where only nginx is public.
 - `database/migrations` — ordered SQL migration truth.
 - `database/ddl` — current schema snapshots.
+
+### Repository taxonomy
+
+- Runtime/product source lives under `runtime/node/apps/**/src`, `runtime/node/packages/**/src`, `runtime/node/services/**/src` and `runtime/python/src/signalops/**`.
+- Deterministic tests live under `tests/unit/{ts,python}`; bounded integration and browser tests live under `tests/integration` and `tests/e2e`.
+- Static repository guards live under `infra/scripts/checks`; product/operator proof entrypoints live under `infra/scripts/proof`; ops and release entrypoints live under `infra/scripts/ops` and `infra/scripts/release`; shared proof/check libraries live under `infra/scripts/lib`.
+- Service-specific smoke helpers may live under `infra/scripts/{fetchers,relay,workers}` when package scripts or compose proof consume them.
+- Test/proof fixtures live under `infra/fixtures`; generated/build/runtime state such as `build/**`, `.astro`, coverage, reports, caches and `data/{models,indices,snapshots,logs}` payloads are ignored/generated, not source truth. Package-local `dist/**` is not an active runtime contract.
 
 ## Операционная схема
 
@@ -122,12 +131,12 @@ Blueprint context обязателен до writes, которые меняют 
 
 ## Durable boundary summary
 
-- Architecture boundary: `apps/*`, `services/*`, `packages/*`, `database/*`, `infra/*` имеют разные reasons-to-change и не должны смешиваться ради удобства.
+- Architecture boundary: `runtime/node/apps/*`, `runtime/node/services/*`, `runtime/python/src/signalops/*`, `runtime/node/packages/*`, `database/*`, `infra/*` имеют разные reasons-to-change и не должны смешиваться ради удобства.
 - Ownership boundary: fetchers own acquisition/raw persistence; relay owns dispatch/routing; workers own processing/selection/notifications/discovery; API/admin/web expose or orchestrate declared surfaces.
-- API boundary: shared vocabulary belongs in `packages/contracts`, `packages/sdk`, `packages/control-plane` or explicit server modules, not hidden cross-service imports.
+- API boundary: shared vocabulary belongs in `runtime/node/packages/contracts`, `runtime/node/packages/sdk`, `runtime/node/packages/control-plane` or explicit server modules, not hidden cross-service imports.
 - State/data boundary: PostgreSQL owns business truth; Redis/BullMQ/HNSW/snapshots/cache are transport or derived state.
-- Runtime boundary: compose/nginx/env/health scripts define local delivery baseline; proof harnesses and fixtures are dev/test inputs, not production runtime content.
-- Packaging boundary: production Dockerfiles must not copy `tests/**`, `infra/scripts/**` or `infra/fixtures/**`; package/release proof remains a declared gap until real release commands exist.
+- Runtime boundary: compose/nginx/env/health scripts define local and single-host beta delivery baselines; proof harnesses and fixtures are dev/test inputs, not production runtime content.
+- Packaging boundary: production Dockerfiles must not copy `tests/**`, `infra/scripts/**` or `infra/fixtures/**`; `pnpm release:verify` proves local non-deploy release readiness and `pnpm release:beta:verify` proves single-host beta readiness without performing deployment.
 - AIDP/process boundary: `.aidp/*` owns runtime truth for agents; root/tool routers, monitor output, human-docs and product docs are adapters or observations and must not become a second canon.
 
 <!-- aidp-monitor:start aidp_blueprint_index v1 -->
@@ -165,23 +174,23 @@ aidp_blueprint_index:
       name: "Admin UI work"
       owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
       refs:
-        - "apps/admin"
-        - "packages/ui"
-        - "packages/control-plane"
+        - "runtime/node/apps/admin"
+        - "runtime/node/packages/ui"
+        - "runtime/node/packages/control-plane"
     - id: API-CONTROL-PLANE
       name: "API/control-plane work"
       owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
       refs:
-        - "services/api"
-        - "services/mcp"
-        - "packages/sdk"
-        - "packages/control-plane"
+        - "runtime/python/src/signalops/api"
+        - "runtime/node/services/mcp"
+        - "runtime/node/packages/sdk"
+        - "runtime/node/packages/control-plane"
     - id: SOURCE-DISCOVERY-SELECTION
       name: "Fetcher/discovery/selection work"
       owner_section: ".aidp/blueprint.md#канонические-neighborhoods-для-типовой-работы"
       refs:
-        - "services/fetchers"
-        - "services/workers"
+        - "runtime/node/services/fetchers"
+        - "runtime/python/src/signalops/workers"
         - ".aidp/contracts/discovery-agent.md"
         - ".aidp/contracts/signal_candidate-pipeline-core.md"
     - id: DELIVERY-RUNTIME
@@ -215,8 +224,8 @@ aidp_blueprint_index:
 
 - Keep package/service responsibilities visible; avoid dumping orchestration into vague shared helpers.
 - Database migrations are ordered source changes; DDL snapshots are derived/reference and must not outrank migrations.
-- Queue event names and payload contracts belong in `packages/contracts`.
-- Cross-surface write behavior should reuse `packages/control-plane` or explicit server modules rather than duplicate SQL in UI routes.
+- Queue event names and payload contracts belong in `runtime/node/packages/contracts`.
+- Cross-surface write behavior should reuse `runtime/node/packages/control-plane` or explicit server modules rather than duplicate SQL in UI routes.
 - Discovery/selection/website/browser-assisted behavior with durable complexity should have or use a deep contract under `.aidp/contracts/`.
 
 ## Модель capabilities
@@ -234,12 +243,12 @@ Durable capability lines that often need staged work:
 
 ## Канонические neighborhoods для типовой работы
 
-- UI/admin work: `apps/admin`, `packages/ui`, `packages/control-plane`, relevant API/BFF server modules, `.aidp/verification.md`.
-- User web work: `apps/web`, `packages/ui`, `packages/sdk`, user BFF/server modules.
-- API work: `services/api/app/main.py`, `packages/sdk`, affected database migrations/contracts.
-- Fetcher/source work: `services/fetchers`, `packages/contracts/src/source.ts`, `.aidp/contracts/test-access-and-fixtures.md` if stateful proof is used.
-- Worker/selection/discovery work: `services/workers`, `services/ml`, database migrations, relevant contract docs.
-- Relay/queue work: `services/relay`, `packages/contracts/src/queue.ts`, worker smoke tests.
+- UI/admin work: `runtime/node/apps/admin`, `runtime/node/packages/ui`, `runtime/node/packages/control-plane`, relevant API/BFF server modules, `.aidp/verification.md`.
+- User web work: `runtime/node/apps/web`, `runtime/node/packages/ui`, `runtime/node/packages/sdk`, user BFF/server modules.
+- API work: `runtime/python/src/signalops/api/main.py`, `runtime/node/packages/sdk`, affected database migrations/contracts.
+- Fetcher/source work: `runtime/node/services/fetchers`, `runtime/node/packages/contracts/src/source.ts`, `.aidp/contracts/test-access-and-fixtures.md` if stateful proof is used.
+- Worker/selection/discovery work: `runtime/python/src/signalops/workers`, `runtime/python/src/signalops/ml`, database migrations, relevant contract docs.
+- Relay/queue work: `runtime/node/services/relay`, `runtime/node/packages/contracts/src/queue.ts`, worker smoke tests.
 - Delivery work: `infra/docker`, `infra/nginx`, `.env.example`, root scripts.
 
 ## Зоны риска

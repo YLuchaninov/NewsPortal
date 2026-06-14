@@ -7,7 +7,7 @@ import {
   createUserInterest,
   parseUserInterestCreateInput,
   updateUserInterest,
-} from "../../../apps/web/src/lib/server/user-interests.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/user-interests.ts";
 
 type QueryResponse = {
   rowCount?: number;

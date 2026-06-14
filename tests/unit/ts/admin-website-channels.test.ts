@@ -6,8 +6,8 @@ import {
   parseWebsiteAdminChannelInput,
   planWebsiteBulkImport,
   upsertWebsiteChannels,
-} from "../../../apps/admin/src/lib/server/website-channels.ts";
-import { getBulkChannelImportViewModel } from "../../../apps/admin/src/components/BulkChannelImport.tsx";
+} from "../../../runtime/node/packages/control-plane/src/website-channels.ts";
+import { getBulkChannelImportViewModel } from "../../../runtime/node/apps/admin/src/components/BulkChannelImport.tsx";
 
 test("parseWebsiteAdminChannelInput normalizes website admin payload fields", () => {
   const channel = parseWebsiteAdminChannelInput({

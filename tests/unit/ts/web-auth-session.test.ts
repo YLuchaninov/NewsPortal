@@ -7,7 +7,7 @@ import {
   buildWebAuthCookies,
   isAuthorizedGoogleIdentity,
   signInWebWithGoogleCredential,
-} from "../../../apps/web/src/lib/server/auth.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/auth.ts";
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {

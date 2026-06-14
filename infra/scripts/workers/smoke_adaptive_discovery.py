@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from services.workers.app.task_engine.adapters import web_search as web_search_module
+from signalops.workers.task_engine.adapters import web_search as web_search_module
 
 
 class _FakeGeminiHandler(BaseHTTPRequestHandler):

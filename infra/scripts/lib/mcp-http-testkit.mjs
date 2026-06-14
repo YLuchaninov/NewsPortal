@@ -53,7 +53,7 @@ const STACK_SERVICES = [
   "nginx",
 ];
 
-const REBUILD_SERVICES = ["migrate", "relay", "worker", "api", "admin", "mcp"];
+const REBUILD_SERVICES = ["migrate", "relay", "fetchers", "worker", "api", "web", "admin", "mcp"];
 
 export const adminBaseUrl = "http://127.0.0.1:4322";
 export const apiBaseUrl = "http://127.0.0.1:8000";

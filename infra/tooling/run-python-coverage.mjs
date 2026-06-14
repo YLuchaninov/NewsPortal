@@ -55,7 +55,7 @@ const coverage = run(traceArgs, {
   stdio: "inherit",
   env: {
     ...process.env,
-    PYTHONPATH: `tests/unit/python:.${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}`,
+    PYTHONPATH: `runtime/python/src:tests/unit/python:.${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ""}`,
   },
 });
 process.exit(coverage.status ?? 1);

@@ -3,8 +3,8 @@ import os
 import unittest
 from unittest import mock
 
-from services.ml.app.compiler import CriterionBaselineCompiler, InterestBaselineCompiler
-from services.ml.app.embedding import (
+from signalops.ml.compiler import CriterionBaselineCompiler, InterestBaselineCompiler
+from signalops.ml.embedding import (
     DEFAULT_HASH_MODEL_KEY,
     HashEmbeddingProvider,
     SentenceTransformerEmbeddingProvider,
@@ -73,7 +73,7 @@ class EmbeddingAndCompilerTests(unittest.TestCase):
     def test_load_embedding_provider_auto_uses_hash_when_neural_backend_missing(self) -> None:
         with (
             mock.patch.dict(os.environ, {"EMBEDDING_BACKEND": "auto"}, clear=True),
-            mock.patch("services.ml.app.embedding.is_sentence_transformers_available", return_value=False),
+            mock.patch("signalops.ml.embedding.is_sentence_transformers_available", return_value=False),
         ):
             provider = load_embedding_provider()
 

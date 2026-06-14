@@ -12,7 +12,7 @@ import {
   validateWebActionCsrfMetadata,
   WEB_ACTION_TOKEN_TARGETS,
   type WebActionSession,
-} from "../../../apps/web/src/lib/server/web-action.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/web-action.ts";
 import {
   listFilesRecursive,
   withAppSecret,
@@ -361,7 +361,7 @@ test("web action tokens allow declared route-family prefixes", () => {
 });
 
 test("mutating web BFF POST routes use the shared web action kit", () => {
-  const routeRoot = join(repoRoot, "apps/web/src/pages/bff");
+  const routeRoot = join(repoRoot, "runtime/node/apps/web/src/pages/bff");
   const expectedPostRoutes = new Set([
     "auth/bootstrap.ts",
     "auth/google.ts",

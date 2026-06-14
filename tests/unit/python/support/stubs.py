@@ -162,8 +162,8 @@ def install_fastapi_stub() -> None:
 
 
 def install_gemini_stub() -> None:
-    if "services.workers.app.gemini" not in sys.modules:
-        gemini_stub = types.ModuleType("services.workers.app.gemini")
+    if "signalops.workers.gemini" not in sys.modules:
+        gemini_stub = types.ModuleType("signalops.workers.gemini")
         gemini_stub.review_with_gemini = lambda *args, **kwargs: None
         gemini_stub.DEFAULT_PRICE_CARD = {
             "default": {
@@ -172,7 +172,7 @@ def install_gemini_stub() -> None:
             }
         }
         gemini_stub.PRICE_CARD_VERSION = "test"
-        sys.modules["services.workers.app.gemini"] = gemini_stub
+        sys.modules["signalops.workers.gemini"] = gemini_stub
 
 
 def install_worker_runtime_import_stubs() -> None:
@@ -210,10 +210,8 @@ def install_worker_runtime_import_stubs() -> None:
     install_redis_stub(_Redis)
     install_bullmq_stub(_Job, _Worker)
 
-    if "indexer.app" not in sys.modules:
-        indexer_pkg_stub = types.ModuleType("indexer")
-        sys.modules["indexer"] = indexer_pkg_stub
-        indexer_stub = types.ModuleType("indexer.app")
+    if "signalops.indexer" not in sys.modules:
+        indexer_stub = types.ModuleType("signalops.indexer")
 
         class _InterestCentroidIndexer:
             def __init__(self, _config):
@@ -227,12 +225,10 @@ def install_worker_runtime_import_stubs() -> None:
 
         indexer_stub.InterestCentroidIndexer = _InterestCentroidIndexer
         indexer_stub.load_indexer_config = lambda: {}
-        sys.modules["indexer.app"] = indexer_stub
+        sys.modules["signalops.indexer"] = indexer_stub
 
-    if "ml.app" not in sys.modules:
-        ml_pkg_stub = types.ModuleType("ml")
-        sys.modules["ml"] = ml_pkg_stub
-        ml_stub = types.ModuleType("ml.app")
+    if "signalops.ml" not in sys.modules:
+        ml_stub = types.ModuleType("signalops.ml")
 
         class _CriterionBaselineCompiler:
             pass
@@ -251,15 +247,15 @@ def install_worker_runtime_import_stubs() -> None:
         ml_stub.load_embedding_provider = lambda: object()
         ml_stub.mix_weighted_vectors = lambda *args, **kwargs: []
         ml_stub.truncate_text_for_embedding = lambda text, *_args, **_kwargs: text
-        sys.modules["ml.app"] = ml_stub
+        sys.modules["signalops.ml"] = ml_stub
 
-    if "services.workers.app.delivery" not in sys.modules:
-        delivery_stub = types.ModuleType("services.workers.app.delivery")
+    if "signalops.workers.delivery" not in sys.modules:
+        delivery_stub = types.ModuleType("signalops.workers.delivery")
         delivery_stub.dispatch_channel_message = lambda *args, **kwargs: types.SimpleNamespace(
             status="queued",
             detail="stubbed",
             delivery_payload_json={},
         )
-        sys.modules["services.workers.app.delivery"] = delivery_stub
+        sys.modules["signalops.workers.delivery"] = delivery_stub
 
     install_gemini_stub()

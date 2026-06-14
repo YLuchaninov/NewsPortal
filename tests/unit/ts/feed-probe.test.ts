@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { SIGNALOPS_ERROR_CODES } from "../../../packages/contracts/src/index.ts";
-import { probeFeedsForDiscovery } from "../../../services/fetchers/src/feed-probe.ts";
-import { normalizeProbeUrl, validateAcquisitionUrl } from "../../../services/fetchers/src/probe-url-guard.ts";
-import { validateUrlsForDiscovery } from "../../../services/fetchers/src/url-validation.ts";
+import { SIGNALOPS_ERROR_CODES } from "../../../runtime/node/packages/contracts/src/index.ts";
+import { probeFeedsForDiscovery } from "../../../runtime/node/services/fetchers/src/feed-probe.ts";
+import { normalizeProbeUrl, validateAcquisitionUrl } from "../../../runtime/node/services/fetchers/src/probe-url-guard.ts";
+import { validateUrlsForDiscovery } from "../../../runtime/node/services/fetchers/src/url-validation.ts";
 
 test("normalizeProbeUrl rejects unsafe probe targets", () => {
   assert.equal(normalizeProbeUrl("ftp://example.com/feed.xml").url, null);

@@ -8,8 +8,8 @@ import {
   planRssBulkImport,
   resolveRssChannelDeleteMode,
   upsertRssChannels
-} from "../../../apps/admin/src/lib/server/rss-channels.ts";
-import { saveChannelFromPayload } from "../../../packages/control-plane/src/channels.ts";
+} from "../../../runtime/node/packages/control-plane/src/rss-channels.ts";
+import { saveChannelFromPayload } from "../../../runtime/node/packages/control-plane/src/channels.ts";
 
 test("parseRssAdminChannelInput normalizes RSS admin payload fields", () => {
   const channel = parseRssAdminChannelInput({

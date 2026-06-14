@@ -11,7 +11,7 @@ from tests.unit.python.support.stubs import (
 
 install_psycopg_stub(connection=SubscriptableConnection, json_wrapper=JsonValueWrapper)
 
-from services.workers.app.content_analysis import (  # noqa: E402
+from signalops.workers.content_analysis import (  # noqa: E402
     ContentSubject,
     RuntimeAnalysisPolicy,
     _policy_supports_local_runtime,
@@ -22,7 +22,7 @@ from services.workers.app.content_analysis import (  # noqa: E402
     extract_heuristic_entities,
     validate_structured_extraction_output,
 )
-from services.workers.app.content_analysis_structured import (  # noqa: E402
+from signalops.workers.content_analysis_structured import (  # noqa: E402
     structured_label_projection_allowed,
 )
 
@@ -341,7 +341,7 @@ class ContentAnalysisTests(unittest.TestCase):
         }
 
         with patch(
-            "services.workers.app.content_analysis._load_subject_labels",
+            "signalops.workers.content_analysis._load_subject_labels",
             return_value=[
                 {
                     "label_type": "sentiment",
@@ -383,7 +383,7 @@ class ContentAnalysisTests(unittest.TestCase):
         }
 
         with patch(
-            "services.workers.app.content_analysis._load_subject_structured_extractions",
+            "signalops.workers.content_analysis._load_subject_structured_extractions",
             return_value=[
                 {
                     "type": "job_opening",

@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   computeAdaptiveTransition,
   resolveRuntimeState
-} from "../../../services/fetchers/src/adaptive-scheduling.ts";
+} from "../../../runtime/node/services/fetchers/src/adaptive-scheduling.ts";
 
 test("resolveRuntimeState applies base interval defaults and caps", () => {
   const state = resolveRuntimeState(300, null);

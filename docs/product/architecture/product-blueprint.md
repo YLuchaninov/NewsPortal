@@ -59,21 +59,21 @@ PostgreSQL владеет долговечными бизнес-данными:
 
 ## Сервисы
 
-`apps/web` показывает system-selected collection, personalized matches, saved/following surfaces и notification-related user flows.
+`runtime/node/apps/web` показывает system-selected collection, personalized matches, saved/following surfaces и notification-related user flows.
 
-`apps/admin` дает оператору channels, rules/templates, signal_candidates, clusters, resources, reindex, discovery, observability и BFF writes.
+`runtime/node/apps/admin` дает оператору channels, rules/templates, signal_candidates, clusters, resources, reindex, discovery, observability и BFF writes.
 
-`services/fetchers` опрашивает источники, нормализует provider-specific вход, сохраняет observations/resources/signal-candidates и пишет outbox events.
+`runtime/node/services/fetchers` опрашивает источники, нормализует provider-specific вход, сохраняет observations/resources/signal-candidates и пишет outbox events.
 
-`services/relay` читает `outbox_events`, применяет routing contracts и публикует тонкие jobs в BullMQ.
+`runtime/node/services/relay` читает `outbox_events`, применяет routing contracts и публикует тонкие jobs в BullMQ.
 
-`services/workers` выполняет тяжелую обработку: normalize, dedup, embed, cluster, selection, LLM review, notifications, discovery и sequence runtime.
+`runtime/python/src/signalops/workers` выполняет тяжелую обработку: normalize, dedup, embed, cluster, selection, LLM review, notifications, discovery и sequence runtime.
 
-`services/api` дает read/debug/maintenance API поверх материализованной PostgreSQL-правды.
+`runtime/python/src/signalops/api` дает read/debug/maintenance API поверх материализованной PostgreSQL-правды.
 
-`services/mcp` открывает operator control-plane для MCP-клиентов с token scopes и bounded tools.
+`runtime/node/services/mcp` открывает operator control-plane для MCP-клиентов с token scopes и bounded tools.
 
-`packages/contracts` держит общий словарь типов. `packages/control-plane` держит shared write orchestration для admin/MCP. `packages/ui` держит UI primitives.
+`runtime/node/packages/contracts` держит общий словарь типов. `runtime/node/packages/control-plane` держит shared write orchestration для admin/MCP. `runtime/node/packages/ui` держит UI primitives.
 
 ## Content model
 

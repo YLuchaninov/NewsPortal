@@ -18,7 +18,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** operators can explain and recover the product after failures. This matters for a content intelligence product because customers will not trust a lead/feed/signal if the system cannot show where it came from, why it was selected, and how to replay it.
 
-**Implemented around:** `outbox_events`, `services/relay`, `q.sequence`, worker processors, `.aidp/blueprint.md`.
+**Implemented around:** `outbox_events`, `runtime/node/services/relay`, `q.sequence`, worker processors, `.aidp/blueprint.md`.
 
 **Tradeoff:** more database reads and schema discipline; much clearer recovery, audit and proof.
 
@@ -32,7 +32,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this supports enterprise-style automation without turning the product into an unsafe script runner. It lets the system schedule repeatable monitoring, reindexing, enrichment and reporting while keeping support/debugging realistic.
 
-**Implemented around:** `services/workers/app/task_engine/**`, `services/api/app/sequence_*`, `services/mcp/src/tools/sequences-tools.ts`, `docs/product/operator/mcp/README.md`.
+**Implemented around:** `runtime/python/src/signalops/workers/task_engine/**`, `runtime/python/src/signalops/api/sequence_*`, `runtime/node/services/mcp/src/tools/sequences-tools.ts`, `docs/product/operator/mcp/README.md`.
 
 **Tradeoff:** adding new executable behavior still requires code deployment; in exchange, plugin contracts are typed, testable and discoverable.
 
@@ -46,7 +46,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this turns an LLM/MCP client into a controlled operator surface. The product can be run from an agent without giving the agent unbounded database or admin power, and without relying on chat memory as proof.
 
-**Implemented around:** `services/mcp/src/main.ts`, `services/mcp/src/tools.ts`, `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`, `services/mcp/src/tools/discovery/vnext-tools.ts`, `services/mcp/src/tools/sequences-tools.ts`, `packages/contracts/src/mcp-schemas.ts`, `docs/product/operator/mcp/**`.
+**Implemented around:** `runtime/node/services/mcp/src/main.ts`, `runtime/node/services/mcp/src/tools.ts`, `runtime/node/services/mcp/src/resources.ts`, `runtime/node/services/mcp/src/prompts.ts`, `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`, `runtime/node/services/mcp/src/tools/sequences-tools.ts`, `runtime/node/packages/contracts/src/mcp-schemas.ts`, `docs/product/operator/mcp/**`.
 
 **Tradeoff:** more MCP-specific documentation and tests; better behavior for tool-only clients and safer remote operation.
 
@@ -60,7 +60,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** the product can search widely for unusual source families without polluting the customer-facing feed. This is crucial for "hidden signal" use cases: the system can explore aggressively while only publishing signals that pass downstream gates.
 
-**Implemented around:** `docs/discovery_vnext_blueprint.md`, `.aidp/contracts/discovery-agent.md`, `services/api/app/discovery_vnext_api.py`, `services/workers/app/discovery_vnext_*.py`, `services/mcp/src/tools/discovery/vnext-tools.ts`, migrations `0056`-`0062`.
+**Implemented around:** `docs/discovery_vnext_blueprint.md`, `.aidp/contracts/discovery-agent.md`, `runtime/python/src/signalops/api/discovery_vnext_api.py`, `runtime/python/src/signalops/workers/discovery_vnext_*.py`, `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`, migrations `0056`-`0062`.
 
 **Tradeoff:** more intermediate records and review steps; much better explainability, rollback and budget control.
 
@@ -74,7 +74,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this prevents expensive false positives. A random RFP detail page, vendor service page, PDF or search wrapper is not accidentally turned into a recurring source. The business gets a cleaner source graph and fewer noisy channels to support.
 
-**Implemented around:** `services/workers/app/discovery_vnext_scope_resolution.py`, `services/workers/app/discovery_vnext_understanding.py`, `services/workers/app/discovery_vnext_routing.py`, `services/api/app/discovery_vnext_api.py`, `packages/contracts/src/discovery-vnext.ts`, migration `0061_discovery_vnext_source_scope_resolution.sql`, migration `0062_discovery_vnext_p0_p1_hardening.sql`.
+**Implemented around:** `runtime/python/src/signalops/workers/discovery_vnext_scope_resolution.py`, `runtime/python/src/signalops/workers/discovery_vnext_understanding.py`, `runtime/python/src/signalops/workers/discovery_vnext_routing.py`, `runtime/python/src/signalops/api/discovery_vnext_api.py`, `runtime/node/packages/contracts/src/discovery-vnext.ts`, migration `0061_discovery_vnext_source_scope_resolution.sql`, migration `0062_discovery_vnext_p0_p1_hardening.sql`.
 
 **Key mechanics:**
 
@@ -94,7 +94,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this protects product quality. The system can retain a promising source without presenting it as a lead, can send unsupported sources to adapter backlog, and can prevent vendor/context/single-item pages from leaking into customer-facing selected content.
 
-**Implemented around:** `services/workers/app/discovery_vnext_routing.py`, `services/workers/app/discovery_vnext_handoff.py`, `services/api/app/discovery_vnext_api.py`, `tests/unit/python/test_discovery_vnext_foundation.py`.
+**Implemented around:** `runtime/python/src/signalops/workers/discovery_vnext_routing.py`, `runtime/python/src/signalops/workers/discovery_vnext_handoff.py`, `runtime/python/src/signalops/api/discovery_vnext_api.py`, `tests/unit/python/test_discovery_vnext_foundation.py`.
 
 **Key gates:**
 
@@ -114,7 +114,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this gives the product a compounding source-intelligence asset. Even when a source cannot yet produce selected items, the system can remember why it matters, what adapter is missing, and how it relates to past discovery runs.
 
-**Implemented around:** `source_inventory`, `source_observations`, `adapter_backlog`, `source_channels`, `services/api/app/discovery_vnext_api.py`, `services/mcp/src/tools/discovery/vnext-tools.ts`.
+**Implemented around:** `source_inventory`, `source_observations`, `adapter_backlog`, `source_channels`, `runtime/python/src/signalops/api/discovery_vnext_api.py`, `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`.
 
 **Tradeoff:** operators must understand multiple intermediate states; the system avoids hiding uncertainty behind fake channels.
 
@@ -126,7 +126,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this turns live market/source exploration into an implementation roadmap. If many valuable sources require the same adapter class, the business can prioritize that adapter with evidence instead of guessing.
 
-**Implemented around:** `adapter_backlog`, `services/api/app/discovery_vnext_api.py`, `services/workers/app/discovery_vnext_routing.py`, `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools/discovery/vnext-tools.ts`.
+**Implemented around:** `adapter_backlog`, `runtime/python/src/signalops/api/discovery_vnext_api.py`, `runtime/python/src/signalops/workers/discovery_vnext_routing.py`, `runtime/node/services/mcp/src/operating-intelligence.ts`, `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`.
 
 **Tradeoff:** discovery can honestly report "partially proven" instead of pretending every found source is ready to monetize.
 
@@ -138,7 +138,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** new source families can be onboarded faster without turning every source into a custom code project. At the same time, runtime safety remains high enough for operator-managed acquisition.
 
-**Implemented around:** `database/migrations/0055_ingress_adapter_catalog.sql`, `packages/contracts/src/ingress-adapters.ts`, `packages/control-plane/src/ingress-adapter-bindings.ts`, `services/fetchers/src/ingress-adapters/**`, `services/fetchers/src/ingress-adapters/declarative-api-runtime.ts`, `services/mcp/src/tools/ingress-adapters-tools.ts`, `/admin/ingress-adapters`.
+**Implemented around:** `database/migrations/0055_ingress_adapter_catalog.sql`, `runtime/node/packages/contracts/src/ingress-adapters.ts`, `runtime/node/packages/control-plane/src/ingress-adapter-bindings.ts`, `runtime/node/services/fetchers/src/ingress-adapters/**`, `runtime/node/services/fetchers/src/ingress-adapters/declarative-api-runtime.ts`, `runtime/node/services/mcp/src/tools/ingress-adapters-tools.ts`, `/admin/ingress-adapters`.
 
 **Tradeoff:** migration and UI complexity; clearer adapter identity, safer declarative adapters and better legacy fallback reporting.
 
@@ -152,7 +152,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** many high-value signals live in PDFs, listings, downloads, tender pages, static resources or mixed portals. Treating them as resource truth preserves future conversion value and avoids misleading signal_candidate rows.
 
-**Implemented around:** website fetchers, `services/fetchers/src/resource-pdf-extraction.ts`, `/admin/resources`, `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`, `.aidp/contracts/content-model.md`.
+**Implemented around:** website fetchers, `runtime/node/services/fetchers/src/resource-pdf-extraction.ts`, `/admin/resources`, `docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md`, `.aidp/contracts/content-model.md`.
 
 **Tradeoff:** operators must inspect Resources and Signal Candidates separately; the model is more honest for mixed websites.
 
@@ -160,13 +160,13 @@ The framing is intentionally both technical and business-oriented:
 
 ## 11. Fetcher-Owned PDF And Document Extraction
 
-**Local decision:** PDF text extraction belongs to `services/fetchers`, not Python discovery workers. It uses the already URL-guarded/resource-owned fetch path, bounded parsing and exact pinned `pdfjs-dist`.
+**Local decision:** PDF text extraction belongs to `runtime/node/services/fetchers`, not Python discovery workers. It uses the already URL-guarded/resource-owned fetch path, bounded parsing and exact pinned `pdfjs-dist`.
 
 **Technical uniqueness:** PDF extraction is treated as source/resource enrichment, not as generic LLM or worker-side scraping. The implementation bounds bytes/pages/text/time, records parser/version/metadata, and skips image-only PDFs without OCR hallucination.
 
 **Business meaning:** procurement, grants, regulatory and official notices often arrive as documents. Safe document extraction expands addressable source coverage without weakening security or adding heavy native dependencies.
 
-**Implemented around:** `services/fetchers/src/resource-pdf-extraction.ts`, `tests/unit/ts/resource-enrichment-website.test.ts`, `tests/unit/ts/document-observations.test.ts`, `services/fetchers/package.json`.
+**Implemented around:** `runtime/node/services/fetchers/src/resource-pdf-extraction.ts`, `tests/unit/ts/resource-enrichment-website.test.ts`, `tests/unit/ts/document-observations.test.ts`, `runtime/node/services/fetchers/package.json`.
 
 **Tradeoff:** scanned PDFs remain a known gap until a separate OCR security/dependency plan exists.
 
@@ -178,7 +178,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this keeps the customer-facing feed credible. A user interest cannot accidentally turn vendor noise, wrapper pages or weak matches into public "signals."
 
-**Implemented around:** `final_selection_results`, `services/api/app/content_selection_read_model.py`, `services/api/app/content_detail_read_model.py`, `services/workers/app/selection_*`, web `/` vs `/matches`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`.
+**Implemented around:** `final_selection_results`, `runtime/python/src/signalops/api/content_selection_read_model.py`, `runtime/python/src/signalops/api/content_detail_read_model.py`, `runtime/python/src/signalops/workers/selection_*`, web `/` vs `/matches`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`.
 
 **Tradeoff:** some user-specific recall waits on system selection; the feed remains explainable and safer.
 
@@ -192,7 +192,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this lets the same system handle obvious signals, hidden operational intent and mixed evidence without overfitting the core to one market. Operators can pursue rare/indirect signals without killing recall through keyword piles, while still using strict markers where those markers are genuinely mandatory.
 
-**Implemented around:** `services/mcp/src/resources.ts`, `services/mcp/src/prompts.ts`, `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools/templates-tools.ts`, `services/api/app/content_selection_read_model.py`, `apps/admin/src/components/InterestTemplateEditorForm.tsx`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`.
+**Implemented around:** `runtime/node/services/mcp/src/resources.ts`, `runtime/node/services/mcp/src/prompts.ts`, `runtime/node/services/mcp/src/operating-intelligence.ts`, `runtime/node/services/mcp/src/tools/templates-tools.ts`, `runtime/python/src/signalops/api/content_selection_read_model.py`, `runtime/node/apps/admin/src/components/InterestTemplateEditorForm.tsx`, `.aidp/contracts/zero-shot-interest-filtering.md`, `.aidp/contracts/universal-selection-profiles.md`.
 
 **Key mechanics:**
 
@@ -212,7 +212,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this is a rare but important product stance: the system optimizes for trustworthy signal yield, not vanity counts. It can tell a customer "we found sources but need conversion work" instead of selling noise as leads.
 
-**Implemented around:** `services/mcp/src/operating-intelligence.ts`, `services/mcp/src/tools.ts`, `services/api/app/signal_candidate_list_read_model.py`, `services/api/app/content_selection_read_model.py`, `infra/scripts/test-discovery-vnext-mcp-live-*.mjs`.
+**Implemented around:** `runtime/node/services/mcp/src/operating-intelligence.ts`, `runtime/node/services/mcp/src/tools.ts`, `runtime/python/src/signalops/api/signal_candidate_list_read_model.py`, `runtime/python/src/signalops/api/content_selection_read_model.py`, `infra/scripts/proof/test-discovery-vnext-mcp-live-*.mjs`.
 
 **Tradeoff:** demos can look less flashy when broad discovery finds no selected items; long-term trust is higher.
 
@@ -224,7 +224,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** the platform is not just a vertical scraper. It can be configured for new signal markets without rebuilding the core each time.
 
-**Implemented around:** `services/workers/app/discovery_vnext_megaloop.py`, `services/workers/app/discovery_vnext_brief.py`, `services/workers/app/discovery_vnext_candidates.py`, `docs/discovery_vnext_blueprint.md`, `tests/unit/python/test_discovery_vnext_foundation.py`.
+**Implemented around:** `runtime/python/src/signalops/workers/discovery_vnext_megaloop.py`, `runtime/python/src/signalops/workers/discovery_vnext_brief.py`, `runtime/python/src/signalops/workers/discovery_vnext_candidates.py`, `docs/discovery_vnext_blueprint.md`, `tests/unit/python/test_discovery_vnext_foundation.py`.
 
 **Tradeoff:** domain pack design becomes important. Good results require calibrated interests, feedback and adapter coverage rather than hidden hardcode.
 
@@ -236,7 +236,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** the product can be operated in cost-sensitive environments and can safely recalibrate old content after changing interests or templates. This matters when customers expect repeatable reports and no surprise notifications.
 
-**Implemented around:** `discovery_query_attempts`, `discovery_llm_gateway_events`, `reindex_jobs`, `services/api/app/reindex_read_model.py`, `apps/admin/src/components/LiveReindexJobsSection.tsx`, `services/mcp/src/tools/sequences-tools.ts`, `services/mcp/src/operating-intelligence.ts`, `services/workers/app/reindex_backfill_runtime.py`.
+**Implemented around:** `discovery_query_attempts`, `discovery_llm_gateway_events`, `reindex_jobs`, `runtime/python/src/signalops/api/reindex_read_model.py`, `runtime/node/apps/admin/src/components/LiveReindexJobsSection.tsx`, `runtime/node/services/mcp/src/tools/sequences-tools.ts`, `runtime/node/services/mcp/src/operating-intelligence.ts`, `runtime/python/src/signalops/workers/reindex_backfill_runtime.py`.
 
 **Tradeoff:** operators must explicitly run and verify replay; the system avoids accidental spend and notification mistakes.
 
@@ -248,7 +248,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this gives the team a way to prove the funnel works from idea to source discovery to selected signal, and to honestly label gaps as source recall, adapter conversion, selection quality, LLM health or provider quality.
 
-**Implemented around:** `infra/scripts/test-discovery-vnext-mcp-live-gap-flow.mjs`, `infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs`, `infra/scripts/test-discovery-vnext-mcp-scenario-verification.mjs`, `pnpm test:mcp:http:discovery`, `pnpm test:discovery:vnext-flow`.
+**Implemented around:** `infra/scripts/proof/test-discovery-vnext-mcp-live-gap-flow.mjs`, `infra/scripts/proof/test-discovery-vnext-mcp-live-signal-flow.mjs`, `infra/scripts/proof/test-discovery-vnext-mcp-scenario-verification.mjs`, `pnpm test:mcp:http:discovery`, `pnpm test:discovery:vnext-flow`.
 
 **Tradeoff:** live proof depends on local runtime, credentials and provider behavior; deterministic proofs still remain necessary for CI-style confidence.
 
@@ -260,7 +260,7 @@ The framing is intentionally both technical and business-oriented:
 
 **Business meaning:** this supports product learning without creating a brittle pile of customer-specific code branches. It also makes tuning auditable: the operator can explain which feedback/config changes improved or failed to improve quality.
 
-**Implemented around:** `discovery_feedback_events`, `services/mcp/src/tools/discovery/vnext-tools.ts`, `services/mcp/src/operating-intelligence.ts`, `system_interests.*`, `operator.tuning.recommend`, `maintenance.reindex.request`.
+**Implemented around:** `discovery_feedback_events`, `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`, `runtime/node/services/mcp/src/operating-intelligence.ts`, `system_interests.*`, `operator.tuning.recommend`, `maintenance.reindex.request`.
 
 **Tradeoff:** tuning takes iterations. The payoff is a system that can generalize across markets instead of only working for one hand-coded domain.
 

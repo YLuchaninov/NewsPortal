@@ -14,24 +14,24 @@ import {
   summarizeMcpAccessTokens,
   touchMcpAccessTokenUsage,
   MCP_SCOPE_OPTIONS,
-} from "../../../packages/control-plane/src/mcp-tokens.ts";
-import { hydrateTemplateUpdatePayloadForSave } from "../../../packages/control-plane/src/templates.ts";
-import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
+} from "../../../runtime/node/packages/control-plane/src/mcp-tokens.ts";
+import { hydrateTemplateUpdatePayloadForSave } from "../../../runtime/node/packages/control-plane/src/templates.ts";
+import { createSignalOpsSdk } from "../../../runtime/node/packages/sdk/src/index.ts";
 import {
   buildToolResult,
   JsonRpcError,
   parseJsonRpcRequest,
   readOptionalArgumentsObject,
-} from "../../../services/mcp/src/protocol.ts";
-import { MCP_SERVER_INSTRUCTIONS } from "../../../services/mcp/src/context.ts";
+} from "../../../runtime/node/services/mcp/src/protocol.ts";
+import { MCP_SERVER_INSTRUCTIONS } from "../../../runtime/node/services/mcp/src/context.ts";
 import {
   getDiagnosticsGuide,
   getOperatingModelGuide,
   getTuningGuide,
-} from "../../../services/mcp/src/operating-intelligence.ts";
-import { listMcpPrompts, resolveMcpPrompt } from "../../../services/mcp/src/prompts.ts";
-import { listMcpResources, resolveMcpResource } from "../../../services/mcp/src/resources.ts";
-import { executeMcpTool, listMcpTools } from "../../../services/mcp/src/tools.ts";
+} from "../../../runtime/node/services/mcp/src/operating-intelligence.ts";
+import { listMcpPrompts, resolveMcpPrompt } from "../../../runtime/node/services/mcp/src/prompts.ts";
+import { listMcpResources, resolveMcpResource } from "../../../runtime/node/services/mcp/src/resources.ts";
+import { executeMcpTool, listMcpTools } from "../../../runtime/node/services/mcp/src/tools.ts";
 
 const WRITE_SEQUENCES_TOKEN = {
   tokenId: "token-write-sequences",

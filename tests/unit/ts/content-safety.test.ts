@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sanitizeHtmlFragment } from "../../../packages/content-safety/src/index.ts";
+import { sanitizeHtmlFragment } from "../../../runtime/node/packages/content-safety/src/index.ts";
 
 test("sanitizeHtmlFragment removes active content and unsafe handlers", () => {
   const sanitized = sanitizeHtmlFragment(`

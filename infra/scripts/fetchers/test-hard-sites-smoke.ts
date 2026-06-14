@@ -3,11 +3,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import type { Pool } from "pg";
 
-import { loadFetchersConfig } from "../../../services/fetchers/src/config";
-import { createPgPool } from "../../../services/fetchers/src/db";
-import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
-import { ResourceEnrichmentService } from "../../../services/fetchers/src/resource-enrichment";
-import { probeWebsitesForDiscovery } from "../../../services/fetchers/src/web-ingestion";
+import { loadFetchersConfig } from "../../../runtime/node/services/fetchers/src/config";
+import { createPgPool } from "../../../runtime/node/services/fetchers/src/db";
+import { RssFetcherService } from "../../../runtime/node/services/fetchers/src/fetchers";
+import { ResourceEnrichmentService } from "../../../runtime/node/services/fetchers/src/resource-enrichment";
+import { probeWebsitesForDiscovery } from "../../../runtime/node/services/fetchers/src/web-ingestion";
 
 interface WaitOptions {
   timeoutMs: number;

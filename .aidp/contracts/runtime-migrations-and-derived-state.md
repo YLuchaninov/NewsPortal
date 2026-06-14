@@ -3,7 +3,7 @@
 ## Подсистема
 
 - Имя: local runtime delivery, SQL migrations and rebuildable derived state.
-- Владельцы кода/границ: `infra/docker`, `infra/nginx`, `.env.example`, `database/migrations`, `database/ddl`, `services/relay/src/migrations.ts`, `services/indexer`, root `package.json` scripts.
+- Владельцы кода/границ: `infra/docker`, `infra/nginx`, `.env.example`, `database/migrations`, `database/ddl`, `runtime/node/services/relay/src/migrations.ts`, `services/indexer`, root `package.json` scripts.
 - Основные runtime surfaces: Docker Compose stack, nginx front door, relay migration runner, PostgreSQL schema, HNSW index/snapshot files, local proof scripts.
 
 ## Почему нужен contract

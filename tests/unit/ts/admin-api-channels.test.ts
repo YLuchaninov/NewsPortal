@@ -6,7 +6,7 @@ import {
   parseApiAdminChannelInput,
   planApiBulkImport,
   upsertApiChannels,
-} from "../../../apps/admin/src/lib/server/api-channels.ts";
+} from "../../../runtime/node/packages/control-plane/src/api-channels.ts";
 
 test("parseApiAdminChannelInput normalizes API admin payload fields", () => {
   const channel = parseApiAdminChannelInput({

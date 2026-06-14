@@ -7,7 +7,7 @@ import {
   listSavedContentItemRefs,
   resolveStoryUpdated,
   setContentItemSavedState,
-} from "../../../apps/web/src/lib/server/user-content-state.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/user-content-state.ts";
 
 test("buildUserContentStateView keeps unread items non-new after mark unread semantics", () => {
   const state = buildUserContentStateView(

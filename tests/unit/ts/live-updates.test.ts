@@ -10,7 +10,7 @@ import {
   resolveSurfaceUpdateMessage,
   serializeLiveUpdatesResponse,
   type LiveUpdatesSnapshot,
-} from "../../../apps/web/src/lib/live-updates.ts";
+} from "../../../runtime/node/apps/web/src/lib/live-updates.ts";
 
 function createSnapshot(): LiveUpdatesSnapshot {
   return {

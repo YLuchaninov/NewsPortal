@@ -9,11 +9,11 @@ import {
 } from "@signalops/contracts";
 import type { Pool } from "pg";
 
-import { loadRelayConfig } from "../../../services/relay/src/config";
-import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";
-import { waitForPublishedEvent } from "../../../services/relay/src/outbox";
-import { OutboxRelay } from "../../../services/relay/src/relay";
-import { PostgresSequenceRoutingRepository } from "../../../services/relay/src/sequence-routing";
+import { loadRelayConfig } from "../../../runtime/node/services/relay/src/config";
+import { createPgPool, createRedisConnection } from "../../../runtime/node/services/relay/src/db";
+import { waitForPublishedEvent } from "../../../runtime/node/services/relay/src/outbox";
+import { OutboxRelay } from "../../../runtime/node/services/relay/src/relay";
+import { PostgresSequenceRoutingRepository } from "../../../runtime/node/services/relay/src/sequence-routing";
 
 interface ActiveSequenceRow {
   sequenceId: string;

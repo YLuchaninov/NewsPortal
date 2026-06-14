@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { readRuntimeConfig } from "../../../packages/config/src/index.ts";
-import { createSignalOpsSdk } from "../../../packages/sdk/src/index.ts";
-import * as discoveryBff from "../../../apps/admin/src/pages/bff/admin/discovery.ts";
+import { readRuntimeConfig } from "../../../runtime/node/packages/config/src/index.ts";
+import { createSignalOpsSdk } from "../../../runtime/node/packages/sdk/src/index.ts";
+import * as discoveryBff from "../../../runtime/node/apps/admin/src/pages/bff/admin/discovery.ts";
 
 test("listDiscoveryVNextRecords preserves vNext filters and pagination params", async () => {
   let requestedUrl = "";
@@ -78,7 +78,7 @@ test("Discovery vNext admin BFF exports only the POST action handler", () => {
 
 test("Discovery vNext admin BFF exposes full workflow intents and guarded rollback", async () => {
   const source = await readFile(
-    new URL("../../../apps/admin/src/pages/bff/admin/discovery.ts", import.meta.url),
+    new URL("../../../runtime/node/apps/admin/src/pages/bff/admin/discovery.ts", import.meta.url),
     "utf8"
   );
 
@@ -99,7 +99,7 @@ test("Discovery vNext admin BFF exposes full workflow intents and guarded rollba
 
 test("Discovery vNext admin workspace exposes full resources and detail links", async () => {
   const source = await readFile(
-    new URL("../../../apps/admin/src/pages/discovery.astro", import.meta.url),
+    new URL("../../../runtime/node/apps/admin/src/pages/discovery.astro", import.meta.url),
     "utf8"
   );
 

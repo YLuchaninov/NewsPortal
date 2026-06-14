@@ -5,8 +5,8 @@ import {
   buildWebsiteResourceClassificationJson,
   resolveEditorialExtractorDecision,
   shouldRetainDiscoveryEditorialKind,
-} from "../../../services/fetchers/src/resource-enrichment.ts";
-import { extractPdfDocument } from "../../../services/fetchers/src/resource-pdf-extraction.ts";
+} from "../../../runtime/node/services/fetchers/src/resource-enrichment.ts";
+import { extractPdfDocument } from "../../../runtime/node/services/fetchers/src/resource-pdf-extraction.ts";
 
 function bytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);

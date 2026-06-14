@@ -8,15 +8,15 @@ from tests.unit.python.support.stubs import install_psycopg_stub
 
 install_psycopg_stub()
 
-from services.workers.app.task_engine import (
+from signalops.workers.task_engine import (
     SequenceDefinition,
     SequenceExecutor,
     SequenceRunRecord,
     TaskPluginRegistry,
     register_builtin_plugins,
 )
-from services.workers.app.task_engine.adapters.web_search import DdgsWebSearchAdapter
-from services.workers.app.task_engine.discovery_plugins import (
+from signalops.workers.task_engine.adapters.web_search import DdgsWebSearchAdapter
+from signalops.workers.task_engine.discovery_plugins import (
     LlmAnalyzerPlugin,
     RelevanceScorerPlugin,
     RssProbePlugin,
@@ -566,7 +566,7 @@ class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
         runtime.web_search = _EnvelopeWebSearchAdapter()
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -585,7 +585,7 @@ class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
         runtime.llm_analyzer = _EnvelopeLlmAnalyzerAdapter()
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -609,7 +609,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -640,7 +640,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -672,7 +672,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -805,7 +805,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=FakeDiscoveryRuntime(),
         ):
             result = await executor.execute_run("run-1")
@@ -853,7 +853,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "services.workers.app.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
             return_value=FakeDiscoveryRuntime(),
         ):
             result = await executor.execute_run("run-1")

@@ -17,8 +17,8 @@ import {
   validateAdminActionToken,
   validateAdminActionCsrfMetadata,
   type AdminActionSession,
-} from "../../../apps/admin/src/lib/server/admin-action.ts";
-import { submitAdminForm } from "../../../apps/admin/src/components/admin-form-submit.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/admin-action.ts";
+import { submitAdminForm } from "../../../runtime/node/apps/admin/src/components/admin-form-submit.ts";
 import {
   listFilesRecursive,
   withAppSecret,
@@ -471,7 +471,7 @@ test("submitAdminForm honors cancelled submit fallback", () => {
 });
 
 test("mutating admin BFF POST routes declare signed action-token scopes", () => {
-  const routeRoot = join(repoRoot, "apps/admin/src/pages/bff/admin");
+  const routeRoot = join(repoRoot, "runtime/node/apps/admin/src/pages/bff/admin");
   const expectedScopesByRoute = new Map<string, string>([
     ["signal-candidates/enrichment-retry.ts", "signal_candidates.enrichment-retry"],
     ["automation.ts", "automation"],

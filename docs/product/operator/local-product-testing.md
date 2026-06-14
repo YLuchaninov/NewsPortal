@@ -10,6 +10,16 @@ pnpm release:verify
 
 Это полный локальный release-ready gate без deployment: compliance, lint/typecheck/unit, builds, production compose image build, image size/content checks, supply-chain inventory artifact and product-local core/full/cleanup.
 
+## Public Beta verification
+
+```sh
+pnpm release:beta:verify
+```
+
+Это canonical Public Beta gate. Он требует реальный `.env.prod`, проверяет prod env, beta nginx/compose route exposure, control-plane ownership, compliance/static/unit/build/image checks и пишет product beta readiness proof через `pnpm test:product:beta-readiness`.
+
+Если `.env.prod` отсутствует или содержит placeholders, этот gate должен падать.
+
 ## Быстрый контур
 
 ```sh
@@ -38,35 +48,31 @@ pnpm test:product:local:full
 
 Он добавляет discovery/live-provider evidence там, где это явно разрешено env и harness.
 
+`website-matrix-compose` внутри full contour является `live-diagnostic`: classified external blocks, unsupported challenges and partial/empty public-site shapes produce `weak_with_classified_residual`, not a beta hard failure. To make those live-internet residuals fail the local product gate, run with `SIGNALOPS_STRICT_LIVE_INTERNET=1`.
+
 Используйте full contour перед крупным handoff или когда менялась область discovery/website/MCP/operator runtime.
 
-## Mega Flow для Examples A/B/C
+## Product Beta Readiness Proof
 
 ```sh
-pnpm test:product:mega-flow:compose
+pnpm test:product:beta-readiness
 ```
 
-Это live-pass gate для трех продуктовых доменов из Examples A/B/C:
-
-- Example A: job board / hiring discovery;
-- Example B: developer news discovery;
-- Example C: outsourcing / procurement discovery.
-
-Команда пишет `/tmp/signalops-product-mega-flow-<runId>.json|md`. После Discovery vNext cutover она проверяет только текущие product/runtime/provider/read-surface gates; отдельный live-yield proof для старой discovery модели удален.
+Команда пишет `/tmp/signalops-product-beta-readiness-<runId>.json|md` с `kind=signalops-product-beta-readiness-proof`. Это продуктовый proof поверх control-plane ownership, beta route exposure, `test:product:local:core` and `test:product:local:full`.
 
 ## Total Live Product Audit
 
 ```sh
-pnpm test:product:total-live:compose
+pnpm diagnostic:product:total-live
 ```
 
-Это самый широкий local/live audit layer. Он запускает strict A/B/C mega-flow как hard gate, затем расширяет proof на website/admin, automation admin, relay phases, worker smokes, browser UI audit, MCP and live diagnostic lanes.
+Это diagnostic local/live audit layer. Он проверяет required deterministic/runtime/provider/surface lanes and live diagnostic lanes. Retired legacy proof scripts are outside this audit model.
 
 Команда пишет `/tmp/signalops-product-total-live-<runId>.json|md`. Возможные итоговые состояния:
 
-- `pass`: strict A/B/C mega-flow, required core/runtime/provider/surface lanes and deterministic provider fixtures passed;
+- `pass`: required core/runtime/provider/surface lanes and deterministic provider fixtures passed;
 - `weak`: required lanes passed, but live-internet diagnostic lanes have classified residuals;
-- `fail`: preflight, compose, strict A/B/C selection, provider fixtures, required runtime/surface lanes or unclassified diagnostics failed.
+- `fail`: preflight, compose, provider fixtures, required runtime/surface lanes or unclassified diagnostics failed.
 
 API and Email IMAP сейчас честно fixture-backed: `test:providers:compose` обязателен, а external live API/IMAP помечаются как `not_applicable_with_reason` / `no_real_external_target_available`, пока нет реальных внешних test targets.
 
@@ -91,7 +97,8 @@ pnpm unit_tests
 Acceptance:
 
 ```sh
-pnpm integration_tests
+pnpm test:mvp:internal
+pnpm test:product:beta-readiness
 ```
 
 Website:
@@ -118,6 +125,14 @@ pnpm test:discovery:vnext-flow
 ```
 
 Optional live-provider Discovery vNext checks are separate and gated by explicit env, credentials and positive budget: `pnpm test:discovery:vnext-mcp-live-gap-flow:*` and `pnpm test:discovery:vnext-mcp-live-signal-flow:*`.
+
+Beta/security:
+
+```sh
+pnpm check:control-plane-ownership
+pnpm check:beta-route-exposure
+pnpm check:prod-env
+```
 
 MCP:
 

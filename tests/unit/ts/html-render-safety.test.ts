@@ -10,9 +10,9 @@ function readWorkspaceFile(path: string): string {
 }
 
 test("content detail pages render persisted HTML only through shared sanitizer", () => {
-  const publicContent = readWorkspaceFile("apps/web/src/pages/content/[id].astro");
-  const adminSignalCandidate = readWorkspaceFile("apps/admin/src/pages/signal-candidates/[docId].astro");
-  const adminResource = readWorkspaceFile("apps/admin/src/pages/resources/[resourceId].astro");
+  const publicContent = readWorkspaceFile("runtime/node/apps/web/src/pages/content/[id].astro");
+  const adminSignalCandidate = readWorkspaceFile("runtime/node/apps/admin/src/pages/signal-candidates/[docId].astro");
+  const adminResource = readWorkspaceFile("runtime/node/apps/admin/src/pages/resources/[resourceId].astro");
 
   for (const source of [publicContent, adminSignalCandidate, adminResource]) {
     assert.match(source, /@signalops\/content-safety/);
@@ -22,8 +22,8 @@ test("content detail pages render persisted HTML only through shared sanitizer",
 });
 
 test("admin inline SVG icon rendering is sourced from the static shell icon map", () => {
-  const adminShell = readWorkspaceFile("apps/admin/src/layouts/AdminShell.astro");
-  const sidebarNav = readWorkspaceFile("apps/admin/src/components/AdminDesktopSidebarNav.tsx");
+  const adminShell = readWorkspaceFile("runtime/node/apps/admin/src/layouts/AdminShell.astro");
+  const sidebarNav = readWorkspaceFile("runtime/node/apps/admin/src/components/AdminDesktopSidebarNav.tsx");
 
   assert.match(adminShell, /const icons: Record<string, string> = \{/);
   assert.match(adminShell, /iconSvg: icons\[icon\]/);

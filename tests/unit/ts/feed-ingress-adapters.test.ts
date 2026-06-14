@@ -5,8 +5,8 @@ import {
   parseRssChannelConfig,
   resolveRssChannelAdapterStrategy,
   resolveRssChannelMaxEntryAgeHours,
-} from "../../../packages/contracts/src/source.ts";
-import { adaptFeedIngress } from "../../../services/fetchers/src/feed-ingress-adapters.ts";
+} from "../../../runtime/node/packages/contracts/src/source.ts";
+import { adaptFeedIngress } from "../../../runtime/node/services/fetchers/src/feed-ingress-adapters.ts";
 
 test("RSS adapter helpers infer aggregator strategies and default age gates", () => {
   const emptyConfig = parseRssChannelConfig({});

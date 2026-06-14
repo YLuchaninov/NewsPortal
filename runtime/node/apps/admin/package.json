@@ -1,0 +1,35 @@
+{
+  "name": "@signalops/admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build && node ../../../../infra/tooling/link-node-runtime-deps.mjs --root=runtime/node/apps/admin --out=build/node/apps/admin",
+    "dev": "astro dev --host 0.0.0.0 --port 4322",
+    "start": "HOST=0.0.0.0 PORT=4322 node ../../../../build/node/apps/admin/server/entry.mjs",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/node": "10.1.1",
+    "@astrojs/react": "5.0.5",
+    "@signalops/bff-server": "workspace:*",
+    "@signalops/config": "workspace:*",
+    "@signalops/content-safety": "workspace:*",
+    "@signalops/contracts": "workspace:*",
+    "@signalops/control-plane": "workspace:*",
+    "@signalops/sdk": "workspace:*",
+    "@signalops/ui": "workspace:*",
+    "@tailwindcss/vite": "4.2.2",
+    "@xyflow/react": "12.10.2",
+    "astro": "6.3.5",
+    "lucide-react": "1.0.1",
+    "pg": "8.20.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "sonner": "2.0.7",
+    "tailwindcss": "4.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}

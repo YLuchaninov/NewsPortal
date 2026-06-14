@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
-import { loadFetchersConfig } from "../../../services/fetchers/src/config";
-import { createPgPool } from "../../../services/fetchers/src/db";
-import { RssFetcherService } from "../../../services/fetchers/src/fetchers";
+import { loadFetchersConfig } from "../../../runtime/node/services/fetchers/src/config";
+import { createPgPool } from "../../../runtime/node/services/fetchers/src/db";
+import { RssFetcherService } from "../../../runtime/node/services/fetchers/src/fetchers";
 
 interface WaitOptions {
   timeoutMs: number;

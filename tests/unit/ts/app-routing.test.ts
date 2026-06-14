@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveAppHref } from "../../../packages/config/src/index.ts";
+import { resolveAppHref } from "../../../runtime/node/packages/config/src/index.ts";
 import {
   buildAdminSignInPath,
   buildFlashRedirect as buildAdminFlashRedirect,
   resolveAdminAppPath,
   resolveAdminRedirectPath,
-} from "../../../apps/admin/src/lib/server/browser-flow.ts";
-import { buildFlashRedirect as buildWebFlashRedirect } from "../../../apps/web/src/lib/server/browser-flow.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/browser-flow.ts";
+import { buildFlashRedirect as buildWebFlashRedirect } from "../../../runtime/node/apps/web/src/lib/server/browser-flow.ts";
 
 function withAppBaseUrl(appBaseUrl: string, run: () => void) {
   const previousValue = process.env.SIGNALOPS_APP_BASE_URL;

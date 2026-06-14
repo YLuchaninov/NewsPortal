@@ -6,23 +6,23 @@ import test from "node:test";
 import {
   buildBulkChannelImportPreflightHeaders,
   getBulkChannelImportViewModel
-} from "../../../apps/admin/src/components/BulkChannelImport.tsx";
+} from "../../../runtime/node/apps/admin/src/components/BulkChannelImport.tsx";
 import {
   buildAdminActionToken,
   prepareAdminAction,
   type AdminActionSession
-} from "../../../apps/admin/src/lib/server/admin-action.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/admin-action.ts";
 import {
   formatBulkImportSuccessMessage,
   parseBulkChannels,
   planBulkImportWithPool,
   readBulkPayload
-} from "../../../apps/admin/src/pages/bff/admin/channels/bulk/shared.ts";
+} from "../../../runtime/node/apps/admin/src/pages/bff/admin/channels/bulk/shared.ts";
 import {
   applyChannelBulkOnboardingWithPool,
   planChannelBulkOnboardingWithPool
-} from "../../../packages/control-plane/src/channel-bulk-onboarding.ts";
-import { planChannelAlternativesWithPool } from "../../../packages/control-plane/src/channel-alternatives.ts";
+} from "../../../runtime/node/packages/control-plane/src/channel-bulk-onboarding.ts";
+import { planChannelAlternativesWithPool } from "../../../runtime/node/packages/control-plane/src/channel-alternatives.ts";
 
 const adminSession: AdminActionSession = {
   userId: "admin-user-1",
@@ -67,11 +67,11 @@ test("bulk import island carries scoped admin action tokens explicitly", () => {
   });
 
   const componentSource = readFileSync(
-    join(process.cwd(), "apps/admin/src/components/BulkChannelImport.tsx"),
+    join(process.cwd(), "runtime/node/apps/admin/src/components/BulkChannelImport.tsx"),
     "utf8"
   );
   const importPageSource = readFileSync(
-    join(process.cwd(), "apps/admin/src/pages/channels/import.astro"),
+    join(process.cwd(), "runtime/node/apps/admin/src/pages/channels/import.astro"),
     "utf8"
   );
 

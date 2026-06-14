@@ -23,14 +23,18 @@
 - Build/no-emit package checks: `pnpm build`
 - Node runtime build: `pnpm build:node-runtime`
 - Fast compliance gate: `pnpm check:compliance`
+- Beta route exposure guard: `pnpm check:beta-route-exposure`
+- Control-plane ownership guard: `pnpm check:control-plane-ownership`
 - Dependency compliance guard: `pnpm check:dependency-compliance`
 - Supply-chain inventory guard: `pnpm check:supply-chain-inventory`
 - Env key sync guard: `pnpm check:env-sync`
+- Production beta env guard: `pnpm check:prod-env`
 - Production image content guard: `pnpm check:production-image-contents`
 - Python image size guard: `pnpm check:python-image-size`
 - Runtime image size guard: `pnpm check:runtime-image-sizes`
 - Runtime artifact guard: `pnpm check:runtime-artifacts`
 - Secret leak guard: `pnpm check:secret-leaks`
+- Repo taxonomy guard: `pnpm check:repo-taxonomy`
 - Test/runtime layout guard: `pnpm check:test-layout`
 
 ### Unit proof
@@ -41,13 +45,12 @@
 
 ### Integration/smoke proof
 
-- Canonical full local acceptance alias: `pnpm integration_tests`
+- Canonical internal MVP smoke path: `pnpm test:mvp:internal`
 - Local product core contour with deterministic RSS/website/API/IMAP acquisition proof and without Telegram/YouTube ingestion: `pnpm test:product:local:core`
 - Local product full contour with discovery/live-provider evidence: `pnpm test:product:local:full`
 - Local product cleanup checklist artifact: `pnpm test:product:local:cleanup`
-- Product mega-flow live-pass proof for Examples A/B/C with strict live-selected-signal_candidate acceptance and deterministic provider/filter/sequence/Web/Admin/MCP buckets: `pnpm test:product:mega-flow:compose`
-- Product total-live audit layer above mega-flow, with required core/runtime/surface lanes, classified live diagnostic residuals, and fixture-backed API/Email IMAP external-live residual truth: `pnpm test:product:total-live:compose`
-- Internal MVP smoke path: `pnpm test:mvp:internal`
+- Product beta readiness proof with control-plane ownership, beta route exposure and product-local core/full: `pnpm test:product:beta-readiness`
+- Product total-live diagnostic layer with required core/runtime/surface lanes, classified live diagnostic residuals, and fixture-backed API/Email IMAP external-live residual truth: `pnpm diagnostic:product:total-live`
 - Scaffold sanity: `pnpm check:scaffold`
 - Relay local proof: `pnpm test:relay`
 - Relay compose proof: `pnpm test:relay:compose`
@@ -65,7 +68,7 @@
 - Discovery local smoke: `pnpm test:discovery-enabled:smoke`
 - Discovery vNext operator/API/MCP proof: `pnpm test:mcp:http:discovery`, `pnpm unit_tests:ts -- mcp-control-plane`, and targeted admin/API tests for the touched surface.
 - MCP compose proof: `pnpm test:mcp:compose`
-- MCP HTTP groups: `pnpm test:mcp:http:matrix`, `pnpm test:mcp:http:auth`, `pnpm test:mcp:http:reads`, `pnpm test:mcp:http:writes`, `pnpm test:mcp:http:discovery`
+- MCP HTTP groups: `pnpm test:mcp:http:auth`, `pnpm test:mcp:http:reads`, `pnpm test:mcp:http:writes`, `pnpm test:mcp:http:discovery`
 - Fetcher/provider smoke: `pnpm test:feed-ingress-adapters:smoke`, `pnpm test:channel-auth:compose`, `pnpm test:providers:compose`, `pnpm test:enrichment:compose`, `pnpm test:hard-sites:compose`
 - Worker local smoke: `pnpm test:criterion-compile:smoke`, `pnpm test:cluster-match-notify:smoke`, `pnpm test:discovery-enabled:smoke`, `pnpm test:embed:smoke`, `pnpm test:interest-compile:smoke`, `pnpm test:llm-budget-stop:smoke`, `pnpm test:normalize-dedup:smoke`
 - Worker compose smoke: `pnpm test:criterion-compile:compose`, `pnpm test:cluster-match-notify:compose`, `pnpm test:embed:compose`, `pnpm test:interest-compile:compose`, `pnpm test:llm-budget-stop:compose`, `pnpm test:normalize-dedup:compose`, `pnpm test:reindex-backfill:compose`
@@ -76,6 +79,8 @@
 ### Runtime/delivery proof
 
 - Non-deploy release verification gate: `pnpm release:verify`
+- Public Beta single-host release verification gate: `pnpm release:beta:verify`
+- Public Beta single-host ops entrypoint: `pnpm ops:beta <up|down|logs|status|backup|restore-dry-run>`
 - Start full local stack: `pnpm dev:mvp:internal`
 - Start without rebuild: `pnpm dev:mvp:internal:no-build`
 - Stop/down/log lifecycle: `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:logs`
@@ -87,16 +92,18 @@
 
 - Static gates: lint, typecheck and build prove source shape and package contracts without runtime state.
 - Node runtime build: `pnpm build:node-runtime` proves compiled `.mjs` entrypoints for Node services before Docker/compose startup consumes them.
-- Compliance guard: `pnpm check:compliance` proves scaffold, test/runtime layout, runtime artifact, dependency, supply-chain inventory, env key-sync and secret-leak invariants without starting compose services or printing secret values.
+- Compliance guard: `pnpm check:compliance` proves scaffold, repo taxonomy, runtime artifact, control-plane ownership, beta route exposure, dependency, supply-chain inventory, env key-sync and secret-leak invariants without starting compose services or printing secret values.
 - Dependency compliance guard: `pnpm check:dependency-compliance` proves direct Node dependencies have locally installed package metadata with approved license families, direct specs are fixed exact versions and avoid floating/range/tag/git/url/mutable-source specs, forbidden parser dependencies stay out, and runtime Python requirements remain exactly pinned.
 - Supply-chain inventory guard: `pnpm check:supply-chain-inventory` proves a deterministic SBOM-lite inventory can be built from local workspace manifests, installed direct Node package metadata, Python requirement files and dependency source file hashes without network access.
 - Dependency compromise and pinning check: before any dependency install/add/update/re-enable, the active item must record exact package/version checks against current public advisory and malware/compromised-package evidence, and the manifest/lockfile diff must show fixed versions rather than floating, range, tag or mutable source specs unless an explicit security exception is recorded. This is intentionally external/current-information proof and is not satisfied by the deterministic local supply-chain inventory guard alone.
-- Layout guard: `pnpm check:test-layout` proves tracked test/proof files are outside production source trees.
+- Repo taxonomy guard: `pnpm check:repo-taxonomy` proves production source cleanliness, generated-artifact exclusion, script taxonomy and active references to moved script entrypoints.
+- Layout guard: `pnpm check:test-layout` remains a narrow compatibility guard proving tracked test/proof files are outside production source trees.
 - Runtime artifact guard: `pnpm check:runtime-artifacts` proves production Dockerfiles/compose do not pull tests/proofs/local envs/AIDP hidden state or derived `data` payloads into runtime artifacts, forbidden parser dependencies stay out of manifests, Node service runtime startup does not depend on TS source loaders, Node final image stages avoid source/build-only inputs while installing production dependencies and dropping root privileges, and the Python API/worker final image stage runs non-root from builder-produced wheels without build-essential.
 - Production image content guard: `pnpm check:production-image-contents` proves already-built production compose images do not contain repo-owned `tests/**`, `infra/scripts/**`, `infra/fixtures/**`, `.aidp/**`, `.env*` files or derived `data/**` files.
 - Python image size guard: `pnpm check:python-image-size` proves a built Python API/worker proof image stays below the configured size ceiling after optional ML payloads are kept out of the baseline runtime.
 - Runtime image size guard: `pnpm check:runtime-image-sizes` proves compose-built service images stay below service-specific size ceilings, keep expected non-root runtime users and expose direct runtime commands rather than package-manager wrappers.
 - Env sync guard: `pnpm check:env-sync` proves `.env.dev` exposes the same key set as `.env.example` without comparing or printing values.
+- Production beta env guard: `pnpm check:prod-env` proves real `.env.prod` has no placeholders, uses HTTPS base URLs, requires secure cookies/API auth, disables web test auth and includes required beta secrets without printing values.
 - Secret leak guard: `pnpm check:secret-leaks` scans tracked files only and proves common high-risk token/key shapes are not committed, while ignored local env files remain outside the scan.
 - Unit gates: `tests/unit/ts/**/*.test.ts` and `tests/unit/python/test_*.py` prove deterministic local logic.
 - Local smoke gates: direct Python/Node smoke commands under `infra/scripts/**` that can run outside compose when dependencies are available.
@@ -111,7 +118,8 @@
 - Structural gate: required for boundaries, refactors, shared contracts, migrations, queue routing or cross-surface changes.
 - Runtime smoke gate: required when startup, compose integration or service health matters.
 - Delivery gate: required for Docker/compose/nginx/env/runtime delivery changes.
-- Release gate: `pnpm release:verify` is the repository-owned non-deploy release gate. It runs compliance, lint, typecheck, unit tests, workspace build, Node runtime build, production compose image build, runtime image checks, production image content smoke, supply-chain artifact generation and product-local core/full/cleanup proof. Production deployment remains absent by design because the repository has no declared deployment target.
+- Release gate: `pnpm release:verify` is the repository-owned non-deploy local release gate. It runs compliance, lint, typecheck, unit tests, workspace build, Node runtime build, production compose image build, runtime image checks, production image content smoke, supply-chain artifact generation and product-local core/full/cleanup proof.
+- Public Beta gate: `pnpm release:beta:verify` is the repository-owned single-host beta gate. It requires real `.env.prod`, validates beta route exposure and control-plane ownership, runs compliance/static/unit/build/image checks, writes a product beta readiness proof and performs product-local cleanup without deploying.
 
 <!-- aidp-monitor:start aidp_verification_index v1 -->
 ```yaml
@@ -363,7 +371,7 @@ If delegated/subagent work is used:
 - Automation/control-plane changes: `pnpm test:automation:admin:compose` plus targeted unit/control-plane proof.
 - Delivery/compose changes: compose startup/health proof or an explicit blocked proof gap; scaffold changes should run `pnpm check:scaffold`.
 - Runtime image budget changes: build or compose-start the affected images first, then run `pnpm check:runtime-image-sizes`; if a budget increase is intentional, record the reason in `.aidp/contracts/runtime-migrations-and-derived-state.md` or the active stage archive.
-- Test/runtime layout changes: `pnpm check:test-layout`, lint/typecheck/unit proof, representative moved smoke commands, dev/test compose availability proof, and production image absence checks for `tests/**`, `infra/scripts/**` and `infra/fixtures/**`.
+- Test/runtime layout changes: `pnpm check:repo-taxonomy`, `pnpm check:test-layout`, lint/typecheck/unit proof, representative moved smoke commands, dev/test compose availability proof, and production image absence checks for `tests/**`, `infra/scripts/**` and `infra/fixtures/**`.
 - Notification/digest changes: affected BFF/worker proof plus Mailpit-local or explicit external-provider residual gap.
 - HNSW/index changes: affected rebuild/check command, plus worker/API proof if matching or search behavior changed.
 - UI interaction/layout changes: viewport proof and, for button/control regressions, `pnpm test:web:ui-audit`.

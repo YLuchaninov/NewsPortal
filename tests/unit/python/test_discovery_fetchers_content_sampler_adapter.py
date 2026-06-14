@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.task_engine.adapters.content_sampler import FetchersContentSamplerAdapter
+from signalops.workers.task_engine.adapters.content_sampler import FetchersContentSamplerAdapter
 
 
 class _FakeRssProbe:

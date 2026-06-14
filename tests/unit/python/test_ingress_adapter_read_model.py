@@ -1,7 +1,7 @@
 import unittest
 
-from services.api.app import channel_adapters
-from services.api.app import ingress_adapter_read_model as model
+from signalops.api import channel_adapters
+from signalops.api import ingress_adapter_read_model as model
 
 
 class IngressAdapterReadModelTest(unittest.TestCase):

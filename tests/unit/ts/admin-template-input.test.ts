@@ -6,7 +6,7 @@ import {
   parseCandidateSignalGroups,
   readTextList,
   slugifyCandidateSignalName,
-} from "../../../apps/admin/src/lib/server/admin-template-input.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/admin-template-input.ts";
 
 test("admin template input helpers split list payloads consistently", () => {
   assert.deepEqual(readTextList(["alpha\nbeta", "gamma, delta"], { splitCommas: true }), [

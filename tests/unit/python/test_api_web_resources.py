@@ -5,7 +5,7 @@ from tests.unit.python.support.stubs import install_psycopg_stub
 
 install_psycopg_stub()
 
-from services.api.app import main as api_main
+from signalops.api import main as api_main
 
 
 class ApiWebResourcesTests(unittest.TestCase):

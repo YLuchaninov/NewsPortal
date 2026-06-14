@@ -26,7 +26,7 @@
 Если нужен не один ручной пример, а широкий bounded live pass, используйте repo-owned script:
 
 ```sh
-node infra/scripts/test-live-website-matrix.mjs
+node infra/scripts/proof/test-live-website-matrix.mjs
 ```
 
 Он прогоняет 16 primary public sites по четырем ingress shapes и пишет JSON evidence bundle в `/tmp/signalops-live-website-matrix-<runId>.json`.

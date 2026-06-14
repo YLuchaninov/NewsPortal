@@ -7,7 +7,7 @@ import {
   formatLineListValue,
   resolveAdminUserInterestCompileState,
   resolveAdminUserInterestSearchState,
-} from "../../../apps/admin/src/lib/server/user-interest-admin-page.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/user-interest-admin-page.ts";
 
 test("resolveAdminUserInterestSearchState preserves raw inputs and normalized lookup priority", () => {
   const state = resolveAdminUserInterestSearchState(

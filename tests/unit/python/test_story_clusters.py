@@ -7,7 +7,7 @@ from tests.unit.python.support.stubs import SubscriptableAsyncCursor, install_ps
 
 install_psycopg_stub(async_cursor=SubscriptableAsyncCursor)
 
-from services.workers.app.story_clusters import (
+from signalops.workers.story_clusters import (
     compute_conflicting_signal_count,
     extract_source_family_key,
     refresh_canonical_document_verification,
@@ -119,7 +119,7 @@ class StoryClusterLogicTests(unittest.TestCase):
                 ]
             )
             with patch(
-                "services.workers.app.story_clusters.upsert_verification_result",
+                "signalops.workers.story_clusters.upsert_verification_result",
                 new=AsyncMock(),
             ):
                 result = await refresh_canonical_document_verification(
@@ -160,11 +160,11 @@ class StoryClusterLogicTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "services.workers.app.story_clusters.fetch_canonical_document_vector",
+                    "signalops.workers.story_clusters.fetch_canonical_document_vector",
                     new=AsyncMock(return_value=[]),
                 ),
                 patch(
-                    "services.workers.app.story_clusters.upsert_verification_result",
+                    "signalops.workers.story_clusters.upsert_verification_result",
                     new=AsyncMock(),
                 ),
             ):

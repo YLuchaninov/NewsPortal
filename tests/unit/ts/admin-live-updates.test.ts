@@ -10,7 +10,7 @@ import {
   serializeAdminLiveUpdatesResponse,
   type AdminDashboardLiveSnapshot,
   type AdminReindexLiveSnapshot,
-} from "../../../apps/admin/src/lib/live-updates.ts";
+} from "../../../runtime/node/apps/admin/src/lib/live-updates.ts";
 
 function createDashboardSnapshot(): AdminDashboardLiveSnapshot {
   return {

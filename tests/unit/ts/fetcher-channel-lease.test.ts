@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RssFetcherService } from "../../../services/fetchers/src/fetchers.ts";
+import { RssFetcherService } from "../../../runtime/node/services/fetchers/src/fetchers.ts";
 
 function createConfig() {
   return {

@@ -3,7 +3,7 @@
 ## Подсистема
 
 - Имя: граница web/admin аутентификации и сессий.
-- Владельцы кода/границ: `apps/web/src/lib/server/auth.ts`, `apps/admin/src/lib/server/auth.ts`, web/admin BFF auth routes, `user_roles`/`user_profiles`/`users` tables, nginx `/admin` routing.
+- Владельцы кода/границ: `runtime/node/apps/web/src/lib/server/auth.ts`, `runtime/node/apps/admin/src/lib/server/auth.ts`, web/admin BFF auth routes, `user_roles`/`user_profiles`/`users` tables, nginx `/admin` routing.
 - Основные runtime surfaces: публичная anonymous web-сессия, admin email/password sign-in, session cookies, Firebase Identity Toolkit, локальная PostgreSQL authorization truth.
 
 ## Почему нужен contract

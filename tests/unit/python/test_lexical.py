@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.lexical import build_lexical_tsquery
+from signalops.workers.lexical import build_lexical_tsquery
 
 
 class LexicalQueryTests(unittest.TestCase):

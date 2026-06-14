@@ -6,11 +6,11 @@ from tests.unit.python.support.stubs import install_psycopg_stub
 
 install_psycopg_stub()
 
-from services.workers.app.task_engine.adapters.source_registrar import (
+from signalops.workers.task_engine.adapters.source_registrar import (
     PostgresSourceRegistrarAdapter,
 )
-from services.workers.app.task_engine.adapters import source_registrar
-from services.workers.app.task_engine.adapters.website_probe import (
+from signalops.workers.task_engine.adapters import source_registrar
+from signalops.workers.task_engine.adapters.website_probe import (
     FetchersWebsiteProbeAdapter,
 )
 
@@ -105,7 +105,7 @@ class FetchersWebsiteProbeAdapterTests(unittest.TestCase):
 
         adapter = FetchersWebsiteProbeAdapter()
         with patch(
-            "services.workers.app.task_engine.adapters.website_probe.urlopen",
+            "signalops.workers.task_engine.adapters.website_probe.urlopen",
             new=fake_urlopen,
         ):
             rows = adapter.probe_websites(
@@ -137,7 +137,7 @@ class FetchersWebsiteProbeAdapterTests(unittest.TestCase):
 
         adapter = FetchersWebsiteProbeAdapter()
         with patch(
-            "services.workers.app.task_engine.adapters.website_probe.urlopen",
+            "signalops.workers.task_engine.adapters.website_probe.urlopen",
             new=fake_urlopen,
         ):
             adapter.probe_websites(
@@ -290,3 +290,16 @@ class SourceRegistrarBrowserConfigTests(unittest.TestCase):
         self.assertIn("insert into outbox_events", sql_text)
         self.assertNotIn("discovery_source", sql_text)
         self.assertNotIn("discovery_actions", sql_text)
+
+    def test_register_sources_rejects_future_hidden_provider(self) -> None:
+        adapter = PostgresSourceRegistrarAdapter(database_url="postgresql://stub")
+
+        with self.assertRaisesRegex(ValueError, "provider_type"):
+            adapter.register_sources(
+                sources=[{"url": "https://example.com/watch?v=1"}],
+                enabled=True,
+                dry_run=True,
+                created_by="operator",
+                tags=[],
+                provider_type="youtube",
+            )

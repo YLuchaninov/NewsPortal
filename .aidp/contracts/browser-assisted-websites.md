@@ -8,7 +8,7 @@ Browser assistance is a bounded fallback for public/operator-authorized `website
 
 ## Ownership boundary
 
-- Browser runtime ownership lives only in `services/fetchers`.
+- Browser runtime ownership lives only in `runtime/node/services/fetchers`.
 - `services/workers` may call fetchers-owned internal probe endpoint but must not own browser automation.
 - Astro, FastAPI and generic discovery plugins must not add parallel browser stacks.
 - Browser-assisted logic must not migrate into unrelated provider adapters.

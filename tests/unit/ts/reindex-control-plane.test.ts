@@ -5,7 +5,7 @@ import {
   buildReindexCancellationKey,
   cancelReindexJob,
   queueReindexJobWithSupersession,
-} from "../../../packages/control-plane/src/reindex.ts";
+} from "../../../runtime/node/packages/control-plane/src/reindex.ts";
 
 class FakePgClient {
   calls: Array<{ sql: string; params: unknown[] }> = [];

@@ -10,7 +10,7 @@
 
 ## Truth model
 
-- `services/fetchers` owns fetch/extract/enrichment handoff and raw/resource/signal_candidate persistence.
+- `runtime/node/services/fetchers` owns fetch/extract/enrichment handoff and raw/resource/signal_candidate persistence.
 - Rendered signal_candidate/resource HTML is untrusted provider content until passed through the shared server-side `@signalops/content-safety` sanitizer allowlist.
 - Public/admin signal_candidate and resource detail pages must not use local regex sanitizers for persisted provider HTML; they should call `sanitizeHtmlFragment` from `@signalops/content-safety`. Inline admin SVG icons are trusted UI chrome only when sourced from static icon maps, not persisted/operator content.
 - `document_observations` are additive evidence and must not disappear because an early semantic gate rejects content.

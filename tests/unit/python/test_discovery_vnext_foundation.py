@@ -7,24 +7,24 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 
-from services.api.app import discovery_vnext_api
-from services.api.app.routes.discovery_routes import register_discovery_routes
-from services.workers.app.discovery_vnext_artifacts import (
+from signalops.api import discovery_vnext_api
+from signalops.api.routes.discovery_routes import register_discovery_routes
+from signalops.workers.discovery_vnext_artifacts import (
     validate_artifact_payload,
     validate_discovery_brief,
     validate_source_scope_resolution,
     validate_source_understanding,
 )
-from services.workers.app.discovery_vnext_brief import compile_discovery_brief
-from services.workers.app.discovery_vnext_candidates import build_candidate_rows, query_quality_report
-from services.workers.app.discovery_vnext_megaloop import (
+from signalops.workers.discovery_vnext_brief import compile_discovery_brief
+from signalops.workers.discovery_vnext_candidates import build_candidate_rows, query_quality_report
+from signalops.workers.discovery_vnext_megaloop import (
     compare_hypothesis_batches,
     run_mega_loop_preview,
 )
-from services.workers.app.discovery_vnext_probe import build_probe_plan, execute_probe_plan
-from services.workers.app.discovery_vnext_routing import route_source_understanding
-from services.workers.app.discovery_vnext_scope_resolution import resolve_source_scope
-from services.workers.app.discovery_vnext_understanding import synthesize_source_understanding
+from signalops.workers.discovery_vnext_probe import build_probe_plan, execute_probe_plan
+from signalops.workers.discovery_vnext_routing import route_source_understanding
+from signalops.workers.discovery_vnext_scope_resolution import resolve_source_scope
+from signalops.workers.discovery_vnext_understanding import synthesize_source_understanding
 
 
 def _unwrap_json_param(value):  # type: ignore[no-untyped-def]
@@ -51,15 +51,15 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
     def test_core_vnext_modules_do_not_hardcode_eval_domains(self) -> None:
         root = Path(__file__).resolve().parents[3]
         core_paths = [
-            root / "services/workers/app/discovery_vnext_brief.py",
-            root / "services/workers/app/discovery_vnext_megaloop.py",
-            root / "services/workers/app/discovery_vnext_candidates.py",
-            root / "services/workers/app/discovery_vnext_probe.py",
-            root / "services/workers/app/discovery_vnext_scope_resolution.py",
-            root / "services/workers/app/discovery_vnext_understanding.py",
-            root / "services/workers/app/discovery_vnext_routing.py",
-            root / "services/workers/app/discovery_vnext_handoff.py",
-            root / "services/api/app/discovery_vnext_api.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_brief.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_megaloop.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_candidates.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_probe.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_scope_resolution.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_understanding.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_routing.py",
+            root / "runtime/python/src/signalops/workers/discovery_vnext_handoff.py",
+            root / "runtime/python/src/signalops/api/discovery_vnext_api.py",
         ]
         forbidden_terms = [
             "out" + "sourcing",
@@ -419,7 +419,7 @@ class DiscoveryVNextFoundationTests(unittest.TestCase):
         self.assertEqual(plan["payload"]["limits"]["maxBrowserRequests"], 0)
         self.assertNotIn("bounded_browser", plan["payload"]["allowedEscalations"])
         self.assertIn("website_static_probe", plan["payload"]["checks"])
-        self.assertEqual(plan["payload"]["fetchersBoundary"]["owner"], "services/fetchers")
+        self.assertEqual(plan["payload"]["fetchersBoundary"]["owner"], "runtime/node/services/fetchers")
 
     def test_probe_plan_requires_explicit_browser_escalation_when_browser_budget_is_positive(self) -> None:
         plan = build_probe_plan(

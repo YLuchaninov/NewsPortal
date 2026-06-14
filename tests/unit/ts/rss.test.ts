@@ -6,8 +6,8 @@ import {
   collapseWhitespace,
   decodeHtmlEntities,
   stripHtmlTags
-} from "../../../services/fetchers/src/rss.ts";
-import { parseFeed } from "../../../services/fetchers/src/feed-parser/index.ts";
+} from "../../../runtime/node/services/fetchers/src/rss.ts";
+import { parseFeed } from "../../../runtime/node/services/fetchers/src/feed-parser/index.ts";
 
 test("parseFeed normalizes RSS channel metadata and items", () => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

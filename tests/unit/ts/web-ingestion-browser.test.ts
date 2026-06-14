@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseWebsiteChannelConfig } from "../../../packages/contracts/src/source.ts";
+import { parseWebsiteChannelConfig } from "../../../runtime/node/packages/contracts/src/source.ts";
 import {
   buildBrowserRouteHeaders,
   buildWebsiteRequestHeaders,
@@ -15,7 +15,7 @@ import {
   shouldAttemptBrowserAssistedDiscovery,
   type RuntimeCrawlPolicy,
   type WebsiteCapabilities,
-} from "../../../services/fetchers/src/web-ingestion.ts";
+} from "../../../runtime/node/services/fetchers/src/web-ingestion.ts";
 
 function buildPolicy(overrides: Partial<RuntimeCrawlPolicy> = {}): RuntimeCrawlPolicy {
   return {

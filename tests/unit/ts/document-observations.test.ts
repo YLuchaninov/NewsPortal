@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { PoolClient } from "pg";
 
-import { upsertSignalCandidateObservation } from "../../../services/fetchers/src/document-observations";
+import { upsertSignalCandidateObservation } from "../../../runtime/node/services/fetchers/src/document-observations";
 
 test("upsertSignalCandidateObservation persists a pending signal_candidate observation keyed by signal_candidate origin", async () => {
   const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];

@@ -6,12 +6,12 @@ RUN npm install -g pnpm@10.11.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json turbo.json ./
 COPY infra/tooling/build-node-runtime.mjs infra/tooling/build-node-runtime.mjs
-COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/contracts/tsconfig.json packages/contracts/tsconfig.json
-COPY packages/contracts/src packages/contracts/src
-COPY services/fetchers/package.json services/fetchers/package.json
-COPY services/fetchers/tsconfig.json services/fetchers/tsconfig.json
-COPY services/fetchers/src services/fetchers/src
+COPY runtime/node/packages/contracts/package.json runtime/node/packages/contracts/package.json
+COPY runtime/node/packages/contracts/tsconfig.json runtime/node/packages/contracts/tsconfig.json
+COPY runtime/node/packages/contracts/src runtime/node/packages/contracts/src
+COPY runtime/node/services/fetchers/package.json runtime/node/services/fetchers/package.json
+COPY runtime/node/services/fetchers/tsconfig.json runtime/node/services/fetchers/tsconfig.json
+COPY runtime/node/services/fetchers/src runtime/node/services/fetchers/src
 
 RUN pnpm install --frozen-lockfile
 RUN node infra/tooling/build-node-runtime.mjs --service=fetchers
@@ -29,17 +29,17 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/contracts/package.json packages/contracts/package.json
-COPY services/fetchers/package.json services/fetchers/package.json
+COPY runtime/node/packages/contracts/package.json runtime/node/packages/contracts/package.json
+COPY runtime/node/services/fetchers/package.json runtime/node/services/fetchers/package.json
 
 RUN pnpm install --frozen-lockfile --prod --filter @signalops/fetchers... \
   && pnpm --filter @signalops/fetchers exec playwright install --with-deps chromium \
   && pnpm store prune
 
-COPY --from=builder --chown=node:node /workspace/services/fetchers/dist services/fetchers/dist
+COPY --from=builder --chown=node:node /workspace/build/node/services/fetchers build/node/services/fetchers
 
 RUN chown -R node:node /workspace /ms-playwright
 
 USER node
 
-CMD ["node", "services/fetchers/dist/main.mjs"]
+CMD ["node", "build/node/services/fetchers/main.mjs"]

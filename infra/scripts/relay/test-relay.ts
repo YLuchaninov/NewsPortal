@@ -1,11 +1,11 @@
 import { Queue } from "bullmq";
 import { FOUNDATION_SMOKE_QUEUE } from "@signalops/contracts";
 
-import { loadRelayConfig } from "../../../services/relay/src/config";
-import { createPgPool, createRedisConnection } from "../../../services/relay/src/db";
-import { OutboxRelay } from "../../../services/relay/src/relay";
-import { insertFoundationSmokeEvent, waitForPublishedEvent } from "../../../services/relay/src/outbox";
-import { PostgresSequenceRoutingRepository } from "../../../services/relay/src/sequence-routing";
+import { loadRelayConfig } from "../../../runtime/node/services/relay/src/config";
+import { createPgPool, createRedisConnection } from "../../../runtime/node/services/relay/src/db";
+import { OutboxRelay } from "../../../runtime/node/services/relay/src/relay";
+import { insertFoundationSmokeEvent, waitForPublishedEvent } from "../../../runtime/node/services/relay/src/outbox";
+import { PostgresSequenceRoutingRepository } from "../../../runtime/node/services/relay/src/sequence-routing";
 
 async function main(): Promise<void> {
   const config = loadRelayConfig();

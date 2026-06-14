@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.selection_signal_summary import build_candidate_signal_tier_summary
+from signalops.workers.selection_signal_summary import build_candidate_signal_tier_summary
 
 
 class SelectionSignalSummaryTests(unittest.TestCase):

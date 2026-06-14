@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pollApiProviderChannel } from "../../../services/fetchers/src/fetcher-api-poller.ts";
+import { pollApiProviderChannel } from "../../../runtime/node/services/fetchers/src/fetcher-api-poller.ts";
 import type {
   ChannelPollCompletion,
   PersistSignalCandidateInput,
   SourceChannelRow,
-} from "../../../services/fetchers/src/fetcher-persistence.ts";
+} from "../../../runtime/node/services/fetchers/src/fetcher-persistence.ts";
 
 const API_URL = "https://93.184.216.34/api/items";
 

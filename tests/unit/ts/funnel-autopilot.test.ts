@@ -7,7 +7,7 @@ import {
   updateOperatorFunnelLane,
   validateOperatorFunnelPlan,
   verifyOperatorFunnel,
-} from "../../../packages/control-plane/src/funnels.ts";
+} from "../../../runtime/node/packages/control-plane/src/funnels.ts";
 
 function makeFakePool(funnelCount = 1) {
   return {

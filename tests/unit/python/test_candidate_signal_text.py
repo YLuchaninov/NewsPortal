@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.candidate_signal_text import looks_like_generic_advice_title
+from signalops.workers.candidate_signal_text import looks_like_generic_advice_title
 
 
 class CandidateSignalTextTest(unittest.TestCase):

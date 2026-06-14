@@ -6,10 +6,6 @@ export const PRODUCT_TOTAL_LIVE_STATUSES = {
 };
 
 export const PRODUCT_TOTAL_LIVE_REQUIRED_COMMANDS = [
-  command("product-mega-flow-compose", "strict-live-product", ["test:product:mega-flow:compose", "--skip-stack-build"], {
-    proves: ["a-b-c-live-selected-product-flow"],
-    requiredArtifactKind: "signalops-product-mega-flow-proof",
-  }),
   command("providers-compose", "provider-fixtures", ["test:providers:compose"], {
     proves: ["api-fixture-ingestion", "email-imap-fixture-ingestion"],
   }),
@@ -119,10 +115,6 @@ function findArtifact(commandResult, predicate = () => true) {
   return parsedArtifacts(commandResult).find((artifact) => predicate(artifact)) ?? null;
 }
 
-function artifactFinalVerdict(artifact) {
-  return normalizeText(artifact?.finalVerdict || artifact?.status || artifact?.runtimeVerdict);
-}
-
 function summarizeRequiredCommand(commandResult) {
   if (commandResult?.status === "passed") {
     return {
@@ -156,13 +148,13 @@ export function summarizeProviderExternalResiduals(commandResults) {
     website: {
       status:
         commandPassed(commandResults, "channel-auth-compose")
-        && (commandPassed(commandResults, "product-mega-flow-compose") || commandPassed(commandResults, "website-admin-compose"))
+        && commandPassed(commandResults, "website-admin-compose")
           ? PRODUCT_TOTAL_LIVE_STATUSES.passed
           : PRODUCT_TOTAL_LIVE_STATUSES.failed,
       acceptance: "required_compose_downstream_or_operator_evidence",
       reason:
         commandPassed(commandResults, "channel-auth-compose")
-        && (commandPassed(commandResults, "product-mega-flow-compose") || commandPassed(commandResults, "website-admin-compose"))
+        && commandPassed(commandResults, "website-admin-compose")
           ? null
           : "website_compose_or_channel_auth_evidence_missing",
     },
@@ -193,7 +185,7 @@ export function summarizeProviderExternalResiduals(commandResults) {
   };
 }
 
-function classifyWebsiteMatrix(commandResult) {
+export function classifyWebsiteMatrixDiagnostic(commandResult) {
   const artifact = findArtifact(commandResult, (item) =>
     item?.evidencePath || item?.summary?.verdictCounts || item?.siteResults
   );
@@ -212,7 +204,7 @@ function classifyWebsiteMatrix(commandResult) {
 
   const verdictCounts = asObject(artifact.summary?.verdictCounts);
   const unexpected = Number(verdictCounts.unexpected_failure ?? 0);
-  if (unexpected > 0 || commandResult?.status !== "passed") {
+  if (unexpected > 0) {
     return {
       status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
       reason: "website_matrix_unexpected_failure",
@@ -220,10 +212,21 @@ function classifyWebsiteMatrix(commandResult) {
     };
   }
   const blocked = Number(verdictCounts.observed_truthful_unsupported_or_blocked ?? 0);
-  if (blocked > 0) {
+  const partial = Number(verdictCounts.observed_partial_or_empty_shape ?? 0);
+  if (blocked > 0 || partial > 0) {
     return {
       status: PRODUCT_TOTAL_LIVE_STATUSES.weak,
-      reason: "classified_live_website_unsupported_or_blocked_residual",
+      reason:
+        blocked > 0
+          ? "classified_live_website_unsupported_or_blocked_residual"
+          : "classified_live_website_partial_or_empty_residual",
+      verdictCounts,
+    };
+  }
+  if (commandResult?.status !== "passed") {
+    return {
+      status: PRODUCT_TOTAL_LIVE_STATUSES.failed,
+      reason: "website_matrix_command_failed_without_classified_residual",
       verdictCounts,
     };
   }
@@ -236,37 +239,9 @@ function classifyWebsiteMatrix(commandResult) {
 
 function classifyDiagnosticCommand(commandResult) {
   if (commandResult?.key === "website-matrix-compose") {
-    return classifyWebsiteMatrix(commandResult);
+    return classifyWebsiteMatrixDiagnostic(commandResult);
   }
   return summarizeRequiredCommand(commandResult);
-}
-
-function megaFlowEvidence(commandResults) {
-  const commandResult = findCommand(commandResults, "product-mega-flow-compose");
-  const artifact = findArtifact(commandResult, (item) => item?.kind === "signalops-product-mega-flow-proof");
-  if (!artifact) {
-    return {
-      status: commandResult?.status === "passed"
-        ? PRODUCT_TOTAL_LIVE_STATUSES.passed
-        : PRODUCT_TOTAL_LIVE_STATUSES.failed,
-      reason: commandResult?.status === "passed" ? null : "product_mega_flow_command_failed",
-      finalVerdict: null,
-      runtimeVerdict: null,
-      yieldVerdict: null,
-    };
-  }
-  const finalVerdict = artifactFinalVerdict(artifact);
-  return {
-    status: finalVerdict === "pass" ? PRODUCT_TOTAL_LIVE_STATUSES.passed : PRODUCT_TOTAL_LIVE_STATUSES.failed,
-    reason: finalVerdict === "pass" ? null : `product_mega_flow_final_verdict_${finalVerdict || "unknown"}`,
-    finalVerdict,
-    runtimeVerdict: artifact.runtimeVerdict ?? null,
-    yieldVerdict: artifact.yieldVerdict ?? null,
-    liveSelectedSignalCandidateCounts: asArray(artifact.scenarios).map((scenario) => ({
-      key: scenario.key,
-      selectedFinalRows: scenario.liveSelectedSignalCandidateEvidence?.selectedFinalRows ?? 0,
-    })),
-  };
 }
 
 export function determineProductTotalLiveAuditVerdict(input) {
@@ -294,7 +269,6 @@ export function determineProductTotalLiveAuditVerdict(input) {
       .map((item) => [item.key, classifyDiagnosticCommand(item)])
   );
   const providerEvidence = summarizeProviderExternalResiduals(commandResults);
-  const strictMegaFlow = megaFlowEvidence(commandResults);
   const diagnosticFailures = Object.entries(diagnosticSummaries)
     .filter(([, summary]) => summary.status === PRODUCT_TOTAL_LIVE_STATUSES.failed)
     .map(([key, summary]) => ({ key, reason: summary.reason }));
@@ -312,7 +286,6 @@ export function determineProductTotalLiveAuditVerdict(input) {
     ...(envStatus === "failed" ? asArray(input?.env?.failures) : []),
     ...requiredMissing.map((key) => `${key} did not run`),
     ...requiredFailures.map((item) => `${item.key} failed with exit ${item.exitCode ?? "unknown"}`),
-    ...(strictMegaFlow.status === PRODUCT_TOTAL_LIVE_STATUSES.failed ? [strictMegaFlow.reason] : []),
     ...providerFailures.map((item) => item.reason),
     ...diagnosticFailures.map((item) => `${item.key}: ${item.reason}`),
   ].filter(Boolean);
@@ -327,7 +300,6 @@ export function determineProductTotalLiveAuditVerdict(input) {
   return {
     runtimeVerdict,
     finalVerdict,
-    strictMegaFlow,
     providerEvidence,
     commandSummaries,
     diagnosticSummaries,

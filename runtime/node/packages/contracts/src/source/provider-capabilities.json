@@ -1,0 +1,62 @@
+[
+  {
+    "providerType": "rss",
+    "label": "RSS",
+    "status": "beta_runtime",
+    "ingestRuntime": true,
+    "adminCreateVisible": true,
+    "bulkImportVisible": true,
+    "betaRequired": true,
+    "diagnosticOnly": false
+  },
+  {
+    "providerType": "website",
+    "label": "Website",
+    "status": "beta_runtime",
+    "ingestRuntime": true,
+    "adminCreateVisible": true,
+    "bulkImportVisible": true,
+    "betaRequired": true,
+    "diagnosticOnly": false
+  },
+  {
+    "providerType": "api",
+    "label": "API",
+    "status": "beta_runtime",
+    "ingestRuntime": true,
+    "adminCreateVisible": true,
+    "bulkImportVisible": true,
+    "betaRequired": true,
+    "diagnosticOnly": false
+  },
+  {
+    "providerType": "email_imap",
+    "label": "Email IMAP",
+    "status": "beta_runtime",
+    "ingestRuntime": true,
+    "adminCreateVisible": true,
+    "bulkImportVisible": true,
+    "betaRequired": true,
+    "diagnosticOnly": false
+  },
+  {
+    "providerType": "telegram",
+    "label": "Telegram",
+    "status": "delivery_only",
+    "ingestRuntime": false,
+    "adminCreateVisible": false,
+    "bulkImportVisible": false,
+    "betaRequired": false,
+    "diagnosticOnly": true
+  },
+  {
+    "providerType": "youtube",
+    "label": "YouTube",
+    "status": "future_hidden",
+    "ingestRuntime": false,
+    "adminCreateVisible": false,
+    "bulkImportVisible": false,
+    "betaRequired": false,
+    "diagnosticOnly": true
+  }
+]

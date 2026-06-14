@@ -14,9 +14,9 @@ import {
   validateWebBffActionPayload,
   validateAdminChannelPayload,
   validateJsonSchema,
-} from "../../../packages/contracts/src/schema.ts";
-import { ADMIN_ACTION_TOKEN_TARGETS } from "../../../apps/admin/src/lib/server/admin-action.ts";
-import { MCP_TOOLS } from "../../../services/mcp/src/tools.ts";
+} from "../../../runtime/node/packages/contracts/src/schema.ts";
+import { ADMIN_ACTION_TOKEN_TARGETS } from "../../../runtime/node/apps/admin/src/lib/server/admin-action.ts";
+import { MCP_TOOLS } from "../../../runtime/node/services/mcp/src/tools.ts";
 
 test("shared JSON schema validator rejects unknown fields and invalid primitive types", () => {
   const schema = {

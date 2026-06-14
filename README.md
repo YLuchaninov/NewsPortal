@@ -33,38 +33,40 @@ YouTube и browser-heavy anti-bot fetchers пока остаются future-read
 
 - [Documentation Index](docs/product/README.md)
 - [Product Blueprint](docs/product/architecture/product-blueprint.md)
+- [Public Beta Readiness](docs/product/beta-readiness.md)
 - [Operator Guide](docs/product/operator/HOW_TO_USE.md)
 - [Hidden-Signal Selection Reference](docs/product/operator/hidden-signal-selection.md)
 - [Manual MVP Runbook](docs/product/operator/manual-mvp-runbook.md)
 - [Local Product Testing](docs/product/operator/local-product-testing.md)
-- [Example Bundles](docs/product/operator/examples/EXAMPLES.md)
 - [MCP Operator Docs](docs/product/operator/mcp/README.md)
 - [Architecture Overview](docs/product/architecture/architecture-overview.md)
+- [Repository Taxonomy](docs/product/architecture/repository-taxonomy.md)
 - [Nonstandard Technical Decisions](docs/product/architecture/nonstandard-technical-decisions.md)
 - [Documentation Inventory](docs/documentation-inventory.md)
-- [Data Script Assets](docs/product/data-scripts/README.md)
 
 ## Базовая структура
 
 ```text
-apps/
+runtime/node/apps/
   web/        Astro-приложение с пользовательским health endpoint
   admin/      Astro-приложение с admin health endpoint
-services/
+runtime/node/services/
   fetchers/   Node/TypeScript ingest runtime service and operator CLI
   relay/      Node/TypeScript outbox relay, migrations and operator CLI
+  mcp/        Node MCP control-plane service
+runtime/python/src/signalops/
   api/        FastAPI thin read/debug API с health endpoint
   workers/    Python workers для normalize, dedup, embed, compile, match и notify
   ml/         Shared Python logic для feature extraction, embeddings и compilers
   indexer/    Shared Python tooling для HNSW rebuild и consistency checks
-packages/
+runtime/node/packages/
   contracts/  Shared TS contracts для health, auth boundary и queue payloads
 database/
   migrations/ Ordered SQL migrations
   ddl/        Текущий schema snapshot
 infra/
   docker/     Compose baseline и Dockerfiles
-  scripts/    Smoke/proof harnesses и operator proof scripts
+  scripts/    Checks, proof harnesses, ops/release entrypoints and script libs
   fixtures/   Test/proof fixtures used only by dev/test contours
 tests/
   unit/       Deterministic unit/regression tests
@@ -109,18 +111,16 @@ tests/
 5. Прогнать быстрые root-level QA gates:
 
    ```sh
-   pnpm check:test-layout
+   pnpm check:repo-taxonomy
    pnpm lint
    pnpm unit_tests
    ```
 
-6. Запустить canonical full acceptance gate:
+6. Запустить локальный MVP smoke gate:
 
    ```sh
-   pnpm integration_tests
+   pnpm test:mvp:internal
    ```
-
-   `pnpm test:mvp:internal` сохранен как backward-compatible alias implementation path под этим gate.
 
 7. Управление compose.dev stack вручную:
 
@@ -139,18 +139,21 @@ Dev/test contour всегда запускается через base compose п�
 docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml ...
 ```
 
-Именно `infra/docker/compose.dev.yml` добавляет в контейнеры тестовую оснастку: `tests/**`, `infra/scripts/**` и `infra/fixtures/**`. Production source dirs (`apps/*/src`, `packages/*/src`, `services/*/src`, `services/*/app`) не должны содержать tracked test/proof/fixture/mock/stub files. Это проверяет:
+Именно `infra/docker/compose.dev.yml` добавляет в контейнеры тестовую оснастку: `tests/**`, `infra/scripts/**` и `infra/fixtures/**`. Production source dirs (`runtime/node/apps/*/src`, `runtime/node/packages/*/src`, `runtime/node/services/*/src`, `runtime/python/src/signalops/**`) не должны содержать tracked test/proof/fixture/mock/stub files. Это проверяет:
 
 ```sh
-pnpm check:test-layout
+pnpm check:repo-taxonomy
 ```
 
 Каноническая раскладка такая:
 
 - unit/regression tests: `tests/**`;
-- smoke/proof harnesses: `infra/scripts/**`;
+- static guards: `infra/scripts/checks/**`;
+- product/operator proof harnesses: `infra/scripts/proof/**`;
+- ops/release entrypoints: `infra/scripts/ops/**`, `infra/scripts/release/**`;
+- shared proof/check libraries: `infra/scripts/lib/**`;
 - fixtures: `infra/fixtures/**`;
-- runtime/operator code: `apps/**`, `packages/**`, `services/**`.
+- runtime/operator code: `runtime/node/**`, `runtime/python/src/signalops/**`.
 
 ## Production build/run contract
 
@@ -170,12 +173,12 @@ Production Dockerfiles должны копировать только runtime so
 Минимальная проверка после изменений в build/runtime границах:
 
 ```sh
-pnpm check:test-layout
+pnpm check:repo-taxonomy
 pnpm lint
 pnpm typecheck
 pnpm unit_tests
 pnpm build
-pnpm integration_tests
+pnpm test:mvp:internal
 ```
 
 Для product-level local acceptance используйте:
@@ -186,18 +189,20 @@ pnpm test:product:local:core
 
 ## Root QA Gates
 
+- `pnpm check:repo-taxonomy`
+  Structural guard: проверяет production-source cleanliness, generated-artifact exclusion, taxonomy `infra/scripts/**` and active references to moved script entrypoints.
 - `pnpm check:test-layout`
-  Structural guard: падает, если tracked test/proof/fixture/mock/stub files оказываются внутри production source dirs.
+  Narrow compatibility guard: падает, если tracked test/proof/fixture/mock/stub files оказываются внутри production source dirs.
 - `pnpm lint`
-  Root-level ESLint + Ruff gate для `apps`, `packages`, `services` и `infra/scripts`; Python часть требует установленный `ruff` из `infra/docker/python.dev-requirements.txt`.
+  Root-level ESLint + Ruff gate для `runtime/node/**`, `runtime/python/src/**`, `infra/scripts` и Python unit tests; Python часть требует установленный `ruff` из `infra/docker/python.dev-requirements.txt`.
 - `pnpm typecheck`
   Workspace TypeScript/Astro typecheck плюс отдельный `tsconfig.infra-scripts.json` для moved proof harnesses в `infra/scripts`.
 - `pnpm unit_tests`
   Root-level deterministic unit gate: `node:test` + `tsx` для pure TS logic и `unittest` для pure Python helpers.
 - `pnpm build`
-  Workspace build gate for packages/apps/services that expose a build script.
-- `pnpm integration_tests`
-  Root-level full-acceptance gate; сейчас это thin alias на `pnpm test:mvp:internal`.
+  Workspace build gate for `runtime/node/{packages,apps,services}` projects that expose a build script; generated Node output lives under ignored `build/node/**`.
+- `pnpm test:mvp:internal`
+  Root-level local MVP smoke gate.
 
 ## SignalCandidate LLM Review Runtime
 
@@ -283,7 +288,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - Enable browser assistance only for public `website` channels when static discovery misses real resources or the site is clearly JS-heavy. The relevant website config keys are `browserFallbackEnabled=true` and `maxBrowserFetchesPerPoll` (keep the current default `2` unless you have a bounded reason to change it).
 - When discovery recommends browser help for a website candidate, the registered provider must still remain `website`; hidden feeds remain hints only and must not silently convert the source into RSS.
 - For a dedicated operator-facing manual pass of `website` channels, `/admin/resources`, projected vs resource-only rows, and bounded live-site checks, use [docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md](docs/product/operator/examples/WEBSITE_SOURCES_TESTING.md).
-- For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/signalops-live-website-matrix-<runId>.json`.
+- For the expanded repo-owned real-site matrix after local website proof is green, run `node infra/scripts/proof/test-live-website-matrix.mjs`; it validates 16 primary public sites across static editorial, document/download-heavy, public changelog, and browser-candidate shapes and writes a JSON evidence bundle under `/tmp/signalops-live-website-matrix-<runId>.json`. In the Public Beta gate this lane is diagnostic unless `SIGNALOPS_STRICT_LIVE_INTERNET=1` is set.
 - Operator verification for this lane should include:
   - `pnpm test:hard-sites:compose`
   - `/admin/resources` and `/admin/resources/[resourceId]` to confirm browser provenance is visible
@@ -294,7 +299,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - `pnpm dev:mvp:internal` использует `docker compose --env-file .env.dev -f infra/docker/compose.yml -f infra/docker/compose.dev.yml`; `pnpm dev:mvp:internal:no-build` поднимает тот же stack без rebuild, а `pnpm dev:mvp:internal:stop`, `pnpm dev:mvp:internal:down`, `pnpm dev:mvp:internal:down:volumes` и `pnpm dev:mvp:internal:logs` закрывают повседневный lifecycle stack-а.
 - В compose-based SSR `SIGNALOPS_API_BASE_URL` должен указывать на внутренний service DNS `http://api:8000`, а `SIGNALOPS_PUBLIC_API_BASE_URL` остается host/browser-facing URL вроде `http://127.0.0.1:8000`.
 - Для Astro SSR/BFF теперь используются отдельные app base URLs: `SIGNALOPS_WEB_APP_BASE_URL` и `SIGNALOPS_ADMIN_APP_BASE_URL`; compose прокидывает их в контейнеры как `SIGNALOPS_APP_BASE_URL`, чтобы redirects и trusted host reconstruction не деградировали в `http://localhost/`.
-- `apps/web` и `apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
+- `runtime/node/apps/web` и `runtime/node/apps/admin` теперь имеют contract `dev -> astro dev`, `build -> astro build`, `start -> built SSR server`.
 - Browser/session routes `web` и `admin` больше не делят `/api/*` c Python API: public/read API остается на `/api/*`, а Astro BFF живет на `/bff/*`; через nginx admin surface доступен на `/admin/`, поэтому его browser/BFF paths снаружи имеют вид `/admin/bff/*`.
 - Admin now exposes the Discovery vNext control plane under `/admin/discovery` for runs, artifacts, candidates, probe reports, source understanding, routing decisions, source inventory, policies, adapter backlog, replay and rollback, while FastAPI keeps the canonical `/maintenance/discovery/*` read/action surface for SDK/BFF consumers.
 - Для first-run admin bootstrap используется `ADMIN_ALLOWLIST_EMAILS`; allowlisted email получает локальную роль `admin` при первом успешном Firebase sign-in, а exact allowlisted address допускает repeatable `+alias` sign-in для internal tests. После bootstrap PostgreSQL остается источником истины для authorization.
@@ -303,20 +308,19 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - Пользователь без `user_interests` все равно видит system-selected collection; baseline notifications пока остаются personalization-lane contract, а не отдельным system alert path.
 - `web` keeps `/` as the global system-selected collection and exposes a separate `/matches` surface for per-user personalized matches.
 - Successful user-interest create/update/clone flows now compile first and then queue a scoped `repair` replay for historical system-selected content, without resending retro notifications.
-- Umbrella `pnpm integration_tests` acceptance все еще остается RSS-first ingest path, но website lane теперь имеет отдельные deterministic proofs через `pnpm test:website:compose` и `pnpm test:website:admin:compose`; текущий internal product contour intentionally keeps `api`, `email_imap` и Telegram ingestion parked outside mandatory acceptance.
+- `pnpm test:mvp:internal` остается локальным MVP smoke path; Public Beta readiness дополнительно требует `pnpm test:product:local:core`, `pnpm test:product:local:full` и `pnpm test:product:beta-readiness`. RSS, website, API source и Email IMAP входят в beta-runtime contour; Telegram остается delivery-only, YouTube future-hidden.
 - Root product-local evidence commands now exist: `pnpm test:product:local:core`, `pnpm test:product:local:full` and `pnpm test:product:local:cleanup`. They write `/tmp/signalops-product-local-<mode>-<runId>.json|md`.
 - Для multi-RSS polling baseline теперь используются `FETCHERS_BATCH_SIZE=100` и `FETCHERS_CONCURRENCY=4`; single-channel smoke и multi-channel proofs делят один и тот же fetcher/runtime contract.
 - `source_channels.poll_interval_seconds` теперь трактуется как base/min interval; adaptive runtime truth живет в `source_channel_runtime_state` и управляет `effective_poll_interval_seconds`, `next_due_at`, backoff и overdue state без переписывания operator baseline.
 - Admin surface показывает provider-agnostic scheduling health, append-only fetch history, website resource browse/detail observability via `/admin/resources`, и LLM usage/budget rollups; read-model API дополнена `/maintenance/fetch-runs`, `/maintenance/llm-reviews`, `/maintenance/llm-usage-summary`, `/maintenance/llm-budget-summary` и `/maintenance/web-resources*`.
 - Web surface умеет подключать `web_push` через service worker `/sw.js`; для browser subscription нужен `WEB_PUSH_VAPID_PUBLIC_KEY`, а notify worker дополнительно учитывает `user_profiles.notification_preferences`.
 - Локальный `email_digest` delivery path идет через SMTP sink `mailpit`; для compose baseline используется `smtp://mailpit:1025`, а UI sink доступен на `http://127.0.0.1:8025`.
-- Root `pnpm integration_tests` делегирует на этот же internal MVP acceptance path и не расширяет proof scope beyond RSS-first ingest.
 
 ## Manual MVP Readiness
 
 Для ручного MVP прогона теперь есть консистентный baseline:
 
-- admin product testing сейчас фокусируется на `rss` и `website` sources; `api`, inbound `email_imap` and Telegram ingestion are parked for this local contour, while website lane gives `/admin/resources` browse/detail for projected and resource-only `web_resources`;
+- admin product testing covers `rss`, `website`, `api` and inbound `email_imap` as beta ingest providers; Telegram is notification delivery only, while website lane gives `/admin/resources` browse/detail for projected and resource-only `web_resources`;
 - browser-assisted website handling for public JS-heavy sites is available as an opt-in website-channel setting via `browserFallbackEnabled`; cheap static modes remain default and browser provenance should surface on `/admin/resources`;
 - provider-wide scheduling patch позволяет массово назначать `fast=300`, `normal=900`, `slow=3600`, `daily=86400`, `three_day=259200`;
 - fetchers сохраняют `source_channel_runtime_state` и append-only `channel_fetch_runs`, поэтому overdue/adaptive/failed каналы видны отдельно от `source_channels.last_*`;
@@ -339,7 +343,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 
 - фактический browser receipt для `web_push` остается manual-only proof item;
 - repo не содержит канонического списка real RSS feeds, только импортный template; реальные feed URLs оператор подставляет сам.
-- current mandatory product testing covers `rss` and `website` onboarding; `api`, inbound `email_imap`, Telegram ingestion and `youtube` are parked/future lanes for this cycle.
+- current mandatory product testing covers `rss`, `website`, `api` and inbound `email_imap` onboarding. Telegram ingestion is not a beta source lane, and `youtube` remains future-hidden.
 
 ## Targeted Smokes
 
@@ -412,6 +416,7 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 
 ## Основные команды
 
+- `pnpm check:repo-taxonomy`
 - `pnpm check:test-layout`
 - `pnpm check:scaffold`
 - `pnpm db:migrate`
@@ -427,7 +432,6 @@ For the active discovery model, use [Discovery vNext Blueprint](docs/discovery_v
 - `pnpm index:check:event-cluster-centroids`
 - `pnpm index:rebuild:interest-centroids`
 - `pnpm index:rebuild:event-cluster-centroids`
-- `pnpm integration_tests`
 - `pnpm lint`
 - `pnpm test:cluster-match-notify:compose`
 - `pnpm test:cluster-match-notify:smoke`

@@ -14,15 +14,15 @@ Audience truth split: MCP resources are operator truth for MCP sessions, product
 
 ## Что входит в систему
 
-- `apps/web` — пользовательское Astro SSR приложение.
-- `apps/admin` — Astro SSR админка и операторские BFF routes.
-- `services/api` — FastAPI read/debug/maintenance API.
-- `services/fetchers` — Node/TypeScript сборщики RSS, website, API и IMAP-polled email источников.
-- `services/relay` — outbox relay: читает события из PostgreSQL и отправляет тонкие jobs в BullMQ.
-- `services/workers` — Python workers: normalization, dedup, embeddings, clustering, selection, notifications, discovery и sequence runtime.
-- `services/mcp` — MCP control-plane для операторских инструментов.
-- `packages/contracts` — общие типы и контракты для source/content/queue/auth.
-- `packages/control-plane` — общая логика admin/MCP write flows.
+- `runtime/node/apps/web` — пользовательское Astro SSR приложение.
+- `runtime/node/apps/admin` — Astro SSR админка и операторские BFF routes.
+- `runtime/python/src/signalops/api` — FastAPI read/debug/maintenance API.
+- `runtime/node/services/fetchers` — Node/TypeScript сборщики RSS, website, API и IMAP-polled email источников.
+- `runtime/node/services/relay` — outbox relay: читает события из PostgreSQL и отправляет тонкие jobs в BullMQ.
+- `runtime/python/src/signalops/workers` — Python workers: normalization, dedup, embeddings, clustering, selection, notifications, discovery и sequence runtime.
+- `runtime/node/services/mcp` — MCP control-plane для операторских инструментов.
+- `runtime/node/packages/contracts` — общие типы и контракты для source/content/queue/auth.
+- `runtime/node/packages/control-plane` — общая логика admin/MCP write flows.
 - `infra/docker` и `infra/nginx` — локальный single-host runtime.
 
 ## Главный поток контента
@@ -114,7 +114,7 @@ pnpm dev:mvp:internal
 pnpm lint
 pnpm typecheck
 pnpm unit_tests
-pnpm integration_tests
+pnpm test:mvp:internal
 ```
 
 Полный продуктовый локальный контур:

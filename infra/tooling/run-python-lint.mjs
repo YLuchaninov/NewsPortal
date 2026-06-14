@@ -9,7 +9,14 @@ const candidates = [
   "python3",
 ].filter(Boolean);
 
-const args = ["-m", "ruff", "check", ...(process.argv.slice(2).length > 0 ? process.argv.slice(2) : ["services", "infra/scripts"])];
+const args = [
+  "-m",
+  "ruff",
+  "check",
+  ...(process.argv.slice(2).length > 0
+    ? process.argv.slice(2)
+    : ["runtime/python/src", "infra/scripts", "tests/unit/python"]),
+];
 const failures = [];
 
 for (const executable of candidates) {

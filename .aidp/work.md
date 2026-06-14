@@ -1,5 +1,655 @@
 # AIDP Work State
 
+## Active Sweep: SIGNALOPS-RADICAL-DEV-LIVE-TEST-1
+
+- id: `SIGNALOPS-RADICAL-DEV-LIVE-TEST-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-live-proof-with-residuals`
+- route-specific next step: no further execution inside this runbook item; any remaining DX/runbook sequencing cleanup should be opened as a separate explicit item.
+- route-specific proof: fresh dev reset, env/static/build/release gates, full product local core/full, total-live diagnostic and strict diagnostic classification, provider/load/live lanes, live Discovery/LLM preflight and execution, targeted funnel/signal unit and MCP runtime proof, post-bugfix beta release rerun, cleanup/down, empty `docker ps`, `git diff --check`, and artifact links recorded here.
+- status: `completed-with-residuals`
+- risk: `high`
+- approval: explicit operator request to implement the accepted Radical Dev Live Working Test Runbook, including fresh-only dev volume reset and bounded real live/LLM execution when credentials are configured.
+- planning required: yes for broad destructive/stateful proof sweep.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- sweep invariant: runbook-only proof execution and narrow bugfix follow-ups if proof exposes real product/runtime defects; no new root scripts, APIs, schemas, DB migrations, env names, MCP tools, routes, payloads or proof harnesses.
+- blueprint context checked: verification/release proof, Docker compose runtime, provider lanes, MCP/control-plane/funnel selection boundary and runtime/generated artifact boundary.
+- context manifest:
+  - user-provided `Radical Dev Live Working Test Runbook` in current thread.
+  - `.aidp/verification.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `package.json`
+  - `infra/docker/**`
+  - `infra/scripts/proof/**`
+  - `infra/scripts/release/**`
+  - `runtime/node/packages/control-plane/src/funnel*.ts`
+  - `runtime/node/services/mcp/src/**`
+  - `runtime/python/src/signalops/**`
+  - `tests/unit/**`
+- allowed paths: `.aidp/work.md`; bugfix follow-up paths only if proof exposes a real defect: `runtime/**`, `infra/**`, `tests/**`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig*.json`, `eslint.config.mjs`, `ruff.toml`, `README.md`, `docs/**`.
+- out of scope: `aidp-monitor/**`, new proof harness or root command, intentional product behavior change, DB schema migration, env contract change, production deployment, printing secret values, destructive cleanup outside dev compose volumes.
+- baseline observations:
+  - dirty worktree already contains previous approved beta/simplification/refactor/taxonomy/radical-layout changes; do not revert them.
+  - `git status --short` is large and dominated by the previous hard-cutover from `apps/**`, `packages/**`, `services/**` to `runtime/**`.
+  - `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers before this proof run.
+- child bugfix follow-up:
+  - id: `SIGNALOPS-RADICAL-DEV-LIVE-TEST-1A-SELECTION-REPLAY-GAP`
+  - status: `done`
+  - failure source: `pnpm test:discovery:vnext-mcp-live-signal-flow` wrote `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-4228ca87-a060-411b-8056-7225528d500d.json` and failed with `downstream_selection_gap`.
+  - narrowed cause: live signal proof opted into a permissive explicit-marker selection profile, but `candidate_signal_auto_select_count` still had an additional hardcoded `candidateSignals.evidenceLedUplift=true` gate; that overrode the profile thresholds and prevented selected/content materialization.
+  - fix: `runtime/python/src/signalops/workers/selection_write_repository.py` now respects the profile-owned auto-select thresholds directly; `infra/scripts/proof/test-discovery-vnext-mcp-live-signal-flow.mjs` now makes the live proof policy explicit; regression coverage was added in `tests/unit/python/test_selection_write_repository.py` and `tests/unit/ts/discovery-live-signal-flow.test.ts`.
+  - rerun proof: `pnpm test:discovery:vnext-mcp-live-signal-flow` passed after the fix with `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-d8f42303-fae8-4ddb-8a16-a4b480a24c28.json`, producing `3` packs with content, `32` explainable items and `31` selected/content items.
+- child bugfix follow-up:
+  - id: `SIGNALOPS-RADICAL-DEV-LIVE-TEST-1B-UI-AUDIT-ACTIVATE-DELETE-RACE`
+  - status: `done`
+  - failure source: post-selection-fix `pnpm release:beta:verify` reached nested product-local core and failed in `pnpm test:web:ui-audit` while waiting for the admin system-interest `Delete` button after `Archive` then `Activate`.
+  - narrowed cause: the proof script waited for the archived state before activating, but did not wait for the active state/rerender before looking for the delete action; product behavior was correct, the browser proof was racing the UI state transition.
+  - fix: `infra/scripts/proof/test-ui-button-audit.mjs` now waits for the `Active` state after activating system-interest and LLM-template rows before asserting the delete action.
+  - rerun proof: targeted `pnpm test:web:ui-audit` passed with run id `bb5e4b9b`; the final `pnpm release:beta:verify` rerun also passed nested UI audits with run ids `55f7eac2` and `70f813d2`.
+- cleanup status: completed; final `pnpm test:product:local:cleanup` wrote `/tmp/signalops-product-local-cleanup-fd5950da.json` and `.md`, final `pnpm release:beta:verify` ran `pnpm dev:mvp:internal:down`, `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and `git diff --check` passed after proof sync.
+
+### Proof
+
+- Fresh baseline and env/static/build/release proof passed:
+  - `pnpm dev:mvp:internal:down:volumes`
+  - `pnpm install --frozen-lockfile`
+  - `pnpm check:env-sync`
+  - `pnpm check:prod-env`
+  - `pnpm ci:fast`
+  - `pnpm check:compliance`
+  - `pnpm build`
+  - `pnpm build:node-runtime`
+  - `pnpm release:beta:verify`
+  - release artifacts: `/tmp/signalops-product-local-core-66a90281.json`, `/tmp/signalops-product-local-full-2828704d.json`, `/tmp/signalops-product-beta-readiness-90ba9569.json`, and `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-a171d42f/release-beta-verify-summary.json`.
+- Full dev runtime proof passed:
+  - `pnpm dev:mvp:internal`
+  - health checks for web, admin, API, nginx, Mailpit, MCP and relay returned healthy responses.
+  - `pnpm test:product:local:core`: `/tmp/signalops-product-local-core-b2500013.json`
+  - `DISCOVERY_ENABLED=1 pnpm test:product:local:full`: `/tmp/signalops-product-local-full-ec4a35c0.json`
+  - `DISCOVERY_ENABLED=1 pnpm diagnostic:product:total-live`: `/tmp/signalops-product-total-live-7bc2b698.json`
+  - strict live diagnostic `SIGNALOPS_STRICT_LIVE_INTERNET=1 DISCOVERY_ENABLED=1 node infra/scripts/proof/test-product-total-live-audit.mjs --skip-stack-build`: `/tmp/signalops-product-total-live-7d75baa0.json`
+- Provider/load/live lanes passed:
+  - `pnpm test:providers:compose`
+  - `pnpm test:channel-auth:compose`
+  - `pnpm test:website:matrix:compose`: `/tmp/signalops-live-website-matrix-baseline-b3612e1c-81fc-4570-8511-8599c9714629.json`
+  - `pnpm test:hard-sites:compose`
+  - `pnpm test:ingest:multi:compose`
+  - `pnpm test:ingest:soak:compose`
+  - `pnpm test:feed-ingress-adapters:smoke`
+  - `pnpm test:enrichment:compose` passed after restarting the dev stack that the soak command had stopped.
+- Real live Discovery/LLM proof passed when `.env.dev` was exported into the shell:
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-gap-flow:preflight`: `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-bea03ba7-1b02-4f1a-b88f-c85c23ee1da1.json`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow:preflight`: `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-1c6eec89-7212-412d-9569-a1057576f3b8.json`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_LIVE_SMOKE_MAX_RUN_COST_CENTS=50 pnpm test:discovery:vnext-live-smoke`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-gap-flow`: `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-5d9ecedb-c8e2-48f9-bb66-3836de0b157e.json`
+  - fixed rerun `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow`: `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-d8f42303-fae8-4ddb-8a16-a4b480a24c28.json`
+- Funnel/signal focused proof passed:
+  - `pnpm unit_tests:ts -- funnel-autopilot mcp-control-plane`
+  - `pnpm unit_tests:py tests/unit/python/test_final_selection.py tests/unit/python/test_selection_write_repository.py tests/unit/python/test_api_zero_shot_operator_surfaces.py`
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows`: `/tmp/signalops-mcp-http-deterministic-35c74f6b-9f4b-4f03-8481-d970e5d493fa.json`
+  - `pnpm test:mcp:http:writes`: `/tmp/signalops-mcp-http-deterministic-2e07f9e9-91cb-4d8a-a7da-016be3f02167.json`
+  - `pnpm test:mcp:http:discovery`: `/tmp/signalops-mcp-http-deterministic-5f3bbe88-e9b1-4393-8ea0-9edf67a6fe85.json`
+- Post-fix structural proof passed:
+  - `pnpm unit_tests:ts -- discovery-live-signal-flow`
+  - `pnpm unit_tests:py tests/unit/python/test_selection_write_repository.py tests/unit/python/test_final_selection.py`
+  - `pnpm ci:fast` after the fix: `491` TS tests, `409` Python tests, lint and typecheck passed.
+  - targeted `pnpm test:web:ui-audit` after the UI-audit wait fix: run id `bb5e4b9b`.
+  - final post-fix `pnpm release:beta:verify`: release artifact dir `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-51ebc568`, summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-51ebc568/release-beta-verify-summary.json`, nested core `/tmp/signalops-product-local-core-49611faa.json`, nested full `/tmp/signalops-product-local-full-f93fd741.json`, beta readiness `/tmp/signalops-product-beta-readiness-eecfd13a.json`, live website matrix `/tmp/signalops-live-website-matrix-baseline-1892115e-0a8b-49e3-a42f-5203f77f9abe.json`, cleanup `/tmp/signalops-product-local-cleanup-fd5950da.json`.
+  - `pnpm test:product:local:cleanup`
+  - `pnpm dev:mvp:internal:down`
+  - `docker ps --format '{{.Names}} {{.Status}}'`
+  - `git diff --check`
+
+### Completed Scope
+
+- Executed the accepted runbook from a fresh dev state, including destructive dev volume reset and full build/release baseline.
+- Verified compose runtime health through direct web/admin/API/nginx/Mailpit/MCP/relay checks.
+- Ran deterministic and live product contours, including strict live total-live diagnostic classification.
+- Ran beta provider fixture lanes and load/soak/enrichment smoke lanes.
+- Ran real Discovery/LLM live smoke, live gap flow and live signal flow with bounded cost caps when credentials were exported into the shell.
+- Verified funnel/signal behavior through targeted deterministic unit tests and MCP runtime proof for funnel autopilot, write paths and discovery paths.
+- Found and fixed one real live selection replay defect: auto-selection had an extra hardcoded `evidenceLedUplift` requirement that made profile-owned explicit-marker thresholds ineffective.
+- Found and fixed one proof-level UI race in the button audit after `Archive` then `Activate`; the final beta release rerun now exercises that path twice successfully.
+- Cleaned local product state and stopped the dev compose stack; no running containers remained after closeout.
+
+### Residuals
+
+- `.env.dev` is not cleanly sourceable under zsh because one cron-like value expands as `*/6`; live commands succeeded after export, but the env file should quote or load that value through a dotenv-safe path.
+- The first live smoke attempt skipped because live credentials from `.env.dev` were not present in the outer shell environment; runbook executions that need live credentials must explicitly export/load env before invoking Node proof entrypoints.
+- `pnpm test:ingest:soak:compose` stops/removes the compose stack; `pnpm test:enrichment:compose` only passed after restarting `pnpm dev:mvp:internal`. The runbook sequence should restart the stack before enrichment or move enrichment before the destructive soak.
+- External API/IMAP live targets remain not configured, so those lanes were proven through deterministic provider fixtures rather than complete external live targets.
+- Website live matrix/strict-live proof still contains classified public-site residuals such as blocked/unsupported/partial responses; strict total-live passed because no `unexpected_failure` remained.
+- Astro typecheck still emits non-failing hint-style lines in admin/web files; `ci:fast` passed with `0` errors.
+
+## Active Sweep: SIGNALOPS-RADICAL-REPO-LAYOUT-MIGRATION-1
+
+- id: `SIGNALOPS-RADICAL-REPO-LAYOUT-MIGRATION-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-beta-proof`
+- route-specific next step: no further code work inside this sweep; future repository-layout changes should be opened as a new explicit item.
+- route-specific proof: radical runtime layout migration was implemented and verified through taxonomy/runtime guards, no-old-active-path checks, Node/Python type/unit/build proof, Docker/runtime image proof, product core/full/release beta proof and `git diff --check`.
+- status: `done-beta-proof`
+- risk: `high`
+- approval: explicit operator request to implement the accepted Radical Repo Layout Migration Plan. Product scope excludes `aidp-monitor/**`; archive/history may retain historical old paths, but active code/docs/guards must cut over.
+- planning required: yes for broad structural migration and boundary-changing repo layout sweep.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: no runtime API, DB schema, env, MCP tool, route URL, payload or root public command name changes; behavior-preserving path/layout migration only.
+- blueprint context checked: durable structure, runtime/package boundary, test/runtime boundary, Docker/compose delivery baseline and AIDP/process truth.
+- context manifest:
+  - user-provided `Radical Repo Layout Migration Plan` in current thread.
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/os.yaml`
+  - `docs/product/architecture/repository-taxonomy.md`
+  - `package.json`
+  - `pnpm-workspace.yaml`
+  - `tsconfig.base.json`
+  - `tsconfig.infra-scripts.json`
+  - `eslint.config.mjs`
+  - `ruff.toml`
+  - `infra/docker/**`
+  - `infra/tooling/**`
+  - `infra/scripts/**`
+  - `tests/**`
+- allowed paths: `.aidp/work.md`, `.aidp/blueprint.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `README.md`, `docs/**`, `tests/**`, `package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `eslint.config.mjs`, `ruff.toml`, `.gitignore`, `.dockerignore`, `infra/**`, `runtime/**`, old runtime roots being moved/deleted: `apps/**`, `packages/**`, `services/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, dependency upgrades, product behavior changes, env contract changes, public route/payload/MCP tool changes, production deployment, live secret access.
+- baseline observations:
+  - previous approved beta/simplification/taxonomy sweeps are still in the dirty worktree; do not revert them.
+  - old active runtime roots are `apps/**`, `packages/**`, `services/**`; Node runtime has package-local `src` and package-local `dist`, while Python imports use `services.*` via `PYTHONPATH=.`
+  - Docker/compose currently hardcode package-local `dist` and Python `services/{api,workers}` working directories.
+  - static guards and docs currently encode the conservative taxonomy from the prior sweep and must be updated, not layered with a second canon.
+- cleanup status: `pnpm release:beta:verify` ran product-local cleanup and `pnpm dev:mvp:internal:down`; the compose.dev network and containers were removed by the release harness, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers. Generated `build/**` remains ignored build output.
+
+### Proof
+
+- Install/build proof passed:
+  - `pnpm install --frozen-lockfile`
+  - `pnpm build:node-runtime`
+  - `pnpm --filter @signalops/web build`
+  - `pnpm --filter @signalops/admin build`
+  - `pnpm build`
+  - `python3 -m compileall -q runtime/python/src/signalops`
+- Static/taxonomy/security proof passed:
+  - `pnpm check:scaffold`
+  - `pnpm check:test-layout`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm check:runtime-artifacts`
+  - `pnpm check:compliance`
+  - `pnpm check:prod-env`
+  - `pnpm check:beta-route-exposure`
+  - `pnpm check:production-image-contents` passed inside `pnpm release:beta:verify` for `8` runtime images.
+- Structural gates passed:
+  - `pnpm unit_tests:ts` (`490` tests)
+  - `pnpm unit_tests:py` (`409` tests)
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm ci:fast`
+- Product/runtime proof passed:
+  - `pnpm test:mcp:compose`: `/tmp/signalops-mcp-http-deterministic-41f134a5-f918-4ffc-8501-a201bf9d5aa4.json`
+  - `pnpm test:mvp:internal` passed after fixing runtime root detection for moved fetcher/relay package paths.
+  - `pnpm test:product:local:core`: `/tmp/signalops-product-local-core-3240ce08.json`
+  - `pnpm test:product:local:full`: `/tmp/signalops-product-local-full-5229aaa0.json`
+  - release nested local core: `/tmp/signalops-product-local-core-e5be7359.json`
+  - release nested local full: `/tmp/signalops-product-local-full-180df859.json`
+  - beta readiness: `/tmp/signalops-product-beta-readiness-1940e8eb.json`
+  - product-local cleanup: `/tmp/signalops-product-local-cleanup-6ae8e8cb.json`
+  - release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-f61c584f`
+  - release summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-f61c584f/release-beta-verify-summary.json`
+- `pnpm release:beta:verify` passed end-to-end.
+- `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers after release cleanup.
+- `git diff --check` passed.
+
+### Completed Scope
+
+- Runtime source is now physically grouped under `runtime/**`:
+  - Node apps: `runtime/node/apps/*`
+  - Node packages: `runtime/node/packages/*`
+  - Node services: `runtime/node/services/{fetchers,mcp,relay}`
+  - Python runtime: `runtime/python/src/signalops/{api,workers,ml,indexer}` plus `runtime/python/src/signalops/runtime_config.py`
+- Old top-level runtime roots `apps/**`, `packages/**`, and `services/**` were removed from the active layout.
+- Python runtime namespace hard-cutover is complete: active code/tests use `signalops.api.*`, `signalops.workers.*`, `signalops.ml.*`, `signalops.indexer.*`, and `signalops.runtime_config`.
+- Generated runtime output is centralized under ignored `build/**`:
+  - Node services build to `build/node/services/{fetchers,mcp,relay}`.
+  - Astro apps build to `build/node/apps/{web,admin}`.
+  - app/service start commands and Docker images consume `build/node/**`, not package-local `dist/**`.
+- Workspace/tooling was updated for the new structure: `pnpm-workspace.yaml`, TypeScript configs, ESLint globs, Ruff/Python unit/lint runners, Dockerfiles, compose files, product proof harnesses, and package scripts now target `runtime/**` and `build/**`.
+- Static guards now enforce the hard-cutover: active old runtime roots/imports/paths are rejected, tracked generated artifacts remain disallowed, and `dist/**` is no longer accepted as an active runtime path.
+- Active docs and AIDP truth were synced to the radical layout contract, including `.aidp/blueprint.md`, `.aidp/os.yaml`, `.aidp/engineering.md`, `.aidp/verification.md`, `README.md`, product architecture docs and `tests/README.md`.
+
+### Residuals
+
+- Archive/history material may retain historical old paths by design; active code, docs, tests, guards, Docker and proof scripts use the new `runtime/**`/`build/**` contract.
+- `build/**` includes generated runtime dependency links for Node app/service execution; this is an explicit ignored build artifact contract, not source.
+- Astro still emits non-failing hint-style lines during build, but the build summary reports `0 errors` and `0 warnings`; all gates passed.
+- Live website matrix inside full/beta proof remains diagnostic for external public-site behavior. The latest run classified `7` expected-shape sites, `8` truthful unsupported/blocked sites, and `1` partial/empty site without failing the beta gate outside strict-live mode.
+
+## Active Sweep: SIGNALOPS-REPO-TAXONOMY-STRUCTURE-1
+
+- id: `SIGNALOPS-REPO-TAXONOMY-STRUCTURE-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-beta-proof`
+- route-specific next step: no further code work inside this sweep; keep compatibility-free `infra/scripts` taxonomy as the active repository structure contract.
+- route-specific proof: repo taxonomy docs/guards/script moves were implemented and verified through static guards, targeted infra import regression, `pnpm ci:fast`, MCP/product/release proof and `git diff --check`.
+- status: `done-beta-proof`
+- risk: `medium`
+- approval: explicit operator request to implement the accepted Repo Taxonomy And Structure Guard Sweep plan. Product scope excludes `aidp-monitor/**`; `.aidp/*` changes are limited to work-state and compact blueprint/verification/os sync.
+- planning required: yes for broad structural sweep.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: no runtime API, DB schema, env, MCP tool, route, payload or root command name changes; build outputs stay package-local and ignored.
+- blueprint context checked: durable structure, test/runtime boundary, packaging/runtime artifact boundary and AIDP/process truth.
+- context manifest:
+  - user-provided `Repo Taxonomy And Structure Guard Sweep` plan in current thread.
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `package.json`
+  - `.gitignore`
+  - `.dockerignore`
+  - `infra/scripts/**`
+  - `tests/README.md`
+  - `docs/documentation-inventory.md`
+- allowed paths: `.aidp/work.md`, `.aidp/blueprint.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `README.md`, `docs/**`, `tests/README.md`, `package.json`, `infra/scripts/**`, `infra/tooling/**`, `.gitignore`, `.dockerignore`, `tsconfig.infra-scripts.json`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, runtime source relocation, DB migrations, dependency changes, env changes, production deployment, live secret access, root command name changes, top-level shared `dist/` policy.
+- baseline observations:
+  - dirty worktree already contains previous approved Public Beta and simplification/refactor sweep changes; do not revert them.
+  - current repo already ignores `dist/`, `.astro`, coverage, caches and derived `data/**` payloads; `check:test-layout` and `check:runtime-artifacts` exist but taxonomy is split across docs/scripts.
+  - `infra/scripts` currently mixes root check scripts, release/ops entrypoints, product proof harnesses and service-specific smoke helpers.
+- cleanup status: `pnpm release:beta:verify` ran product-local cleanup and `pnpm dev:mvp:internal:down`; `git diff --check` passed.
+
+### Proof
+
+- Static/taxonomy proof passed:
+  - `pnpm check:repo-taxonomy`
+  - `pnpm check:test-layout`
+  - `pnpm check:runtime-artifacts`
+  - `pnpm check:compliance`
+  - `node --check` across `55` `infra/scripts` `.mjs` files
+  - `git diff --check`
+- Targeted infra import regression passed:
+  - `FETCHERS_ACQUISITION_PRIVATE_HOST_ALLOWLIST=example.com node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-http-scenarios.test.ts tests/unit/ts/product-local-proof.test.ts tests/unit/ts/compose-proof-testkit.test.ts tests/unit/ts/dependency-specs.test.ts tests/unit/ts/beta-readiness-guards.test.ts tests/unit/ts/discovery-live-signal-flow.test.ts`
+- Structural gates passed: `pnpm lint`, `pnpm typecheck`, and `pnpm ci:fast` (`490` TS unit tests and `409` Python unit tests).
+- Product/release proof passed:
+  - `pnpm test:mcp:compose`: `/tmp/signalops-mcp-http-deterministic-4302b515-a998-4373-8302-5fd993630052.json`
+  - `pnpm test:product:local:core`: `/tmp/signalops-product-local-core-ed1937b2.json`
+  - release nested local core: `/tmp/signalops-product-local-core-5399f96b.json`
+  - release nested local full: `/tmp/signalops-product-local-full-275a1d62.json`
+  - beta readiness: `/tmp/signalops-product-beta-readiness-5da29de7.json`
+  - release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-43dabc24`
+  - release summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-43dabc24/release-beta-verify-summary.json`
+- `pnpm check:production-image-contents` is image-dependent when run standalone; after `release:beta:verify` built production images, the production image content guard passed inside the release gate for `8` runtime images.
+
+### Completed Scope
+
+- Repository taxonomy is now documented in `.aidp/blueprint.md` and `docs/product/architecture/repository-taxonomy.md`, with navigation updates in `README.md`, `docs/product/README.md`, `tests/README.md`, and `docs/documentation-inventory.md`.
+- `infra/scripts` now separates root script responsibilities into explicit subdirectories:
+  - `infra/scripts/checks/**` for static checks.
+  - `infra/scripts/proof/**` for product/operator proof harnesses.
+  - `infra/scripts/ops/**` for ops entrypoints.
+  - `infra/scripts/release/**` for release gates.
+  - `infra/scripts/lib/**` remains shared proof/check library code.
+- Root package command names are preserved; internal script paths now point at the taxonomy directories. `ci:fast` now includes `pnpm check:repo-taxonomy`.
+- `infra/scripts/checks/check-repo-taxonomy.mjs` enforces the new contract: no tracked tests/proofs/fixtures/mocks in production source, no tracked generated artifacts, no new executable root-level `infra/scripts/*.mjs`, and no active references to moved old root script paths.
+- AIDP verification/os truth was synced with the new taxonomy guard and `check:compliance` now includes the repository taxonomy check.
+
+### Residuals
+
+- No temporary compatibility wrappers were kept at old `infra/scripts/*.mjs` paths.
+- Live website matrix remains a diagnostic live-internet lane and still reports classified external-site observations such as 403/captcha/unsupported blocks; these are not Public Beta hard-gate failures under the current beta contract.
+
+## Active Sweep: SIGNALOPS-RESIDUAL-HOTSPOT-CONSOLIDATION-3
+
+- id: `SIGNALOPS-RESIDUAL-HOTSPOT-CONSOLIDATION-3`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-beta-proof`
+- route-specific next step: no further code work inside this sweep; any remaining large-module work should be opened as a new explicit item.
+- route-specific proof: residual MCP/control-plane/API hotspot consolidation was implemented and verified through targeted type/unit checks, structural gates, `pnpm ci:fast`, `pnpm release:beta:verify`, cleanup proof and `git diff --check`.
+- status: `done-beta-proof`
+- risk: `high`
+- approval: explicit operator request to implement the accepted Residual Hotspot Consolidation Sweep plan. Product scope excludes `aidp-monitor/**`; `.aidp/*` changes are workflow/proof truth only.
+- planning required: yes for broad/boundary-changing sweep and large-file refactors.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor only; do not change DB schema, env, root scripts, API routes, response payload shapes, MCP tool names, CLI groups or public package exports.
+- blueprint context checked: API/control-plane neighborhood, MCP control-plane boundary, PostgreSQL/derived-state boundary, test/runtime fixture boundary and AIDP process boundary.
+- context manifest:
+  - user-provided `Residual Hotspot Consolidation Sweep` plan in current thread.
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/mcp-control-plane.md`
+  - `.aidp/contracts/test-access-and-fixtures.md`
+  - `.aidp/contracts/runtime-migrations-and-derived-state.md`
+  - `services/mcp/src/operating-intelligence/**`
+  - `services/api/app/main.py`
+  - `services/api/app/main_*.py`
+  - `services/api/app/route_deps.py`
+  - `packages/control-plane/src/funnel*.ts`
+  - `packages/control-plane/src/admin-template*.ts`
+  - `tests/unit/**`
+- allowed paths: `.aidp/work.md`, `services/mcp/**`, `services/api/**`, `packages/control-plane/**`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, dependency changes, root script changes, env changes, production deployment, live secret access, destructive cleanup, product behavior changes.
+- baseline observations:
+  - dirty worktree already contains previous approved Public Beta and simplification sweep changes; do not revert them.
+  - hotspot sizes before this item: `operating-intelligence/reports.ts` `1327`, `guidance.ts` `1369`, `shared.ts` `913`, `funnel-repository.ts` `988`, `admin-template-sync.ts` `1084`, `admin-template-parsing.ts` `836`, `admin-template-llm-writes.ts` `824`, `admin-template-interest-writes.ts` `848`, `funnel-staging.ts` `833`, `services/api/app/main.py` `464`.
+  - baseline transitional disables exist in MCP/control-plane split modules; API `main.py` still owns compatibility forwarding for tests.
+- cleanup status: `pnpm release:beta:verify` ran final product-local cleanup and `pnpm dev:mvp:internal:down`; `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers; `git diff --check` passed.
+
+### Proof
+
+- Targeted MCP/control-plane/API proof passed:
+  - `pnpm --filter @signalops/mcp typecheck`
+  - `pnpm --filter @signalops/control-plane typecheck`
+  - `python3 -m py_compile services/api/app/main.py services/api/app/main_*.py`
+  - `pnpm unit_tests:ts -- mcp-control-plane funnel-autopilot admin-template-sync`
+  - `pnpm unit_tests:ts -- admin-bulk-channel-import`
+  - targeted Python API/discovery tests that import `services.api.app.main`
+- Structural gates passed: `pnpm check:control-plane-ownership`, `pnpm unit_tests:ts` (`490` tests), `pnpm unit_tests:py` (`409` tests), `pnpm lint`, `pnpm typecheck`, and `pnpm ci:fast`.
+- Product/release proof passed:
+  - `pnpm test:mcp:compose`: `/tmp/signalops-mcp-http-deterministic-8e9dded2-fa9f-439f-acf9-0adbbe6cb0d3.json`
+  - `pnpm test:product:local:core`: `/tmp/signalops-product-local-core-6ac32d09.json`
+  - release nested local core: `/tmp/signalops-product-local-core-343519cd.json`
+  - release nested local full: `/tmp/signalops-product-local-full-da9b8041.json`
+  - beta readiness: `/tmp/signalops-product-beta-readiness-7789ba58.json`
+  - release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-a994907c`
+  - release summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-a994907c/release-beta-verify-summary.json`
+- Cleanup/static proof passed: `rg "@typescript-eslint/no-unused-vars" services/mcp/src/operating-intelligence packages/control-plane/src` returned no matches, `git diff --check` passed, and no compose containers remained running after release cleanup.
+
+### Completed Scope
+
+- MCP operating-intelligence residual barrels are thin: `reports.ts` (`2` lines), `guidance.ts` (`4`), and `shared.ts` (`7`). Report, guidance, issue, query, normalization, evidence-lane, operator-flow, strict-recommendation and verification logic lives in named modules.
+- Control-plane funnel repository residual is a thin barrel: `funnel-repository.ts` (`15` lines). Funnel model, live-state hash, record repository and binding repository ownership are separated, and staging/autoplan/content-scope import owner modules directly.
+- Control-plane admin-template sync was reduced to criterion/profile sync workflows (`396` lines). Template model, codecs, read mappers, parsing, LLM writes and interest writes now own their narrower responsibilities.
+- API `main.py` is an assembly layer (`208` lines). Compatibility/monkeypatch forwarding lives in `main_compat.py`, and repeated route prelude imports are centralized in `main_route_prelude.py`.
+- Secondary duplicate type ownership in channel bulk onboarding was consolidated into `channel-bulk-onboarding-model.ts`; `channel-bulk-onboarding-planning.ts` is now `671` lines and all split modules import/re-export model types from the owner.
+- Public behavior, package exports, DB schema, env names, root scripts, FastAPI routes, response shapes, MCP tool names and CLI groups were preserved.
+
+### Residual Hotspots
+
+- No residual file in the explicitly targeted split set remains above `800` lines after this sweep.
+- Live website matrix inside beta readiness still reports external-site weak/blocked observations such as 403, captcha and Cloudflare challenges; those are diagnostic/live-internet observations and not Public Beta hard-gate failures under the current contract.
+
+## Active Sweep: SIGNALOPS-SIMPLIFICATION-HOTSPOT-REFACTOR-2
+
+- id: `SIGNALOPS-SIMPLIFICATION-HOTSPOT-REFACTOR-2`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-beta-proof-with-recorded-residual-hotspots`
+- route-specific next step: treat the remaining large cohesive modules listed under Residual Hotspots as a follow-up consolidation item; no further behavior change is hidden inside this sweep.
+- route-specific proof: MCP/API/control-plane splits were implemented and verified through targeted type/unit checks, structural gates, `pnpm ci:fast`, `pnpm test:product:local:core`, `pnpm test:product:local:full`, `pnpm release:beta:verify`, and `git diff --check`.
+- status: `done-beta-proof-with-recorded-residuals`
+- risk: `high`
+- approval: explicit operator request to implement the accepted SignalOps Hotspot Refactor Sweep Plan. Product scope excludes `aidp-monitor/**`; `.aidp/*` changes are workflow/proof truth only.
+- planning required: yes for broad/boundary-changing sweep and large-file refactors.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor only; do not change DB schema, env, root scripts, API routes, response payload shapes, MCP tool names, CLI groups or public package exports.
+- blueprint context checked: API/control-plane neighborhood, MCP control-plane boundary, Discovery vNext boundary, PostgreSQL/derived-state boundary, test/runtime fixture boundary and AIDP process boundary.
+- context manifest:
+  - user-provided `SignalOps Hotspot Refactor Sweep Plan` in current thread.
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/mcp-control-plane.md`
+  - `.aidp/contracts/discovery-agent.md`
+  - `.aidp/contracts/test-access-and-fixtures.md`
+  - `.aidp/contracts/runtime-migrations-and-derived-state.md`
+  - `services/mcp/src/operating-intelligence/**`
+  - `services/api/app/main.py`
+  - `services/api/app/route_deps.py`
+  - `services/api/app/routes/**`
+  - `services/api/app/discovery_vnext/**`
+  - `packages/control-plane/src/channel-bulk-onboarding.ts`
+  - `packages/control-plane/src/funnels.ts`
+  - `packages/control-plane/src/admin-templates.ts`
+- allowed paths: `.aidp/work.md`, `services/mcp/**`, `services/api/**`, `packages/control-plane/**`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, dependency changes, root script changes, env changes, production deployment, live secret access, destructive cleanup, product behavior changes.
+- baseline observations:
+  - dirty worktree already contains the previous approved Public Beta and simplification sweep changes; do not revert them.
+  - hotspot sizes before this item: MCP core `4408` lines, Discovery vNext orchestration `2534` lines, API main `1492` lines, bulk onboarding `1505` lines, funnels `1822` lines, admin templates `1461` lines.
+  - direct-import baseline shows control-plane direct imports for `channel-bulk-onboarding`, `funnels`, `admin-templates`, Discovery vNext orchestration helper imports, and no active product import of `operating-intelligence/core` outside the operating-intelligence package surface.
+- cleanup status: release beta verification stopped the compose.dev stack with `pnpm dev:mvp:internal:down`; `git diff --check` passed.
+
+### Proof
+
+- Targeted MCP proof passed: `pnpm --filter @signalops/mcp typecheck`, full MCP-related TS unit coverage inside `pnpm unit_tests:ts`, and deterministic compose artifacts:
+  - `/tmp/signalops-mcp-http-deterministic-f98bb37c-2844-4d6f-8e15-5ad7a844923e.json`
+  - `/tmp/signalops-mcp-http-deterministic-aa53c2b8-6f4d-45fd-a6ca-5c0f7afd103b.json`
+  - `/tmp/signalops-mcp-http-deterministic-a23242bf-96c4-45c8-9324-0d2cb75b5af4.json`
+  - `/tmp/signalops-mcp-http-deterministic-af416741-599c-4b65-bf5e-88d7c229d019.json`
+- Targeted API/discovery proof passed: `python3 -m py_compile services/api/app/discovery_vnext/*.py services/api/app/main.py services/api/app/main_common.py services/api/app/main_content.py services/api/app/main_content_analysis.py services/api/app/main_observability.py services/api/app/main_sequence.py` and `pnpm unit_tests:py tests/unit/python/test_api_app_context.py tests/unit/python/test_discovery_vnext_foundation.py`.
+- Targeted control-plane proof passed: `pnpm --filter @signalops/control-plane typecheck`.
+- Structural gates passed: `pnpm check:control-plane-ownership`, full `pnpm unit_tests:ts` (`490` tests), full `pnpm unit_tests:py` (`409` tests), `pnpm lint`, `pnpm typecheck`, and `pnpm ci:fast`.
+- First standalone `pnpm test:product:local:core` run hit a transient MCP readiness timeout; the immediate rerun passed and later release beta nested core also passed.
+- Product proof artifacts:
+  - local core rerun: `/tmp/signalops-product-local-core-c524bf62.json`
+  - local full standalone: `/tmp/signalops-product-local-full-d049e32f.json`
+  - release nested local core: `/tmp/signalops-product-local-core-559350b3.json`
+  - release nested local full: `/tmp/signalops-product-local-full-bf265636.json`
+  - beta readiness: `/tmp/signalops-product-beta-readiness-5d0c9ba7.json`
+- `pnpm release:beta:verify` passed end-to-end; release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-850c4111`; summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-850c4111/release-beta-verify-summary.json`.
+- `git diff --check` passed.
+
+### Completed Scope
+
+- `services/mcp/src/operating-intelligence/core.ts` is now a compatibility barrel; read model, reports, write actions, guidance, selection diagnostics, scope and shared primitives live in cohesive modules under `services/mcp/src/operating-intelligence/`.
+- `services/api/app/discovery_vnext/orchestration.py` is now a public facade; artifacts, acquisition/probing, source inventory actions, policy, replay/rollback, run lifecycle, feedback, briefs, routing, LLM gateway and source sync logic live in named modules.
+- `services/api/app/main.py` was reduced to assembly/compatibility wiring with grouped main modules for common dependencies, content, content analysis, observability and sequence behavior; route URLs and payload shapes were preserved.
+- `packages/control-plane/src/channel-bulk-onboarding.ts` is now a public barrel over parsing, planning, apply, formatting and verification modules.
+- `packages/control-plane/src/funnels.ts` is now a public barrel over model, repository, autoplan, staging and content-scope modules; preset imports avoid circular barrel coupling.
+- `packages/control-plane/src/admin-templates.ts` is now a public barrel over model, parsing, sync, LLM writes and interest writes modules.
+- Public package exports, MCP tool names, CLI groups, DB schema, env names and root scripts were preserved.
+
+### Hotspot Size Check After Sweep
+
+- `services/mcp/src/operating-intelligence/core.ts`: `36` lines.
+- `services/api/app/discovery_vnext/orchestration.py`: `50` lines.
+- `services/api/app/main.py`: `464` lines.
+- `packages/control-plane/src/channel-bulk-onboarding.ts`: `32` lines.
+- `packages/control-plane/src/funnels.ts`: `43` lines.
+- `packages/control-plane/src/admin-templates.ts`: `28` lines.
+
+### Residual Hotspots
+
+- Some extracted modules remain large but are now separated by reason-to-change: `operating-intelligence/reports.ts` (`1327`), `operating-intelligence/guidance.ts` (`1369`), `operating-intelligence/shared.ts` (`913`), `funnel-repository.ts` (`988`), and `admin-template-sync.ts` (`1084`).
+- Several split modules carry temporary `@typescript-eslint/no-unused-vars` disables because the sweep preserved broad internal helper surfaces while moving logic. A follow-up consolidation should remove unused transitional helpers instead of changing behavior in this high-risk pass.
+- `services/api/app/main.py` is below the previous hotspot size and no longer owns route business logic, but it still contains compatibility/monkeypatch forwarding needed by existing tests.
+
+## Active Sweep: SIGNALOPS-SIMPLIFICATION-HOTSPOT-REFACTOR-1
+
+- id: `SIGNALOPS-SIMPLIFICATION-HOTSPOT-REFACTOR-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-local-beta-proof-with-recorded-residual-hotspots`
+- route-specific next step: finish the remaining behavior-preserving large-file extractions as a separate follow-up sweep; no further code work is hidden inside this item.
+- route-specific proof: stale total-live/mega-flow contract cleanup, YouTube config rejection, shared provider schema source, control-plane runtime-state helper, Python DB URL helper, MCP HTTP scenario split, worker smoke split, API route deps dataclass, Discovery vNext run-lifecycle extraction, control-plane provider-shape extraction, funnel preset resolver, and MCP operating-intelligence resource extraction were implemented and verified through targeted tests, structural gates, `pnpm ci:fast`, `pnpm test:product:local:core`, `pnpm release:beta:verify`, and `git diff --check`.
+- status: `done-local-proof-with-recorded-residuals`
+- risk: `high`
+- approval: explicit operator request to implement the approved Simplification + Hotspot Refactor Sweep. Product scope excludes `aidp-monitor/**`; `.aidp/*` changes are allowed only for workflow/proof truth sync.
+- planning required: yes for broad/boundary-changing sweep and large-file refactors.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: API/control-plane/admin writes, source/provider boundary, MCP/control-plane boundary, worker/discovery runtime boundary, test/runtime boundary, and AIDP proof/owner-file boundary.
+- context manifest:
+  - user-provided `План исполнения: Simplification + Hotspot Refactor Sweep` in current thread.
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/blueprint.md`
+  - `package.json`
+  - `packages/contracts/src/**`
+  - `packages/control-plane/src/**`
+  - `apps/admin/src/lib/server/**`
+  - `infra/scripts/**`
+  - `services/mcp/src/**`
+  - `services/api/app/**`
+  - `services/workers/app/**`
+  - `tests/unit/**`
+- allowed paths: `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `package.json`, `README.md`, `docs/**`, `packages/contracts/**`, `packages/control-plane/**`, `apps/admin/**`, `infra/scripts/**`, `services/mcp/**`, `services/api/**`, `services/workers/**`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, dependency changes, production deployment, real production secret changes, destructive data cleanup, YouTube runtime implementation, product behavior changes beyond explicitly named stale-contract fixes.
+- cleanup status: compose.dev proof services were started by the beta release harness and stopped by final cleanup; generated Python `__pycache__` directories were removed; `docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers.
+
+### Proof
+
+- Targeted provider/schema/total-live/scheduling/admin channel tests passed: `pnpm unit_tests:ts -- source-channel-config schema-registry provider-capabilities product-total-live channel-scheduling admin-rss-channels admin-api-channels admin-website-channels admin-email-imap-channels`.
+- Control-plane extraction proof passed: `pnpm --filter @signalops/control-plane typecheck`, `pnpm unit_tests:ts -- channel-bulk-onboarding provider-capabilities source-channel-config`, and `pnpm unit_tests:ts -- funnel-autopilot`.
+- Python/API/discovery/worker proof passed: `pnpm unit_tests:py tests/unit/python/test_api_app_context.py tests/unit/python/test_discovery_vnext_foundation.py tests/unit/python/test_worker_smoke_system_feed_invariant.py tests/unit/python/test_provider_capabilities.py`.
+- MCP proof passed: `pnpm --filter @signalops/mcp typecheck`, targeted MCP TS tests, dynamic import of the split MCP HTTP scenario registry, and deterministic compose artifacts:
+  - `/tmp/signalops-mcp-http-deterministic-d5628966-0b6b-468c-a579-6bb837702d44.json`
+  - `/tmp/signalops-mcp-http-deterministic-ab693157-32e0-4dc5-bf51-46061c2e356f.json`
+- Structural gates passed: `pnpm check:control-plane-ownership`, full `pnpm unit_tests:ts` (`490` tests), full `pnpm unit_tests:py` (`409` tests), `pnpm lint`, `pnpm typecheck`, and `pnpm ci:fast`.
+- First `pnpm test:product:local:core` run exposed a real packaging issue: `services.runtime_config` was not copied into the Python runtime image. `infra/docker/python-app.Dockerfile` now copies `services/runtime_config.py`, and the rerun passed.
+- Product proof artifacts:
+  - local core: `/tmp/signalops-product-local-core-af90663f.json`
+  - local full: `/tmp/signalops-product-local-full-366ed82e.json`
+  - beta readiness: `/tmp/signalops-product-beta-readiness-df7342ff.json`
+- `pnpm release:beta:verify` passed end-to-end; release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-14a77ea6`; summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-14a77ea6/release-beta-verify-summary.json`.
+- Final cleanup proof passed: no `__pycache__` directories under `infra/scripts/workers` or `services`, no running Docker containers, and `git diff --check` passed.
+
+### Completed Scope
+
+- `total-live` no longer carries `strictMegaFlow`/`legacyMegaFlow` artifact fields and no longer depends on removed mega-flow evidence.
+- `parseSourceChannelConfig("youtube", ...)` now rejects the future-hidden provider instead of masking it as API config, while `youtube` remains a historical DB-compatible provider value.
+- Admin channel schema provider enum is derived from the shared contracts capability registry.
+- Manual schedule runtime-state reset SQL is centralized in `packages/control-plane/src/source-channel-runtime-state.ts`.
+- Python DB URL assembly is centralized in `services/runtime_config.py` and copied into production Python images.
+- MCP HTTP scenario definitions are split into named scenario-group modules while preserving scenario names, CLI groups, and artifact shape.
+- Worker smoke CLI is reduced to a dispatcher with fixture builders and handlers in named modules.
+- API route dependency assembly now uses an explicit dataclass instead of `globals()` string-key dependency mapping.
+- Discovery vNext run lifecycle helpers were extracted from orchestration without changing public payload shape.
+- Control-plane provider-shape classification was extracted from bulk channel onboarding, and funnel defaults are exposed through an explicit preset resolver.
+- MCP operating-intelligence resource/read-back helpers were moved out of the core module.
+
+### Residual Hotspots
+
+- `services/mcp/src/operating-intelligence/core.ts` still contains substantial business logic; this sweep only extracted resource/read-back helpers.
+- `services/api/app/main.py` still needs further route-group extraction; this sweep removed the `globals()` dependency mapping only.
+- `services/api/app/discovery_vnext/orchestration.py` still needs candidate acquisition, source-inventory, replay, rollback, artifact, and policy extraction.
+- `packages/control-plane/src/channel-bulk-onboarding.ts` remains large after provider-shape extraction.
+- `packages/control-plane/src/funnels.ts` remains large after the preset resolver change; repository/autoplan/content-scope splits are still pending.
+- `packages/control-plane/src/admin-templates.ts` was not split in this sweep.
+
+## Active Sweep: SIGNALOPS-BETA-SIMPLIFICATION-1
+
+- id: `SIGNALOPS-BETA-SIMPLIFICATION-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-local-beta-proof`
+- route-specific next step: no code next step inside this sweep; remaining production work is operator-owned real production secret/TLS/base URL replacement before public deployment.
+- route-specific proof: provider/shared-registry cleanup, legacy mega-flow removal, active docs/archive cleanup, control-plane ownership hardening, and behavior-preserving hotspot splits were implemented and verified. `pnpm ci:fast`, `pnpm check:compliance`, `pnpm test:mvp:internal`, and `pnpm release:beta:verify` passed; release artifact dir `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-d2f8e859`, summary `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-d2f8e859/release-beta-verify-summary.json`.
+- status: `done-local-proof`
+- risk: `high`
+- approval: explicit user request to implement the approved SignalOps simplification and redundant-code removal plan. Product scope excludes `.aidp/**` and `aidp-monitor/**`; this `.aidp/work.md` update is workflow state only.
+- planning required: yes for broad/boundary-changing sweep.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: Public Beta provider/runtime boundary, control-plane/admin/MCP ownership boundary, product proof/verification boundary, docs/operator truth boundary, API route boundary, and Discovery vNext orchestration boundary.
+- context manifest:
+  - user-provided simplification implementation plan in current thread.
+  - `package.json`
+  - `packages/contracts/src/source/**`
+  - `services/workers/app/task_engine/adapters/**`
+  - `apps/admin/src/lib/server/**`
+  - `infra/scripts/**`
+  - `docs/**`
+  - `packages/control-plane/src/**`
+  - `services/mcp/src/**`
+  - `services/api/app/**`
+- allowed paths: `.aidp/work.md`, `README.md`, `docs/**`, `package.json`, `infra/scripts/**`, `packages/contracts/**`, `packages/control-plane/**`, `apps/admin/**`, `services/workers/**`, `services/mcp/**`, `services/api/**`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, product implementation under `.aidp/**`, real production deployment, DB schema migration, destructive operator data cleanup, YouTube runtime implementation, Telegram ingest.
+- cleanup status: compose.dev proof services were started by the beta release harness and stopped by final cleanup; `docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers after verification.
+
+### Proof
+
+- Targeted provider/scheduling tests passed: `node --import tsx --test --test-concurrency=1 tests/unit/ts/provider-capabilities.test.ts tests/unit/ts/channel-scheduling.test.ts`.
+- Targeted Python provider runtime tests passed: `PYTHONPATH=. python3 -m unittest tests.unit.python.test_provider_capabilities tests.unit.python.test_discovery_llm_adapter tests.unit.python.test_discovery_fetchers_website_probe`.
+- Targeted local/total-live proof tests passed: `node --import tsx --test --test-concurrency=1 tests/unit/ts/product-total-live-proof.test.ts tests/unit/ts/product-local-proof.test.ts`.
+- `pnpm check:control-plane-ownership` passed.
+- `pnpm lint:ts`, `pnpm lint:py`, `pnpm typecheck`, and full `pnpm unit_tests` passed (`490` TS tests and `409` Python tests).
+- `pnpm ci:fast` passed before and after the post-gate MCP operating-intelligence public-surface split.
+- `pnpm check:compliance` passed.
+- `pnpm test:mvp:internal` passed after fixing the Python Docker image to include the shared provider capability registry.
+- `pnpm release:beta:verify` passed end-to-end. Product beta artifacts: `/tmp/signalops-product-beta-readiness-bbf523f2.json` and `/tmp/signalops-product-beta-readiness-bbf523f2.md`.
+- Post-gate MCP operating-intelligence public-surface split passed: `pnpm --filter @signalops/mcp typecheck`, `node --import tsx --test --test-concurrency=1 tests/unit/ts/mcp-control-plane.test.ts` (`63` tests), and `pnpm lint:ts`.
+- `git diff --check` passed.
+
+## Active Capability: SIGNALOPS-PUBLIC-BETA-READINESS-1
+
+- id: `SIGNALOPS-PUBLIC-BETA-READINESS-1`
+- lifecycle: `normal`
+- route: `capability`
+- route phase: `completed-local-dev-prod-beta-live-proof`
+- route-specific next step: replace the dev-derived local `.env.prod` candidate with real operator-owned production secrets/TLS/base URLs before any public deployment.
+- route-specific proof: local dev-derived `.env.prod` validated, `pnpm release:beta:verify` passed end-to-end, deterministic beta lanes passed, live website matrix residuals were classified as weak/diagnostic outside strict-live mode, and final compose cleanup left no running containers.
+- status: `done-local-proof`
+- risk: `high`
+- approval: explicit user request to implement the Public Beta Readiness Plan; later explicit user request approved using dev-environment variables to populate local `.env.prod` and run full live/beta testing. No real production deployment, destructive cleanup, or off-repo state changes are approved.
+- planning required: yes for broad capability/delivery/security boundary changes.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- blueprint context checked: `.aidp/blueprint.md` system purpose, PostgreSQL/Redis truth split, source provider adapter boundary, control-plane/admin/MCP ownership boundary, runtime delivery compose/nginx/env boundary, auth/session/admin boundary, packaging/release proof boundary.
+- context manifest:
+  - user-provided Public Beta Readiness Plan in current thread.
+  - `docs/product/architecture/product-blueprint.md`
+  - `docs/product/architecture/architecture-overview.md`
+  - `docs/product/operator/local-product-testing.md`
+  - `README.md`
+  - `package.json`
+  - `infra/docker/compose.yml`
+  - `infra/docker/compose.prod.yml`
+  - `infra/nginx/default.conf`
+  - `.env.example`
+  - `packages/contracts`
+  - `packages/control-plane`
+  - `apps/admin/src/lib/server`
+- allowed paths: `.aidp/work.md`, `.aidp/os.yaml`, `.aidp/verification.md`, `.aidp/blueprint.md`, `README.md`, `docs/**`, `package.json`, `.env.prod`, `.env.prod.example`, `infra/docker/**`, `infra/nginx/**`, `infra/scripts/**`, `packages/contracts/**`, `packages/control-plane/**`, `apps/admin/**`, `services/fetchers/**`, `services/mcp/**`, `tests/unit/**`.
+- out of scope: `.aidp` product analysis content changes beyond route/proof sync, `aidp-monitor/**`, real production deployment, real secret reads/writes, destructive data cleanup, Kubernetes/managed-cloud migration, YouTube runtime implementation, Telegram ingest.
+- cleanup status: compose.dev proof services were started and stopped by the release harness; final `docker compose ... down --remove-orphans` completed and `docker ps` returned no running containers. No production deployment or off-repo operator data mutation was performed.
+
+### Current Proof Status
+
+- `pnpm check:control-plane-ownership` passed.
+- `pnpm check:beta-route-exposure` passed.
+- `pnpm unit_tests:ts -- product-mega-flow-proof product-total-live-proof provider-capabilities beta-readiness-guards` passed through the TS harness (`492` tests passed).
+- `pnpm check:runtime-artifacts` passed.
+- `pnpm check:domain-neutrality` passed.
+- `pnpm check:secret-leaks` passed after replacing a docs bearer-token example and hardening the scanner against self-matches.
+- `pnpm typecheck` passed after moving the admin-only MCP workspace loader into a BFF-only file and after the legacy mega-flow diagnostic verdict fix.
+- `pnpm check:compliance` passed.
+- `pnpm lint:ts` passed.
+- `pnpm ci:fast` passed.
+- `pnpm --filter @signalops/admin build` passed after the control-plane subpath import fix.
+- `.env.prod` was regenerated as a local dev-derived candidate from `.env.dev` / existing `.env.prod` fallback / `.env.prod.example`, with generated local-only replacements for missing short secrets; secret values were not printed. Previous `.env.prod` was backed up to an ignored `.env.prod.before-dev-derived-*` file.
+- `pnpm check:prod-env` passed against the dev-derived `.env.prod` candidate (`89` keys validated without printing secrets).
+- `pnpm test:product:beta-readiness` passed on a clean rerun; artifacts:
+  - JSON: `/tmp/signalops-product-beta-readiness-716505fb.json`
+  - Markdown: `/tmp/signalops-product-beta-readiness-716505fb.md`
+  - Full local product contour JSON: `/tmp/signalops-product-local-full-109fc758.json`
+  - Full local product contour Markdown: `/tmp/signalops-product-local-full-109fc758.md`
+  - MCP deterministic proof JSON: `/tmp/signalops-mcp-http-deterministic-092730f5-722f-44f7-a9af-a0c3abfdcb21.json`
+  - MCP deterministic proof Markdown: `/tmp/signalops-mcp-http-deterministic-092730f5-722f-44f7-a9af-a0c3abfdcb21.md`
+- First `pnpm release:beta:verify` run found two proof issues: transient Docker content lease/startup failure and an over-strict live website matrix acceptance that hard-failed classified external residuals.
+- Fixed local/live proof verdict logic: `website-matrix-compose` is `live-diagnostic`, classified public-site blocks/unsupported/partial shapes are `weak_with_classified_residual` outside strict mode, and `SIGNALOPS_STRICT_LIVE_INTERNET=1` turns those weak live residuals into hard failures.
+- Targeted proof for the verdict fix passed: `node --import tsx --test --test-concurrency=1 tests/unit/ts/product-local-proof.test.ts tests/unit/ts/product-total-live-proof.test.ts` (`9` tests passed).
+- `pnpm release:beta:verify` passed on the clean rerun; release artifact dir: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-be7f28bb`; summary: `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-be7f28bb/release-beta-verify-summary.json`.
+- Beta readiness proof passed with `finalVerdict=pass`; artifact:
+  - JSON: `/tmp/signalops-product-beta-readiness-23f725c6.json`
+  - Markdown: `/tmp/signalops-product-beta-readiness-23f725c6.md`
+- Full local product proof finished as `weak_with_classified_residual` because strict live internet was not enabled and the website live matrix had classified external residuals; artifact:
+  - JSON: `/tmp/signalops-product-local-full-a9eec6cb.json`
+  - Markdown: `/tmp/signalops-product-local-full-a9eec6cb.md`
+- Website live matrix proof for `2026-06-13` covered `16` public sites with verdict counts `7` observed expected shape, `8` truthful unsupported/blocked, `1` partial/empty shape, `6` conditional 304 hits, and no cleanup residuals; artifact: `/tmp/signalops-live-website-matrix-baseline-20e0e960-2553-4799-809e-7287e351ef5e.json`.
+- `git diff --check` passed.
+- `docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'` returned no running containers after cleanup.
+- Residual: the validated `.env.prod` is a local dev-derived candidate for proof, not an operator-approved production secret set. `EMAIL_IMAP_PROD_RUNTIME_REQUIRED=false` because the dev environment does not provide a complete production IMAP host/user/password/TLS target.
+
 ## Completed Bugfix: SIGNALOPS-MAX-VERIFY-LINT-1
 
 - id: `SIGNALOPS-MAX-VERIFY-LINT-1`

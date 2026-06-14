@@ -8,7 +8,7 @@ import {
   parseUserInterestCreateInput,
   resolveAdminUserInterestLookupInput,
   updateAdminUserInterest,
-} from "../../../apps/admin/src/lib/server/user-interests.ts";
+} from "../../../runtime/node/apps/admin/src/lib/server/user-interests.ts";
 
 type QueryResponse = {
   rowCount?: number;

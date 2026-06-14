@@ -1,6 +1,4 @@
 packages:
-  - "apps/*"
-  - "packages/*"
-  - "services/fetchers"
-  - "services/mcp"
-  - "services/relay"
+  - "runtime/node/apps/*"
+  - "runtime/node/packages/*"
+  - "runtime/node/services/*"

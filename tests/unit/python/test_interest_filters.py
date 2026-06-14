@@ -5,7 +5,7 @@ from tests.unit.python.support.stubs import SubscriptableAsyncCursor, install_ps
 
 install_psycopg_stub(async_cursor=SubscriptableAsyncCursor)
 
-from services.workers.app.interest_filters import (
+from signalops.workers.interest_filters import (
     build_interest_filter_explain,
     build_interest_filter_key,
     resolve_criterion_filter_outcome,

@@ -6,7 +6,7 @@ import {
   resolveSavedDigestItemIds,
   renderSavedDigestHtml,
   renderSavedDigestText,
-} from "../../../apps/web/src/lib/server/saved-digest.ts";
+} from "../../../runtime/node/apps/web/src/lib/server/saved-digest.ts";
 
 test("parseSelectedDigestItemIds keeps order and removes duplicates", () => {
   const params = new URLSearchParams();

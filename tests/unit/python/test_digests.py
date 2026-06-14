@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from services.workers.app.digests import (
+from signalops.workers.digests import (
     DigestItem,
     build_digest_subject,
     compute_next_digest_run_at,

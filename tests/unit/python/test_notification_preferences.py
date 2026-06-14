@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.notification_preferences import (
+from signalops.workers.notification_preferences import (
     is_channel_enabled_by_preferences,
     normalize_notification_preferences,
 )

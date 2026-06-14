@@ -12,7 +12,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from services.api.app.web_content_auth import require_api_content_read_session
+from signalops.api.web_content_auth import require_api_content_read_session
 
 
 def _request_with_cookie(cookie: str = "") -> Request:
@@ -84,7 +84,7 @@ class ApiWebContentAuthTests(unittest.IsolatedAsyncioTestCase):
             },
             clear=False,
         ), patch(
-            "services.api.app.web_content_auth.query_one",
+            "signalops.api.web_content_auth.query_one",
             return_value={"user_id": "other-user"},
         ):
             with self.assertRaises(HTTPException) as context:

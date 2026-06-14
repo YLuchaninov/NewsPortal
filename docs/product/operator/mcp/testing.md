@@ -175,4 +175,4 @@ For any environment:
 
 - MCP contract: [.aidp/contracts/mcp-control-plane.md](../../../../.aidp/contracts/mcp-control-plane.md)
 - Proof commands: [.aidp/verification.md](../../../../.aidp/verification.md)
-- Admin token UI: [apps/admin/src/pages/automation/mcp.astro](../../../../apps/admin/src/pages/automation/mcp.astro)
+- Admin token UI: [runtime/node/apps/admin/src/pages/automation/mcp.astro](../../../../runtime/node/apps/admin/src/pages/automation/mcp.astro)

@@ -5,7 +5,7 @@ import {
   classifySignalOpsErrorCode,
   createSignalOpsErrorDiagnostic,
   SIGNALOPS_ERROR_CODES,
-} from "../../../packages/contracts/src/index.ts";
+} from "../../../runtime/node/packages/contracts/src/index.ts";
 
 test("error taxonomy classifies known and unknown error codes", () => {
   assert.deepEqual(classifySignalOpsErrorCode(SIGNALOPS_ERROR_CODES.acquisitionUrlBlocked), {

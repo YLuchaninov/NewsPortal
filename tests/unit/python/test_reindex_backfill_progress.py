@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, call, patch
 
-from services.workers.app import reindex_backfill, reindex_backfill_runtime
+from signalops.workers import reindex_backfill, reindex_backfill_runtime
 
 
 class ReindexBackfillProgressTests(unittest.IsolatedAsyncioTestCase):

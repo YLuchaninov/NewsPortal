@@ -6,7 +6,7 @@ import {
   parseEmailImapAdminChannelInput,
   planEmailImapBulkImport,
   upsertEmailImapChannels,
-} from "../../../apps/admin/src/lib/server/email-imap-channels.ts";
+} from "../../../runtime/node/packages/control-plane/src/email-imap-channels.ts";
 
 test("parseEmailImapAdminChannelInput normalizes mailbox admin payload fields", () => {
   const channel = parseEmailImapAdminChannelInput({

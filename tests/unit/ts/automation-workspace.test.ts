@@ -10,7 +10,7 @@ import {
   instantiateAutomationTemplate,
   sequenceToEditorGraph,
   type AutomationNodeData,
-} from "../../../apps/admin/src/lib/automation-workspace.ts";
+} from "../../../runtime/node/apps/admin/src/lib/automation-workspace.ts";
 
 test("instantiateAutomationTemplate produces a truthful linear sequence payload", () => {
   const payload = instantiateAutomationTemplate("maintenance_reindex", {

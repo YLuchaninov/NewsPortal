@@ -21,37 +21,12 @@ function commandResult(key: string, status = "passed", parsedArtifacts: unknown[
   };
 }
 
-function passingMegaArtifact() {
-  return {
-    kind: "signalops-product-mega-flow-proof",
-    finalVerdict: "pass",
-    runtimeVerdict: "pass",
-    yieldVerdict: "pass",
-    scenarios: [
-      {
-        key: "example_a_listing_sources",
-        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
-      },
-      {
-        key: "example_b_editorial_updates",
-        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
-      },
-      {
-        key: "example_c_public_notices",
-        liveSelectedSignalCandidateEvidence: { selectedFinalRows: 1 },
-      },
-    ],
-  };
-}
-
 function passingRequiredCommands(extraArtifacts: Record<string, unknown[]> = {}) {
   return PRODUCT_TOTAL_LIVE_REQUIRED_COMMANDS.map((item) =>
     commandResult(
       item.key,
       "passed",
-      item.key === "product-mega-flow-compose"
-        ? [passingMegaArtifact()]
-        : extraArtifacts[item.key] ?? []
+      extraArtifacts[item.key] ?? []
     )
   );
 }
@@ -59,7 +34,7 @@ function passingRequiredCommands(extraArtifacts: Record<string, unknown[]> = {})
 test("total-live provider evidence marks API and Email IMAP external live as not applicable when fixtures pass", () => {
   const evidence = summarizeProviderExternalResiduals(
     passingRequiredCommands().filter((item) =>
-      ["providers-compose", "channel-auth-compose", "product-mega-flow-compose", "website-admin-compose"].includes(item.key)
+      ["providers-compose", "channel-auth-compose", "website-admin-compose"].includes(item.key)
     )
   );
 
@@ -68,33 +43,6 @@ test("total-live provider evidence marks API and Email IMAP external live as not
   assert.equal(evidence.api.externalLive.status, PRODUCT_TOTAL_LIVE_STATUSES.notApplicable);
   assert.equal(evidence.api.externalLive.reason, "no_real_external_target_available");
   assert.equal(evidence.emailImap.externalLive.status, PRODUCT_TOTAL_LIVE_STATUSES.notApplicable);
-});
-
-test("total-live fails when strict A/B/C mega-flow fails even if other commands pass", () => {
-  const commandResults = passingRequiredCommands({
-    "product-mega-flow-compose": [
-      {
-        ...passingMegaArtifact(),
-        finalVerdict: "fail",
-      },
-    ],
-  });
-  commandResults[0] = commandResult("product-mega-flow-compose", "passed", [
-    {
-      ...passingMegaArtifact(),
-      finalVerdict: "fail",
-    },
-  ]);
-
-  const verdict = determineProductTotalLiveAuditVerdict({
-    env: { status: "passed" },
-    commandResults,
-    diagnosticCommands: [],
-  });
-
-  assert.equal(verdict.runtimeVerdict, "fail");
-  assert.equal(verdict.finalVerdict, "fail");
-  assert.equal(verdict.strictMegaFlow.status, PRODUCT_TOTAL_LIVE_STATUSES.failed);
 });
 
 test("total-live returns weak when only live diagnostic lanes have classified residuals", () => {
@@ -140,6 +88,38 @@ test("total-live returns weak when only live diagnostic lanes have classified re
   assert.deepEqual(
     verdict.diagnosticWeak.map((item) => item.key).sort(),
     ["website-matrix-compose"]
+  );
+});
+
+test("total-live treats failed website matrix command as weak when artifact residuals are classified", () => {
+  const verdict = determineProductTotalLiveAuditVerdict({
+    env: { status: "passed" },
+    commandResults: [
+      ...passingRequiredCommands(),
+      commandResult("website-matrix-compose", "failed", [
+        {
+          evidencePath: "/tmp/signalops-live-website-matrix-proof.json",
+          summary: {
+            verdictCounts: {
+              observed_expected_shape: 7,
+              observed_truthful_unsupported_or_blocked: 8,
+              observed_partial_or_empty_shape: 1,
+            },
+          },
+          siteResults: [],
+        },
+      ]),
+    ],
+    diagnosticCommands: PRODUCT_TOTAL_LIVE_DIAGNOSTIC_COMMANDS.filter((item) =>
+      item.key === "website-matrix-compose"
+    ),
+  });
+
+  assert.equal(verdict.runtimeVerdict, "pass");
+  assert.equal(verdict.finalVerdict, "weak");
+  assert.equal(
+    verdict.diagnosticSummaries["website-matrix-compose"]?.status,
+    PRODUCT_TOTAL_LIVE_STATUSES.weak
   );
 });
 

@@ -6,7 +6,7 @@
 
 ## Файлы
 
-- `it_news.json` — пример RSS-каналов для IT/news domain.
+- `it_signal.json` — пример RSS-каналов для IT/signal domain.
 - `outsource.json` — широкий source bundle для outsourcing-oriented corpus.
 - `outsource_cleaned_balanced_tenders_and_company_signals.json` — более узкий bundle для tenders/company-signal monitoring.
 - `web.bulk-import.json` — website-only bulk import bundle, все rows имеют `providerType: "website"`.
@@ -41,13 +41,14 @@ Optional overrides:
 
 ## Provider types
 
-Для текущей модели допустимы:
+Для Public Beta ingest допустимы:
 
 - `rss`
 - `website`
 - `api`
 - `email_imap`
-- `youtube` как declared provider value без полного operator runtime baseline
+
+`telegram` является delivery-only lane, не source ingestion. `youtube` остается future-hidden provider value и не должен появляться в обычных beta import assets.
 
 Atom feeds импортируются как `rss`. Различие RSS/Atom принадлежит adapter layer, а не `providerType`.
 
@@ -60,9 +61,9 @@ Atom feeds импортируются как `rss`. Различие RSS/Atom п
 
 Он полезен как reference для ручной настройки, но не является machine-owned runtime config.
 
-Если значения из этого JSON расходятся с Example C в `docs/product/operator/examples/EXAMPLES.md`, live MCP/admin read-back или `operator.funnel.audit`, JSON считается устаревшим reference evidence. Не применяйте его напрямую поверх live config без MCP calibration/read-back.
+Если значения из этого JSON расходятся с live MCP/admin read-back или `operator.funnel.audit`, JSON считается устаревшим reference evidence. Не применяйте его напрямую поверх live config без MCP calibration/read-back.
 
-Человеческое описание outsourcing scenario теперь живет в [Example Bundles](../operator/examples/EXAMPLES.md), чтобы не держать отдельную companion note рядом с asset-файлами. Старый companion note сохранен только как historical reference в `operator/old_examples`.
+Человеческое описание старого outsourcing scenario сохранено только как historical reference в `operator/old_examples`.
 
 ## Проверка
 

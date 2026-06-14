@@ -5,7 +5,7 @@ from tests.unit.python.support.stubs import install_worker_runtime_import_stubs
 
 install_worker_runtime_import_stubs()
 
-from services.workers.app import worker_bootstrap
+from signalops.workers import worker_bootstrap
 
 
 class _ImmediateEvent:

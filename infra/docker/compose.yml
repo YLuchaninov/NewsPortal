@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-signalops}
       POSTGRES_USER: ${POSTGRES_USER:-signalops}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
-    ports:
-      - "55432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,8 +18,6 @@ services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports:
-      - "56379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -36,7 +32,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/relay.Dockerfile
-    command: ["node", "services/relay/dist/cli/migrate.mjs"]
+    command: ["node", "build/node/services/relay/cli/migrate.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-signalops}
       POSTGRES_USER: ${POSTGRES_USER:-signalops}
@@ -56,7 +52,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/relay.Dockerfile
-    command: ["node", "services/relay/dist/main.mjs"]
+    command: ["node", "build/node/services/relay/main.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-signalops}
       POSTGRES_USER: ${POSTGRES_USER:-signalops}
@@ -75,8 +71,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "${RELAY_PORT:-4000}:4000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
       interval: 5s
@@ -89,7 +83,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/fetchers.Dockerfile
-    command: ["node", "services/fetchers/dist/main.mjs"]
+    command: ["node", "build/node/services/fetchers/main.mjs"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-signalops}
       POSTGRES_USER: ${POSTGRES_USER:-signalops}
@@ -127,8 +121,8 @@ services:
       args:
         PYTHON_APP_UID: ${PYTHON_APP_UID:-10001}
         PYTHON_APP_GID: ${PYTHON_APP_GID:-10001}
-    working_dir: /workspace/services/workers
-    command: ["python", "-m", "app.main"]
+    working_dir: /workspace
+    command: ["python", "-m", "signalops.workers.main"]
     volumes:
       - ../../data:/workspace/data
     environment:
@@ -204,8 +198,8 @@ services:
       args:
         PYTHON_APP_UID: ${PYTHON_APP_UID:-10001}
         PYTHON_APP_GID: ${PYTHON_APP_GID:-10001}
-    working_dir: /workspace/services/api
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    working_dir: /workspace
+    command: ["uvicorn", "signalops.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ../../data:/workspace/data
     environment:
@@ -238,8 +232,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "${API_PORT:-8000}:8000"
     healthcheck:
       test:
         [
@@ -260,7 +252,7 @@ services:
       dockerfile: infra/docker/web.Dockerfile
       args:
         SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_WEB_APP_BASE_URL:-http://127.0.0.1:4321/}
-    command: ["node", "apps/web/dist/server/entry.mjs"]
+    command: ["node", "build/node/apps/web/server/entry.mjs"]
     environment:
       HOST: 0.0.0.0
       PORT: ${WEB_PORT:-4321}
@@ -282,8 +274,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-    ports:
-      - "${WEB_PORT:-4321}:4321"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4321/api/health"]
       interval: 10s
@@ -298,7 +288,7 @@ services:
       dockerfile: infra/docker/admin.Dockerfile
       args:
         SIGNALOPS_APP_BASE_URL: ${SIGNALOPS_ADMIN_APP_BASE_URL:-http://127.0.0.1:4322/}
-    command: ["node", "apps/admin/dist/server/entry.mjs"]
+    command: ["node", "build/node/apps/admin/server/entry.mjs"]
     environment:
       HOST: 0.0.0.0
       PORT: ${ADMIN_PORT:-4322}
@@ -321,8 +311,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signalops}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-    ports:
-      - "${ADMIN_PORT:-4322}:4322"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4322/api/health"]
       interval: 10s
@@ -335,7 +323,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/mcp.Dockerfile
-    command: ["node", "services/mcp/dist/main.mjs"]
+    command: ["node", "build/node/services/mcp/main.mjs"]
     environment:
       MCP_PORT: ${MCP_PORT:-4300}
       SIGNALOPS_API_BASE_URL: ${SIGNALOPS_API_BASE_URL:-http://api:8000}
@@ -352,8 +340,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "${MCP_PORT:-4300}:4300"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4300/health"]
       interval: 10s
@@ -375,10 +361,6 @@ services:
         condition: service_healthy
       mcp:
         condition: service_healthy
-    ports:
-      - "${NGINX_PORT:-8080}:80"
-    volumes:
-      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 10s

@@ -39,7 +39,7 @@ Universal Task Engine is the sequence-based execution model for SignalOps: decla
 - Relay owns outbox polling and sequence lookup/handoff.
 - Sequence Runner owns traversal, retries/timeouts, context merge and run/task-run persistence.
 - Task plugins are self-contained execution units and must not become relay or scheduler.
-- Builtin plugin ownership lives in focused plugin-family modules, with `services/workers/app/task_engine/pipeline_registry.py` as the canonical registration surface. Do not restore the old catch-all `pipeline_plugins.py` compatibility module for internal imports.
+- Builtin plugin ownership lives in focused plugin-family modules, with `runtime/python/src/signalops/workers/task_engine/pipeline_registry.py` as the canonical registration surface. Do not restore the old catch-all `pipeline_plugins.py` compatibility module for internal imports.
 - Maintenance API owns sequence CRUD/run/read/cancel/retry.
 - Admin `/automation` visual workspace may store `editor_state`, but `task_graph` remains execution truth.
 

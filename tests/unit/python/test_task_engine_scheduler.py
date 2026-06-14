@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from itertools import count
 from typing import Any
 
-from services.workers.app.task_engine import (
+from signalops.workers.task_engine import (
     parse_cron_expression,
     SequenceCronScheduler,
     SequenceDefinition,

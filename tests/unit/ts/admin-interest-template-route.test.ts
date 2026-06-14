@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   formatTemplateBrowserErrorMessage,
   normalizeTemplateValidationPayload,
-} from "../../../apps/admin/src/pages/bff/admin/templates.ts";
+} from "../../../runtime/node/apps/admin/src/pages/bff/admin/templates.ts";
 
 test("formatTemplateBrowserErrorMessage points system-interest time-window schema drift to migrations", () => {
   const message = formatTemplateBrowserErrorMessage(

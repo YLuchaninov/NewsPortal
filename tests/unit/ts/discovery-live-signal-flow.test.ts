@@ -8,7 +8,7 @@ import {
   rankSignalCandidatesForProof,
   isSelectedSignalAttempt,
   SIGNAL_PACKS,
-} from "../../../infra/scripts/test-discovery-vnext-mcp-live-signal-flow.mjs";
+} from "../../../infra/scripts/proof/test-discovery-vnext-mcp-live-signal-flow.mjs";
 
 test("live signal flow does not stop on rejected fetched evidence", () => {
   const rejectedFetchedAttempt = {
@@ -60,6 +60,17 @@ test("live signal proof packs define multiple named candidate-signal groups", ()
       assert.match(signal, /,/);
     }
   }
+});
+
+test("live signal proof opts into explicit marker auto-select policy", () => {
+  const payload = buildInterestPayload(SIGNAL_PACKS[0], "unit");
+
+  assert.equal(payload.selection_profile_signal_visibility, "explicit_marker");
+  assert.equal(payload.selection_profile_auto_select_mode, "evidence_or_llm");
+  assert.equal(payload.selection_profile_auto_select_min_positive_groups, 1);
+  assert.equal(payload.selection_profile_auto_select_min_cue_hits, 1);
+  assert.equal(payload.selection_profile_auto_select_requires_no_noise, true);
+  assert.equal(payload.selection_profile_auto_select_requires_no_technical_veto, true);
 });
 
 test("live signal proof archives old active proof interests only", () => {

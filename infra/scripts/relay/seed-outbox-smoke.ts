@@ -1,6 +1,6 @@
-import { loadRelayConfig } from "../../../services/relay/src/config";
-import { createPgPool } from "../../../services/relay/src/db";
-import { insertFoundationSmokeEvent } from "../../../services/relay/src/outbox";
+import { loadRelayConfig } from "../../../runtime/node/services/relay/src/config";
+import { createPgPool } from "../../../runtime/node/services/relay/src/db";
+import { insertFoundationSmokeEvent } from "../../../runtime/node/services/relay/src/outbox";
 
 async function main(): Promise<void> {
   const config = loadRelayConfig();

@@ -4,7 +4,7 @@ This directory stores historical example-only documents that are useful as refer
 
 Use active docs first:
 
-- [Example Bundles](../examples/EXAMPLES.md) for current RSS/template/system-interest bundles.
+- [Current Example Index](../examples/EXAMPLES.md) for active example entry points.
 - [Website Source Testing](../examples/WEBSITE_SOURCES_TESTING.md) for current website-source verification.
 - [Operator Guide](../HOW_TO_USE.md) and [Manual MVP Runbook](../manual-mvp-runbook.md) for current admin workflows.
 
@@ -18,4 +18,5 @@ Rules for files in this directory:
 ## Archived Files
 
 - `WEBSITE_SOURCE_EXAMPLES.md` — dated live website URL examples retained for comparison; current website proof lives in `../examples/WEBSITE_SOURCES_TESTING.md`.
-- `outsource_balanced_templates.md` — historical companion notes for outsourcing templates; current human-facing Example C lives in `../examples/EXAMPLES.md`.
+- `outsource_balanced_templates.md` — historical companion notes for outsourcing templates.
+- `EXAMPLES.archive.md` — historical bundle prose retained for comparison only; not a Public Beta acceptance path.

@@ -3,7 +3,7 @@
 ## Подсистема
 
 - Имя: пользовательские notifications, channel bindings and digest delivery.
-- Владельцы кода/границ: web settings/BFF modules, `services/workers/app/main.py`, `services/workers/app/delivery.py`, `services/workers/app/digests.py`, notification migrations and Mailpit/dev delivery baseline.
+- Владельцы кода/границ: web settings/BFF modules, `runtime/python/src/signalops/workers/main.py`, `runtime/python/src/signalops/workers/delivery.py`, `runtime/python/src/signalops/workers/digests.py`, notification migrations and Mailpit/dev delivery baseline.
 - Основные runtime surfaces: web push, Telegram, email digest, notification preferences, manual saved digest queue, scheduled match digest queue.
 
 ## Почему нужен contract

@@ -5,8 +5,8 @@ import {
   assertDiscoveryVNextPayload,
   DISCOVERY_VNEXT_ARTIFACT_ENVELOPE_SCHEMA,
   validateDiscoveryVNextPayload,
-} from "../../../packages/contracts/src/discovery-vnext";
-import { validateJsonSchema } from "../../../packages/contracts/src/schema";
+} from "../../../runtime/node/packages/contracts/src/discovery-vnext";
+import { validateJsonSchema } from "../../../runtime/node/packages/contracts/src/schema";
 
 test("Discovery vNext envelope schema accepts typed artifact lineage", () => {
   const issues = validateJsonSchema(

@@ -1,6 +1,6 @@
 import unittest
 
-from services.workers.app.system_feed import summarize_system_feed_result
+from signalops.workers.system_feed import summarize_system_feed_result
 
 
 class SystemFeedContractTests(unittest.TestCase):
