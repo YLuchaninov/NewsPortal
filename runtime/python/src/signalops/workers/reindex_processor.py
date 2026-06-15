@@ -9,13 +9,26 @@ from typing import Any
 from psycopg.types.json import Json
 
 from .content_analysis import DEFAULT_CONTENT_FILTER_POLICY_KEY
+from .reindex_content_analysis_backfill import (
+    normalize_content_analysis_backfill_modules,
+    normalize_content_analysis_backfill_subject_types,
+    replay_content_analysis,
+)
+from .reindex_historical_replay_runtime import replay_historical_signal_candidates
+from .reindex_runtime_jobs import (
+    read_active_selection_profile_snapshot,
+    read_reindex_job_context,
+)
+from .runtime_db import open_connection
 from .runtime_json import coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool, coerce_optional_string, coerce_positive_int
+from .worker_events import is_event_processed, record_processed_event
 from .worker_queues import (
     EVENT_CLUSTER_CENTROIDS_INDEX_NAME,
     INTEREST_CENTROIDS_INDEX_NAME,
     REINDEX_CONSUMER,
 )
+from .worker_runtime_singletons import INTEREST_INDEXER
 
 
 @dataclass(frozen=True)
@@ -33,19 +46,17 @@ class ReindexProcessorDependencies:
 
 
 def build_reindex_processor_dependencies() -> ReindexProcessorDependencies:
-    from . import main as legacy_main
-
     return ReindexProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        is_event_processed=legacy_main.is_event_processed,
-        read_reindex_job_context=legacy_main.read_reindex_job_context,
-        interest_indexer=legacy_main.INTEREST_INDEXER,
-        read_active_selection_profile_snapshot=legacy_main.read_active_selection_profile_snapshot,
-        replay_historical_signal_candidates=legacy_main.replay_historical_signal_candidates,
-        normalize_content_analysis_backfill_modules=legacy_main.normalize_content_analysis_backfill_modules,
-        normalize_content_analysis_backfill_subject_types=legacy_main.normalize_content_analysis_backfill_subject_types,
-        replay_content_analysis=legacy_main.replay_content_analysis,
-        record_processed_event=legacy_main.record_processed_event,
+        open_connection=open_connection,
+        is_event_processed=is_event_processed,
+        read_reindex_job_context=read_reindex_job_context,
+        interest_indexer=INTEREST_INDEXER,
+        read_active_selection_profile_snapshot=read_active_selection_profile_snapshot,
+        replay_historical_signal_candidates=replay_historical_signal_candidates,
+        normalize_content_analysis_backfill_modules=normalize_content_analysis_backfill_modules,
+        normalize_content_analysis_backfill_subject_types=normalize_content_analysis_backfill_subject_types,
+        replay_content_analysis=replay_content_analysis,
+        record_processed_event=record_processed_event,
     )
 
 

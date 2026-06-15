@@ -1,51 +1,67 @@
 from __future__ import annotations
 
 import re
+from importlib import import_module
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Final, Mapping
 
-from ..signal_candidate_extraction_processor import (
-    process_signal_candidate_extract as process_signal_candidate_extract_processor,
-)
-from ..signal_candidate_processors import (
-    process_dedup as process_dedup_processor,
-    process_embed as process_embed_processor,
-    process_normalize as process_normalize_processor,
-)
-from ..cluster_processor import process_cluster as process_cluster_processor
-from ..compile_processors import (
-    process_criterion_compile as process_criterion_compile_processor,
-    process_interest_compile as process_interest_compile_processor,
-)
-from ..criteria_match_processor import (
-    process_match_criteria as process_match_criteria_processor,
-)
-from ..feedback_ingest_processor import (
-    process_feedback_ingest as process_feedback_ingest_processor,
-)
-from ..interest_match_processor import (
-    process_match_interests as process_match_interests_processor,
-)
-from ..llm_review_processor import process_llm_review as process_llm_review_processor
-from ..notification_processor import process_notify as process_notify_processor
-from ..reindex_processor import process_reindex as process_reindex_processor
 from .plugins import TaskPlugin
 
 LegacyHandler = Callable[[Any, str], Awaitable[dict[str, Any]]]
-DIRECT_PROCESSOR_HANDLERS: dict[str, LegacyHandler] = {
-    "process_signal_candidate_extract": process_signal_candidate_extract_processor,
-    "process_normalize": process_normalize_processor,
-    "process_dedup": process_dedup_processor,
-    "process_embed": process_embed_processor,
-    "process_feedback_ingest": process_feedback_ingest_processor,
-    "process_cluster": process_cluster_processor,
-    "process_interest_compile": process_interest_compile_processor,
-    "process_criterion_compile": process_criterion_compile_processor,
-    "process_match_criteria": process_match_criteria_processor,
-    "process_match_interests": process_match_interests_processor,
-    "process_llm_review": process_llm_review_processor,
-    "process_notify": process_notify_processor,
-    "process_reindex": process_reindex_processor,
+ProcessorHandlerSpec = tuple[str, str]
+DIRECT_PROCESSOR_HANDLERS: dict[str, ProcessorHandlerSpec] = {
+    "process_signal_candidate_extract": (
+        "signalops.workers.signal_candidate_extraction_processor",
+        "process_signal_candidate_extract",
+    ),
+    "process_normalize": (
+        "signalops.workers.signal_candidate_processors",
+        "process_normalize",
+    ),
+    "process_dedup": (
+        "signalops.workers.signal_candidate_processors",
+        "process_dedup",
+    ),
+    "process_embed": (
+        "signalops.workers.signal_candidate_processors",
+        "process_embed",
+    ),
+    "process_feedback_ingest": (
+        "signalops.workers.feedback_ingest_processor",
+        "process_feedback_ingest",
+    ),
+    "process_cluster": (
+        "signalops.workers.cluster_processor",
+        "process_cluster",
+    ),
+    "process_interest_compile": (
+        "signalops.workers.compile_processors",
+        "process_interest_compile",
+    ),
+    "process_criterion_compile": (
+        "signalops.workers.compile_processors",
+        "process_criterion_compile",
+    ),
+    "process_match_criteria": (
+        "signalops.workers.criteria_match_processor",
+        "process_match_criteria",
+    ),
+    "process_match_interests": (
+        "signalops.workers.interest_match_processor",
+        "process_match_interests",
+    ),
+    "process_llm_review": (
+        "signalops.workers.llm_review_processor",
+        "process_llm_review",
+    ),
+    "process_notify": (
+        "signalops.workers.notification_processor",
+        "process_notify",
+    ),
+    "process_reindex": (
+        "signalops.workers.reindex_processor",
+        "process_reindex",
+    ),
 }
 
 _CAMEL_CASE_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
@@ -60,9 +76,10 @@ class LegacyJobShim:
 
 
 def load_legacy_handler(handler_name: str) -> LegacyHandler:
-    direct_handler = DIRECT_PROCESSOR_HANDLERS.get(handler_name)
-    if direct_handler is not None:
-        return direct_handler
+    handler_spec = DIRECT_PROCESSOR_HANDLERS.get(handler_name)
+    if handler_spec is not None:
+        module_name, attribute_name = handler_spec
+        return getattr(import_module(module_name), attribute_name)
 
     raise LookupError(
         f"Legacy worker handler {handler_name} was not found in the direct processor registry."

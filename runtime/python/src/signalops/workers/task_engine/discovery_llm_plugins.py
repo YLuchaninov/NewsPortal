@@ -9,13 +9,8 @@ from .discovery_plugin_common import (
     _lookup_from_mapping,
     _non_reserved_context,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class LlmAnalyzerPlugin(ContextTaskPlugin):
@@ -94,7 +89,7 @@ class LlmAnalyzerPlugin(ContextTaskPlugin):
             default=None,
         ) or None
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_result = await resolve_runtime_call(
             runtime.llm_analyzer.analyze(
                 prompt=prompt,

@@ -4,7 +4,7 @@ import type {
   CrawlPolicyCacheRow,
   WebsiteCachedTextResponseState,
   WebsiteConditionalRequestState
-} from "./web-ingestion";
+} from "./web-ingestion-types";
 
 type QueryExecutor = Pick<Pool | PoolClient, "query">;
 

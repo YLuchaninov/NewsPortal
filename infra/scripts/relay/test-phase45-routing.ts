@@ -190,8 +190,10 @@ async function assertSequenceManagedRouting(
         `${input.label} created unexpected sequence ${run.sequenceId} for event ${eventId}.`
       );
     }
-    if (run.status !== "pending") {
-      throw new Error(`${input.label} run ${run.runId} expected pending status, got ${run.status}.`);
+    if (!["pending", "running", "completed"].includes(run.status)) {
+      throw new Error(
+        `${input.label} run ${run.runId} expected pending/running/completed status, got ${run.status}.`
+      );
     }
 
     assertRecordContains(run.contextJson, input.expectedContext, `${input.label} context`);

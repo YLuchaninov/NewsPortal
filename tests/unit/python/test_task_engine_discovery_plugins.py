@@ -566,7 +566,7 @@ class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
         runtime.web_search = _EnvelopeWebSearchAdapter()
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -585,7 +585,7 @@ class DiscoveryMetaPluginTests(unittest.IsolatedAsyncioTestCase):
         runtime.llm_analyzer = _EnvelopeLlmAnalyzerAdapter()
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -609,7 +609,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -640,7 +640,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -672,7 +672,7 @@ class DiscoveryPluginBehaviorTests(unittest.IsolatedAsyncioTestCase):
         runtime = FakeDiscoveryRuntime()
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=runtime,
         ):
             result = await plugin.execute(
@@ -805,7 +805,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=FakeDiscoveryRuntime(),
         ):
             result = await executor.execute_run("run-1")
@@ -853,7 +853,7 @@ class DiscoveryPluginSequenceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch(
-            "signalops.workers.task_engine.discovery_plugins.get_discovery_runtime",
+            "signalops.workers.task_engine.discovery_runtime.get_discovery_runtime",
             return_value=FakeDiscoveryRuntime(),
         ):
             result = await executor.execute_run("run-1")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .pipeline_legacy import (
+from .pipeline_processor_adapters import (
     _MISSING,
     LegacyHandlerTaskPlugin,
 )

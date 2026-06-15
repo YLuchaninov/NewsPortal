@@ -8,15 +8,10 @@ from .discovery_plugin_common import (
     _coerce_mapping_list,
     _lookup_from_mapping,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
 
 _VALID_ENRICHMENT_MODES = {"merge", "replace"}
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class SignalCandidateLoaderPlugin(ContextTaskPlugin):
@@ -61,7 +56,7 @@ class SignalCandidateLoaderPlugin(ContextTaskPlugin):
             default=False,
         )
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.signal_candidate_loader.load_signal_candidates(
                 filters=filters,
@@ -148,7 +143,7 @@ class SignalCandidateEnricherPlugin(ContextTaskPlugin):
             aliases=("targetField",),
         )
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_result = await resolve_runtime_call(
             runtime.signal_candidate_enricher.enrich_signal_candidates(
                 signal_candidates=signal_candidates,

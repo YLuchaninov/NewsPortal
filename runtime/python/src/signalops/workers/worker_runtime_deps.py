@@ -1,49 +1,52 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from dataclasses import dataclass, fields
 from typing import Any
 
 
-def build_worker_runtime_deps_from_namespace(namespace: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        "CLUSTER_QUEUE": namespace["CLUSTER_QUEUE"],
-        "CRITERIA_MATCH_QUEUE": namespace["CRITERIA_MATCH_QUEUE"],
-        "CRITERION_COMPILE_QUEUE": namespace["CRITERION_COMPILE_QUEUE"],
-        "DEDUP_QUEUE": namespace["DEDUP_QUEUE"],
-        "EMBED_QUEUE": namespace["EMBED_QUEUE"],
-        "FEEDBACK_INGEST_QUEUE": namespace["FEEDBACK_INGEST_QUEUE"],
-        "INTEREST_COMPILE_QUEUE": namespace["INTEREST_COMPILE_QUEUE"],
-        "INTEREST_MATCH_QUEUE": namespace["INTEREST_MATCH_QUEUE"],
-        "LLM_REVIEW_QUEUE": namespace["LLM_REVIEW_QUEUE"],
-        "NORMALIZE_QUEUE": namespace["NORMALIZE_QUEUE"],
-        "NOTIFY_QUEUE": namespace["NOTIFY_QUEUE"],
-        "REINDEX_QUEUE": namespace["REINDEX_QUEUE"],
-        "SEQUENCE_QUEUE": namespace["SEQUENCE_QUEUE"],
-        "PostgresSequenceRepository": namespace["PostgresSequenceRepository"],
-        "SequenceCronScheduler": namespace["SequenceCronScheduler"],
-        "SequenceRunJobProcessor": namespace["SequenceRunJobProcessor"],
-        "build_redis_connection_options": namespace["build_redis_connection_options"],
-        "enqueue_sequence_run_job_async": namespace["enqueue_sequence_run_job_async"],
-        "process_cluster": namespace["process_cluster"],
-        "process_criterion_compile": namespace["process_criterion_compile"],
-        "process_dedup": namespace["process_dedup"],
-        "process_due_scheduled_digests": namespace["process_due_scheduled_digests"],
-        "process_embed": namespace["process_embed"],
-        "process_feedback_ingest": namespace["process_feedback_ingest"],
-        "process_interest_compile": namespace["process_interest_compile"],
-        "process_llm_review": namespace["process_llm_review"],
-        "process_match_criteria": namespace["process_match_criteria"],
-        "process_match_interests": namespace["process_match_interests"],
-        "process_normalize": namespace["process_normalize"],
-        "process_notify": namespace["process_notify"],
-        "process_queued_manual_digests": namespace["process_queued_manual_digests"],
-        "process_reindex": namespace["process_reindex"],
-        "sequence_cron_poll_interval_seconds": namespace["sequence_cron_poll_interval_seconds"],
-        "sequence_cron_scheduler_enabled": namespace["sequence_cron_scheduler_enabled"],
-        "sequence_runner_concurrency": namespace["sequence_runner_concurrency"],
-        "sequence_runner_enabled": namespace["sequence_runner_enabled"],
-        "sequence_runner_lock_duration_ms": namespace["sequence_runner_lock_duration_ms"],
-        "sequence_runner_stalled_interval_ms": namespace["sequence_runner_stalled_interval_ms"],
-        "user_digest_poll_interval_seconds": namespace["user_digest_poll_interval_seconds"],
-        "user_digest_scheduler_enabled": namespace["user_digest_scheduler_enabled"],
-    }
+@dataclass(frozen=True)
+class WorkerRuntimeDeps:
+    CLUSTER_QUEUE: Any
+    CRITERIA_MATCH_QUEUE: Any
+    CRITERION_COMPILE_QUEUE: Any
+    DEDUP_QUEUE: Any
+    EMBED_QUEUE: Any
+    FEEDBACK_INGEST_QUEUE: Any
+    INTEREST_COMPILE_QUEUE: Any
+    INTEREST_MATCH_QUEUE: Any
+    LLM_REVIEW_QUEUE: Any
+    NORMALIZE_QUEUE: Any
+    NOTIFY_QUEUE: Any
+    REINDEX_QUEUE: Any
+    SEQUENCE_QUEUE: Any
+    PostgresSequenceRepository: Any
+    SequenceCronScheduler: Any
+    SequenceRunJobProcessor: Any
+    build_redis_connection_options: Any
+    enqueue_sequence_run_job_async: Any
+    process_cluster: Any
+    process_criterion_compile: Any
+    process_dedup: Any
+    process_due_scheduled_digests: Any
+    process_embed: Any
+    process_feedback_ingest: Any
+    process_interest_compile: Any
+    process_llm_review: Any
+    process_match_criteria: Any
+    process_match_interests: Any
+    process_normalize: Any
+    process_notify: Any
+    process_queued_manual_digests: Any
+    process_reindex: Any
+    sequence_cron_poll_interval_seconds: Any
+    sequence_cron_scheduler_enabled: Any
+    sequence_runner_concurrency: Any
+    sequence_runner_enabled: Any
+    sequence_runner_lock_duration_ms: Any
+    sequence_runner_stalled_interval_ms: Any
+    user_digest_poll_interval_seconds: Any
+    user_digest_scheduler_enabled: Any
+
+
+def worker_runtime_deps_to_dict(deps: WorkerRuntimeDeps) -> dict[str, Any]:
+    return {field.name: getattr(deps, field.name) for field in fields(WorkerRuntimeDeps)}

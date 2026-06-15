@@ -3,13 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from .discovery_plugin_common import ContextTaskPlugin, _non_reserved_context
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class DbStorePlugin(ContextTaskPlugin):
@@ -58,7 +53,7 @@ class DbStorePlugin(ContextTaskPlugin):
             context.get(payload_field) if payload_field else _non_reserved_context(context),
         )
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         receipt = await resolve_runtime_call(
             runtime.db_store.store(
                 record_key=record_key,

@@ -5,6 +5,7 @@ import {
   buildProofInterestArchiveActions,
   buildInterestPayload,
   isFetchedExplainableSignalAttempt,
+  rankDiscoveryCandidatesForProof,
   rankSignalCandidatesForProof,
   isSelectedSignalAttempt,
   SIGNAL_PACKS,
@@ -130,4 +131,176 @@ test("live signal proof ranks signal-like candidates ahead of wrapper pages", ()
 
   assert.equal(ranked[0].doc_id, "cve");
   assert.equal(ranked.at(-1)?.doc_id, "login");
+});
+
+test("live signal proof prefers official regulatory sources over social and consultancy noise", () => {
+  const policyPack = SIGNAL_PACKS.find((pack) => pack.key === "policy_regulatory");
+  assert.ok(policyPack);
+
+  const ranked = rankDiscoveryCandidatesForProof(policyPack, [
+    {
+      candidate_id: "linkedin",
+      canonical_url: "https://www.linkedin.com/posts/example_compliance-deadline",
+      canonical_domain: "linkedin.com",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Compliance Deadline LinkedIn Post",
+            snippet: "Public consultation and regulatory compliance deadline commentary.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "consultancy",
+      canonical_url: "https://example-consulting.test/regulatory-compliance-deadlines",
+      canonical_domain: "example-consulting.test",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Regulatory Compliance Consultancy",
+            snippet: "Schedule a consultation with compliance experts before the deadline.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "official",
+      canonical_url: "https://www.federalregister.gov/documents/2026/05/20/example",
+      canonical_domain: "federalregister.gov",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Extending the Compliance Deadline",
+            snippet: "Official regulatory notice with compliance deadline and public guidance.",
+          },
+        ],
+      },
+    },
+  ]);
+
+  assert.equal(ranked[0].candidate_id, "official");
+  assert.equal(ranked.at(-1)?.candidate_id, "linkedin");
+});
+
+test("live signal proof prefers changelog sources over generic support pages", () => {
+  const changelogPack = SIGNAL_PACKS.find((pack) => pack.key === "software_changelogs");
+  assert.ok(changelogPack);
+
+  const ranked = rankDiscoveryCandidatesForProof(changelogPack, [
+    {
+      candidate_id: "support-download",
+      canonical_url: "https://support.apple.com/en-us/106445",
+      canonical_domain: "support.apple.com",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Download Windows Migration Assistant",
+            snippet: "Migration assistant download support page.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "changelog",
+      canonical_url: "https://github.blog/changelog/type/deprecations",
+      canonical_domain: "github.blog",
+      acquisition_json: {
+        paths: [
+          {
+            title: "GitHub Changelog Deprecations",
+            snippet: "Official changelog with deprecation notice, API changes and migration guidance.",
+          },
+        ],
+      },
+    },
+  ]);
+
+  assert.equal(ranked[0].candidate_id, "changelog");
+});
+
+test("live signal proof prefers official release notes over software support noise", () => {
+  const changelogPack = SIGNAL_PACKS.find((pack) => pack.key === "software_changelogs");
+  assert.ok(changelogPack);
+
+  const ranked = rankDiscoveryCandidatesForProof(changelogPack, [
+    {
+      candidate_id: "generic-help",
+      canonical_url: "https://learn.microsoft.com/en-us/answers/questions/5917628/deprecation-notice-received-yet-the-server-is-curr",
+      canonical_domain: "learn.microsoft.com",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Deprecation Notice received - Yet the server is current on updates",
+            snippet: "Support question about a local server and updates.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "release-notes",
+      canonical_url: "https://www.keycloak.org/docs/latest/release_notes/index.html",
+      canonical_domain: "keycloak.org",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Release Notes - Keycloak",
+            snippet: "Official release notes with breaking changes, deprecations and migration guidance.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "tutorial",
+      canonical_url: "https://example.dev/tutorial/api-migration-guide",
+      canonical_domain: "example.dev",
+      acquisition_json: {
+        paths: [
+          {
+            title: "API migration guide tutorial",
+            snippet: "Third-party tutorial and commentary about upgrading an API integration.",
+          },
+        ],
+      },
+    },
+  ]);
+
+  assert.equal(ranked[0].candidate_id, "release-notes");
+  assert.equal(ranked.at(-1)?.candidate_id, "tutorial");
+});
+
+test("live signal proof prefers deprecation feeds over generic migration downloads", () => {
+  const changelogPack = SIGNAL_PACKS.find((pack) => pack.key === "software_changelogs");
+  assert.ok(changelogPack);
+
+  const ranked = rankDiscoveryCandidatesForProof(changelogPack, [
+    {
+      candidate_id: "migration-download",
+      canonical_url: "https://support.example.com/download/windows-migration-assistant",
+      canonical_domain: "support.example.com",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Download Windows Migration Assistant",
+            snippet: "Generic support download without release history.",
+          },
+        ],
+      },
+    },
+    {
+      candidate_id: "deprecations",
+      canonical_url: "https://developers.openai.com/api/docs/deprecations",
+      canonical_domain: "developers.openai.com",
+      acquisition_json: {
+        paths: [
+          {
+            title: "Deprecations - API",
+            snippet: "Official API deprecations with removed API versions and recommended migration replacements.",
+          },
+        ],
+      },
+    },
+  ]);
+
+  assert.equal(ranked[0].candidate_id, "deprecations");
 });

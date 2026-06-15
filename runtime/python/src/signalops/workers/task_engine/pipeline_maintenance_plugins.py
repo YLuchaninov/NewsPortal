@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .pipeline_legacy import LegacyHandlerTaskPlugin
+from .pipeline_processor_adapters import LegacyHandlerTaskPlugin
 
 
 class LegacyMaintenanceTaskPlugin(LegacyHandlerTaskPlugin):

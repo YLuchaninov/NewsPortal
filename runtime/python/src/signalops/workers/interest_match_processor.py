@@ -8,8 +8,38 @@ from typing import Any
 
 from psycopg.types.json import Json
 
+from .interest_filters import (
+    build_interest_filter_explain,
+    resolve_interest_filter_context,
+    resolve_user_interest_filter_outcome,
+    upsert_interest_filter_result,
+)
+from .matching_read_repository import list_compiled_interests
+from .notification_runtime import compute_novelty_score
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool, coerce_optional_string
+from .runtime_db import open_connection
+from .scoring import (
+    compute_interest_final_score,
+    compute_interest_meta_score,
+    decide_interest,
+    semantic_prototype_score,
+)
+from .selection_gate_repository import fetch_selection_gate_result_row
+from .selection_runtime import passes_hard_filters
+from .signal_candidate_repository import fetch_signal_candidate_for_update
+from .vector_registry import (
+    fetch_embedding_vectors_by_ids,
+    fetch_signal_candidate_features_row,
+    fetch_signal_candidate_vectors,
+)
+from .worker_events import (
+    advance_processing_state,
+    insert_outbox_event,
+    is_event_processed,
+    record_processed_event,
+    suppress_downstream_outbox,
+)
 from .worker_queues import SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT, INTEREST_MATCH_CONSUMER
 
 
@@ -40,31 +70,29 @@ class InterestMatchProcessorDependencies:
 
 
 def build_interest_match_processor_dependencies() -> InterestMatchProcessorDependencies:
-    from . import main as legacy_main
-
     return InterestMatchProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
-        is_event_processed=legacy_main.is_event_processed,
-        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
-        fetch_selection_gate_result_row=legacy_main.fetch_selection_gate_result_row,
-        record_processed_event=legacy_main.record_processed_event,
-        fetch_signal_candidate_features_row=legacy_main.fetch_signal_candidate_features_row,
-        fetch_signal_candidate_vectors=legacy_main.fetch_signal_candidate_vectors,
-        resolve_interest_filter_context=legacy_main.resolve_interest_filter_context,
-        list_compiled_interests=legacy_main.list_compiled_interests,
-        passes_hard_filters=legacy_main.passes_hard_filters,
-        fetch_embedding_vectors_by_ids=legacy_main.fetch_embedding_vectors_by_ids,
-        compute_novelty_score=legacy_main.compute_novelty_score,
-        semantic_prototype_score=legacy_main.semantic_prototype_score,
-        compute_interest_meta_score=legacy_main.compute_interest_meta_score,
-        compute_interest_final_score=legacy_main.compute_interest_final_score,
-        decide_interest=legacy_main.decide_interest,
-        resolve_user_interest_filter_outcome=legacy_main.resolve_user_interest_filter_outcome,
-        upsert_interest_filter_result=legacy_main.upsert_interest_filter_result,
-        build_interest_filter_explain=legacy_main.build_interest_filter_explain,
-        advance_processing_state=legacy_main.advance_processing_state,
-        insert_outbox_event=legacy_main.insert_outbox_event,
+        open_connection=open_connection,
+        suppress_downstream_outbox=suppress_downstream_outbox,
+        is_event_processed=is_event_processed,
+        fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+        fetch_selection_gate_result_row=fetch_selection_gate_result_row,
+        record_processed_event=record_processed_event,
+        fetch_signal_candidate_features_row=fetch_signal_candidate_features_row,
+        fetch_signal_candidate_vectors=fetch_signal_candidate_vectors,
+        resolve_interest_filter_context=resolve_interest_filter_context,
+        list_compiled_interests=list_compiled_interests,
+        passes_hard_filters=passes_hard_filters,
+        fetch_embedding_vectors_by_ids=fetch_embedding_vectors_by_ids,
+        compute_novelty_score=compute_novelty_score,
+        semantic_prototype_score=semantic_prototype_score,
+        compute_interest_meta_score=compute_interest_meta_score,
+        compute_interest_final_score=compute_interest_final_score,
+        decide_interest=decide_interest,
+        resolve_user_interest_filter_outcome=resolve_user_interest_filter_outcome,
+        upsert_interest_filter_result=upsert_interest_filter_result,
+        build_interest_filter_explain=build_interest_filter_explain,
+        advance_processing_state=advance_processing_state,
+        insert_outbox_event=insert_outbox_event,
     )
 
 

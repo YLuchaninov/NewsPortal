@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: F401
-
 from signalops.api.discovery_vnext.acquisition import (
     create_candidates_from_payload,
     execute_candidate_acquisition,
@@ -48,3 +46,47 @@ from signalops.api.discovery_vnext.source_inventory_actions import (
     upsert_monitoring_state,
     upsert_source_inventory,
 )
+
+__all__ = [
+    "_mark_candidate_status",
+    "_rank_search_results",
+    "activate_policy",
+    "apply_rollback",
+    "apply_routing_decision",
+    "apply_scope_resolution",
+    "apply_source_inventory_action",
+    "cancel_run",
+    "create_adapter_backlog_item",
+    "create_artifact",
+    "create_artifact_from_payload",
+    "create_candidates_from_payload",
+    "create_run",
+    "create_source_observation",
+    "diagnose_run",
+    "execute_candidate_acquisition",
+    "execute_full_probe_understand_route",
+    "execute_probe_from_payload",
+    "execute_run_steps",
+    "explain_source_inventory",
+    "get_required_active_policy",
+    "normalize_candidates",
+    "prepare_rollback",
+    "preview_brief",
+    "preview_mega_loop",
+    "preview_probe_plan",
+    "preview_route",
+    "preview_scope_resolution",
+    "preview_source_understanding",
+    "resolve_required_policy_payload",
+    "resolve_source_inventory_scopes",
+    "run_llm_gateway",
+    "select_candidates_for_probe",
+    "start_replay",
+    "start_run",
+    "submit_feedback",
+    "upsert_candidate",
+    "upsert_monitoring_state",
+    "upsert_source_inventory",
+    "validate_artifact",
+    "validate_policy",
+]

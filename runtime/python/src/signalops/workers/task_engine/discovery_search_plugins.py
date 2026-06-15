@@ -9,16 +9,11 @@ from .discovery_plugin_common import (
     _coerce_mapping_list,
     _lookup_from_mapping,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
 
 _VALID_SEARCH_TYPES = {"web", "news"}
 _VALID_TIME_RANGES = {"day", "week", "month", "year"}
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class WebSearchPlugin(ContextTaskPlugin):
@@ -73,7 +68,7 @@ class WebSearchPlugin(ContextTaskPlugin):
                 f"{self.name} expected time to be one of {sorted(_VALID_TIME_RANGES)} when provided."
             )
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_output = await resolve_runtime_call(
             runtime.web_search.search(
                 query=query,

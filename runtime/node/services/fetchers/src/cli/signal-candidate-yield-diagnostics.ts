@@ -3,9 +3,9 @@ import path from "node:path";
 import {
   collectSignalCandidateYieldSnapshot,
   createSignalCandidateYieldPackRoot,
-  createConfiguredPoolFromLocalEnv,
-  writeSnapshotPack
+  createConfiguredPoolFromLocalEnv
 } from "./signal-candidate-yield-shared";
+import { writeSnapshotPack } from "./signal-candidate-yield-pack";
 
 async function main(): Promise<void> {
   const pool = await createConfiguredPoolFromLocalEnv();

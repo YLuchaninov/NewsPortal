@@ -8,19 +8,26 @@ import psycopg
 from psycopg.types.json import Json
 
 from .final_selection import summarize_final_selection_result
+from .interest_filters import (
+    build_interest_filter_explain,
+    resolve_criterion_filter_outcome,
+    resolve_interest_filter_context,
+    upsert_interest_filter_result,
+)
 from .runtime_json import coerce_json_object, make_json_safe
+from .selection_gate_repository import (
+    fetch_final_selection_result_row,
+    fetch_system_feed_result_row,
+)
+from .selection_funnel_attribution import collect_funnel_runtime_attribution
 from .selection_signal_summary import build_candidate_signal_tier_summary
+from .signal_candidate_repository import fetch_signal_candidate_for_update
 from .system_feed import summarize_system_feed_result
+from .worker_events import insert_outbox_event
 from .worker_queues import SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT
 
 AsyncFunc = Callable[..., Awaitable[Any]]
 SyncFunc = Callable[..., Any]
-
-
-def _legacy_worker_main() -> Any:
-    from . import main as legacy_main
-
-    return legacy_main
 
 
 def _collect_signal_candidate_shape_veto_reasons(signal_candidate: Mapping[str, Any]) -> set[str]:
@@ -56,205 +63,6 @@ def _collect_signal_candidate_shape_veto_reasons(signal_candidate: Mapping[str, 
     return reasons
 
 
-def _compact_json_rows(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    return [make_json_safe(dict(row)) for row in rows]
-
-
-async def collect_funnel_runtime_attribution(
-    cursor: psycopg.AsyncCursor[Any],
-    doc_id: str | uuid.UUID,
-) -> dict[str, Any]:
-    await cursor.execute(
-        """
-        select distinct
-          f.funnel_id::text as "funnelId",
-          f.name as "funnelName",
-          f.status as "funnelStatus",
-          l.lane_id::text as "laneId",
-          l.name as "laneName",
-          l.lane_type as "laneType",
-          l.routing_mode as "routingMode",
-          fsib.binding_role as "bindingRole",
-          c.criterion_id::text as "criterionId",
-          c.source_interest_template_id::text as "interestTemplateId",
-          it.name as "interestName",
-          ifr.semantic_decision as "semanticDecision",
-          ifr.technical_filter_state as "technicalFilterState"
-        from interest_filter_results ifr
-        join criteria c on c.criterion_id = ifr.criterion_id
-        join funnel_system_interest_bindings fsib
-          on fsib.interest_template_id = c.source_interest_template_id
-        join operator_funnels f
-          on f.funnel_id = fsib.funnel_id
-          and f.status <> 'archived'
-        left join funnel_lanes l on l.lane_id = fsib.lane_id
-        left join interest_templates it
-          on it.interest_template_id = c.source_interest_template_id
-        where ifr.doc_id = %s
-          and ifr.filter_scope = 'system_criterion'
-        order by f.name asc, l.name asc nulls last, it.name asc nulls last
-        limit 50
-        """,
-        (doc_id,),
-    )
-    system_interest_bindings = _compact_json_rows(await cursor.fetchall() or [])
-
-    await cursor.execute(
-        """
-        select distinct
-          f.funnel_id::text as "funnelId",
-          f.name as "funnelName",
-          f.status as "funnelStatus",
-          l.lane_id::text as "laneId",
-          l.name as "laneName",
-          l.lane_type as "laneType",
-          l.routing_mode as "routingMode",
-          fsb.source_role as "sourceRole",
-          fsb.binding_role as "bindingRole",
-          a.channel_id::text as "channelId",
-          sc.name as "channelName",
-          sc.provider_type as "providerType"
-        from signal_candidates a
-        join funnel_source_bindings fsb on fsb.channel_id = a.channel_id
-        join operator_funnels f
-          on f.funnel_id = fsb.funnel_id
-          and f.status <> 'archived'
-        left join funnel_lanes l on l.lane_id = fsb.lane_id
-        left join source_channels sc on sc.channel_id = a.channel_id
-        where a.doc_id = %s
-        order by f.name asc, l.name asc nulls last, fsb.source_role asc
-        limit 50
-        """,
-        (doc_id,),
-    )
-    source_bindings = _compact_json_rows(await cursor.fetchall() or [])
-
-    await cursor.execute(
-        """
-        with prompt_template_ids as (
-          select distinct value::uuid as prompt_template_id
-          from (
-            select nullif(ifr.explain_json #>> '{llmReview,promptTemplateId}', '') as value
-            from interest_filter_results ifr
-            where ifr.doc_id = %s
-              and ifr.filter_scope = 'system_criterion'
-            union all
-            select lrl.prompt_template_id::text as value
-            from llm_review_log lrl
-            where lrl.doc_id = %s
-              and lrl.prompt_template_id is not null
-          ) raw_template_ids
-          where value ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        )
-        select distinct
-          f.funnel_id::text as "funnelId",
-          f.name as "funnelName",
-          f.status as "funnelStatus",
-          l.lane_id::text as "laneId",
-          l.name as "laneName",
-          l.lane_type as "laneType",
-          l.routing_mode as "routingMode",
-          ftb.binding_role as "bindingRole",
-          lpt.prompt_template_id::text as "promptTemplateId",
-          lpt.name as "templateName",
-          lpt.scope as "templateScope",
-          lpt.purpose as "templatePurpose"
-        from prompt_template_ids p
-        join funnel_template_bindings ftb on ftb.prompt_template_id = p.prompt_template_id
-        join operator_funnels f
-          on f.funnel_id = ftb.funnel_id
-          and f.status <> 'archived'
-        left join funnel_lanes l on l.lane_id = ftb.lane_id
-        left join llm_prompt_templates lpt on lpt.prompt_template_id = p.prompt_template_id
-        order by f.name asc, l.name asc nulls last, lpt.name asc nulls last
-        limit 50
-        """,
-        (doc_id, doc_id),
-    )
-    template_bindings = _compact_json_rows(await cursor.fetchall() or [])
-
-    await cursor.execute(
-        """
-        select distinct
-          f.funnel_id::text as "funnelId",
-          f.name as "funnelName",
-          f.status as "funnelStatus",
-          l.lane_id::text as "laneId",
-          l.name as "laneName",
-          l.lane_type as "laneType",
-          l.routing_mode as "routingMode",
-          frjb.binding_role as "bindingRole",
-          frjb.verification_target as "verificationTarget",
-          frjb.reindex_job_id::text as "reindexJobId",
-          frjb.plan_id::text as "planId",
-          rj.job_kind as "jobKind",
-          rj.status as "jobStatus",
-          rj.requested_at as "requestedAt",
-          rj.finished_at as "finishedAt"
-        from funnel_reindex_job_bindings frjb
-        join reindex_jobs rj on rj.reindex_job_id = frjb.reindex_job_id
-        join operator_funnels f
-          on f.funnel_id = frjb.funnel_id
-          and f.status <> 'archived'
-        left join funnel_lanes l on l.lane_id = frjb.lane_id
-        where jsonb_typeof(coalesce(rj.options_json -> 'docIds', '[]'::jsonb)) = 'array'
-          and exists (
-            select 1
-            from jsonb_array_elements_text(coalesce(rj.options_json -> 'docIds', '[]'::jsonb)) doc(value)
-            where doc.value = %s
-          )
-        order by rj.requested_at desc nulls last
-        limit 25
-        """,
-        (str(doc_id),),
-    )
-    replay_bindings = _compact_json_rows(await cursor.fetchall() or [])
-
-    funnel_ids = sorted(
-        {
-            str(row.get("funnelId"))
-            for rows in (
-                system_interest_bindings,
-                source_bindings,
-                template_bindings,
-                replay_bindings,
-            )
-            for row in rows
-            if row.get("funnelId")
-        }
-    )
-    lane_ids = sorted(
-        {
-            str(row.get("laneId"))
-            for rows in (
-                system_interest_bindings,
-                source_bindings,
-                template_bindings,
-                replay_bindings,
-            )
-            for row in rows
-            if row.get("laneId")
-        }
-    )
-    return {
-        "version": "2.0",
-        "source": "worker.final_selection_results",
-        "scope": "funnel_runtime_attribution",
-        "funnelIds": funnel_ids,
-        "laneIds": lane_ids,
-        "systemInterestBindings": system_interest_bindings,
-        "sourceBindings": source_bindings,
-        "templateBindings": template_bindings,
-        "replayBindings": replay_bindings,
-        "hasRuntimeAttribution": bool(
-            system_interest_bindings
-            or source_bindings
-            or template_bindings
-            or replay_bindings
-        ),
-    }
-
-
 async def upsert_system_feed_result(
     cursor: psycopg.AsyncCursor[Any],
     doc_id: str | uuid.UUID,
@@ -268,17 +76,16 @@ async def upsert_system_feed_result(
         or upsert_final_selection_result_func is None
         or fetch_system_feed_result_row_func is None
     ):
-        legacy_main = _legacy_worker_main()
         fetch_signal_candidate_for_update_func = (
-            fetch_signal_candidate_for_update_func or legacy_main.fetch_signal_candidate_for_update
+            fetch_signal_candidate_for_update_func or fetch_signal_candidate_for_update
         )
         upsert_final_selection_result_func = (
             upsert_final_selection_result_func
-            or legacy_main.upsert_final_selection_result
+            or upsert_final_selection_result
         )
         fetch_system_feed_result_row_func = (
             fetch_system_feed_result_row_func
-            or legacy_main.fetch_system_feed_result_row
+            or fetch_system_feed_result_row
         )
 
     signal_candidate = await fetch_signal_candidate_for_update_func(cursor, doc_id)
@@ -474,30 +281,29 @@ async def persist_criterion_review_resolution(
         or should_dispatch_clustering_func is None
         or insert_outbox_event_func is None
     ):
-        legacy_main = _legacy_worker_main()
         resolve_interest_filter_context_func = (
             resolve_interest_filter_context_func
-            or legacy_main.resolve_interest_filter_context
+            or resolve_interest_filter_context
         )
         resolve_criterion_filter_outcome_func = (
             resolve_criterion_filter_outcome_func
-            or legacy_main.resolve_criterion_filter_outcome
+            or resolve_criterion_filter_outcome
         )
         upsert_interest_filter_result_func = (
             upsert_interest_filter_result_func
-            or legacy_main.upsert_interest_filter_result
+            or upsert_interest_filter_result
         )
         build_interest_filter_explain_func = (
             build_interest_filter_explain_func
-            or legacy_main.build_interest_filter_explain
+            or build_interest_filter_explain
         )
         upsert_system_feed_result_func = (
-            upsert_system_feed_result_func or legacy_main.upsert_system_feed_result
+            upsert_system_feed_result_func or upsert_system_feed_result
         )
         should_dispatch_clustering_func = (
-            should_dispatch_clustering_func or legacy_main.should_dispatch_clustering
+            should_dispatch_clustering_func or should_dispatch_clustering
         )
-        insert_outbox_event_func = insert_outbox_event_func or legacy_main.insert_outbox_event
+        insert_outbox_event_func = insert_outbox_event_func or insert_outbox_event
 
     final_decision = resolve_criterion_review_final_decision(provider_decision)
     base_explain = coerce_json_object(review_context.get("explain_json"))
@@ -617,14 +423,13 @@ async def upsert_final_selection_result(
         fetch_final_selection_result_row_func is None
         or resolve_interest_filter_context_func is None
     ):
-        legacy_main = _legacy_worker_main()
         fetch_final_selection_result_row_func = (
             fetch_final_selection_result_row_func
-            or legacy_main.fetch_final_selection_result_row
+            or fetch_final_selection_result_row
         )
         resolve_interest_filter_context_func = (
             resolve_interest_filter_context_func
-            or legacy_main.resolve_interest_filter_context
+            or resolve_interest_filter_context
         )
 
     doc_id = uuid.UUID(str(signal_candidate["doc_id"]))

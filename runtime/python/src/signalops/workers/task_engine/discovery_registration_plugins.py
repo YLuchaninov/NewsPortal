@@ -8,16 +8,11 @@ from .discovery_plugin_common import (
     _coerce_mapping_list,
     _lookup_from_mapping,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
 from ..provider_capabilities import BETA_INGEST_PROVIDER_TYPE_SET
 
 _VALID_DISCOVERY_PROVIDER_TYPES = set(BETA_INGEST_PROVIDER_TYPE_SET)
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class SourceRegistrarPlugin(ContextTaskPlugin):
@@ -90,7 +85,7 @@ class SourceRegistrarPlugin(ContextTaskPlugin):
             )
         ]
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.source_registrar.register_sources(
                 sources=selected_sources,

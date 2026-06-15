@@ -11,13 +11,8 @@ from .discovery_plugin_common import (
     _looks_like_rss_candidate,
     _unique_preserving_order,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class UrlValidatorPlugin(ContextTaskPlugin):
@@ -94,7 +89,7 @@ class UrlValidatorPlugin(ContextTaskPlugin):
             if len(filtered_urls) >= limit:
                 break
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.url_validator.validate_urls(urls=filtered_urls)
         )
@@ -244,7 +239,7 @@ class RssProbePlugin(ContextTaskPlugin):
             else:
                 urls = _extract_url_candidates(candidate_value)
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.rss_probe.probe_feeds(
                 urls=_unique_preserving_order(urls),
@@ -373,7 +368,7 @@ class WebsiteProbePlugin(ContextTaskPlugin):
             else:
                 urls = _extract_url_candidates(candidate_value)
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.website_probe.probe_websites(
                 urls=_unique_preserving_order(urls),

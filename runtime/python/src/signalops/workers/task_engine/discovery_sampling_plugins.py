@@ -8,13 +8,8 @@ from .discovery_plugin_common import (
     _extract_url_candidates,
     _unique_preserving_order,
 )
+from . import discovery_runtime as _discovery_runtime
 from .discovery_runtime import resolve_runtime_call
-
-
-def _get_discovery_runtime() -> Any:
-    from . import discovery_plugins as _registry_owner
-
-    return _registry_owner.get_discovery_runtime()
 
 
 class ContentSamplerPlugin(ContextTaskPlugin):
@@ -58,7 +53,7 @@ class ContentSamplerPlugin(ContextTaskPlugin):
         candidate_value = explicit_urls or context.get(sources_field)
         urls = explicit_urls or _extract_url_candidates(candidate_value)
 
-        runtime = _get_discovery_runtime()
+        runtime = _discovery_runtime.get_discovery_runtime()
         raw_results = await resolve_runtime_call(
             runtime.content_sampler.sample_content(
                 source_urls=_unique_preserving_order(urls),

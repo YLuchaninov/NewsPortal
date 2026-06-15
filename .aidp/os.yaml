@@ -174,8 +174,11 @@ capabilities:
   lint: true
   typecheck: true
   unit_tests: true
-  integration_tests: true
-  smoke_tests: true
+  integration_tests: false
+  compose_smoke_tests: true
+  product_local_gates: true
+  product_beta_gate: true
+  live_diagnostics: true
   packaging: false
   deploy: false
   database: true

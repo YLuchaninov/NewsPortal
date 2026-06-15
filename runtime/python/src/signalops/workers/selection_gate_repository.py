@@ -6,6 +6,8 @@ from typing import Any
 
 import psycopg
 
+from .runtime_db import open_connection
+
 SelectionResultFetcher = Callable[
     [Any, str | uuid.UUID],
     Awaitable[dict[str, Any] | None],
@@ -15,12 +17,6 @@ SelectionGateFetcher = Callable[
     Awaitable[dict[str, Any] | None],
 ]
 OpenConnectionFactory = Callable[[], Awaitable[Any]]
-
-
-def _legacy_worker_main() -> Any:
-    from . import main as legacy_main
-
-    return legacy_main
 
 
 async def fetch_final_selection_result_row(
@@ -83,13 +79,12 @@ async def fetch_selection_gate_result_row(
         fetch_final_selection_result_row_func is None
         or fetch_system_feed_result_row_func is None
     ):
-        legacy_main = _legacy_worker_main()
         fetch_final_selection_result_row_func = (
             fetch_final_selection_result_row_func
-            or legacy_main.fetch_final_selection_result_row
+            or fetch_final_selection_result_row
         )
         fetch_system_feed_result_row_func = (
-            fetch_system_feed_result_row_func or legacy_main.fetch_system_feed_result_row
+            fetch_system_feed_result_row_func or fetch_system_feed_result_row
         )
 
     final_selection_result = await fetch_final_selection_result_row_func(cursor, doc_id)
@@ -195,11 +190,10 @@ async def is_signal_candidate_eligible_for_personalization(
     fetch_selection_gate_result_row_func: SelectionGateFetcher | None = None,
 ) -> bool:
     if open_connection_func is None or fetch_selection_gate_result_row_func is None:
-        legacy_main = _legacy_worker_main()
-        open_connection_func = open_connection_func or legacy_main.open_connection
+        open_connection_func = open_connection_func or open_connection
         fetch_selection_gate_result_row_func = (
             fetch_selection_gate_result_row_func
-            or legacy_main.fetch_selection_gate_result_row
+            or fetch_selection_gate_result_row
         )
 
     async with await open_connection_func() as connection:

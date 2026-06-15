@@ -7,8 +7,17 @@ from typing import Any
 
 import psycopg
 
+from signalops.ml import mix_weighted_vectors
+
 from .runtime_json import coerce_text_list
 from .scoring import parse_datetime
+from .vector_registry import (
+    fetch_signal_candidate_vectors,
+    upsert_embedding_registry,
+    upsert_event_vector_registry,
+)
+from .worker_events import compute_content_hash
+from .worker_runtime_singletons import EMBEDDING_PROVIDER
 
 FetchSignalCandidateVectors = Callable[[Any, Any], Awaitable[dict[str, list[float]]]]
 RebuildClusterState = Callable[..., Awaitable[bool]]
@@ -16,12 +25,6 @@ ComputeContentHash = Callable[[Mapping[str, Any]], str]
 MixWeightedVectors = Callable[[list[tuple[float, Sequence[float]]]], list[float]]
 UpsertEmbeddingRegistry = Callable[..., Awaitable[str]]
 UpsertEventVectorRegistry = Callable[..., Awaitable[None]]
-
-
-def _legacy_worker_main() -> Any:
-    from . import main as legacy_main
-
-    return legacy_main
 
 
 async def fetch_cluster_event_vector(
@@ -92,25 +95,22 @@ async def rebuild_cluster_state(
         or mix_weighted_vectors_func is None
         or embedding_model_key is None
     ):
-        legacy_main = _legacy_worker_main()
         fetch_signal_candidate_vectors_func = (
-            fetch_signal_candidate_vectors_func or legacy_main.fetch_signal_candidate_vectors
+            fetch_signal_candidate_vectors_func or fetch_signal_candidate_vectors
         )
         upsert_embedding_registry_func = (
-            upsert_embedding_registry_func or legacy_main.upsert_embedding_registry
+            upsert_embedding_registry_func or upsert_embedding_registry
         )
         upsert_event_vector_registry_func = (
-            upsert_event_vector_registry_func or legacy_main.upsert_event_vector_registry
+            upsert_event_vector_registry_func or upsert_event_vector_registry
         )
         compute_content_hash_func = (
-            compute_content_hash_func or legacy_main.compute_content_hash
+            compute_content_hash_func or compute_content_hash
         )
         mix_weighted_vectors_func = (
-            mix_weighted_vectors_func or legacy_main.mix_weighted_vectors
+            mix_weighted_vectors_func or mix_weighted_vectors
         )
-        embedding_model_key = embedding_model_key or str(
-            legacy_main.EMBEDDING_PROVIDER.model_key
-        )
+        embedding_model_key = embedding_model_key or str(EMBEDDING_PROVIDER.model_key)
 
     await cursor.execute(
         """
@@ -258,7 +258,7 @@ async def create_or_update_cluster(
     rebuild_cluster_state_func: RebuildClusterState | None = None,
 ) -> tuple[uuid.UUID, bool]:
     if rebuild_cluster_state_func is None:
-        rebuild_cluster_state_func = _legacy_worker_main().rebuild_cluster_state
+        rebuild_cluster_state_func = rebuild_cluster_state
 
     signal_candidate_doc_id = signal_candidate["doc_id"]
     cluster_id = uuid.uuid4() if cluster_row is None else cluster_row["cluster_id"]

@@ -55,13 +55,3 @@ export {
   readClientErrorMessage,
   reportClientError,
 } from "./lib/client-errors";
-
-// Legacy — kept for backward compatibility during migration
-export const APP_SHELL_STYLES = "";
-
-export function formatScore(value: number | null | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "-";
-  }
-  return value.toFixed(2);
-}

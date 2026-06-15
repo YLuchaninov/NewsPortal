@@ -60,19 +60,21 @@ export const SIGNAL_PACKS = [
     geographies: ["global"],
     languages: ["en", "ja", "ko", "de", "fr"],
     positiveTexts: [
+      "official changelog release notes deprecation feed",
       "release notes breaking change migration",
-      "deprecation notice changelog",
-      "upgrade guide removed API",
+      "developer changelog breaking changes version updates",
+      "api deprecations removed API migration notice",
     ],
-    negativeTexts: ["marketing launch blog", "generic tutorial", "third-party roundup"],
+    negativeTexts: ["marketing launch blog", "generic tutorial", "third-party roundup", "generic support download without release history"],
     candidatePositiveSignals: [
       "primary_changelog: release notes, changelog, version",
+      "release_feed: official release notes index, releases page, what is new feed",
       "breaking_change: breaking change, deprecated, deprecation, removed API",
       "migration_signal: migration guide, upgrade guide, upgrade requirement",
       "developer_operator_signal: language server, CLI, compatibility impact, code intelligence",
     ],
     candidateNegativeSignals: ["marketing_only: feature announcement", "tutorial_only: how-to signal_candidate"],
-    evidenceTerms: ["release notes", "changelog", "deprecation", "deprecated", "breaking change", "migration", "upgrade", "api"],
+    evidenceTerms: ["release notes", "changelog", "deprecation", "deprecated", "breaking change", "migration", "upgrade", "api", "what's new", "releases"],
   },
 ];
 
@@ -260,6 +262,126 @@ function wrapperPenalty(item) {
   if (/\bbug bounty\b|\breport a vulnerability\b/u.test(title)) penalty += 35;
   if (/\/(about|contact|privacy|terms)\/?$/u.test(url)) penalty += 35;
   return penalty;
+}
+
+const SOCIAL_OR_WRAPPER_DOMAINS = [
+  "linkedin.com",
+  "youtube.com",
+  "youtu.be",
+  "facebook.com",
+  "x.com",
+  "twitter.com",
+  "medium.com",
+];
+
+const OFFICIAL_DOMAIN_PATTERNS = [
+  /(^|\.)gov(\.|$)/iu,
+  /(^|\.)gov\.uk$/iu,
+  /(^|\.)canada\.ca$/iu,
+  /(^|\.)europa\.eu$/iu,
+  /(^|\.)federalregister\.gov$/iu,
+  /(^|\.)regulations\.gov$/iu,
+  /(^|\.)epa\.gov$/iu,
+  /(^|\.)finra\.org$/iu,
+  /(^|\.)sec\.gov$/iu,
+  /(^|\.)github\.blog$/iu,
+  /(^|\.)github\.com$/iu,
+  /(^|\.)docs\.redhat\.com$/iu,
+  /(^|\.)developer\.atlassian\.com$/iu,
+  /(^|\.)developer\.microsoft\.com$/iu,
+  /(^|\.)developers\.openai\.com$/iu,
+  /(^|\.)docs\.docker\.com$/iu,
+  /(^|\.)keycloak\.org$/iu,
+  /(^|\.)learn\.microsoft\.com$/iu,
+  /(^|\.)developer\.[a-z0-9.-]+$/iu,
+  /(^|\.)docs\.[a-z0-9.-]+$/iu,
+];
+
+function discoveryEvidenceText(candidate) {
+  return stringifyEvidence({
+    url: canonicalUrl(candidate),
+    domain: canonicalDomain(candidate),
+    kind: valueFrom(candidate, ["candidate_kind_guess", "candidateKindGuess"]),
+    acquisition: candidate?.acquisition_json ?? candidate?.acquisitionJson,
+  }).toLowerCase();
+}
+
+function isLikelyOfficialDomain(domain) {
+  const normalized = String(domain ?? "").toLowerCase();
+  return OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function isSoftwareChangelogPack(pack) {
+  return pack?.key === "software_changelogs";
+}
+
+function hasSoftwareChangelogPath(url) {
+  return /(?:\/|^)(?:changelog|change-log|release[-_/]?notes?|releases?|whats[-_/]?new|what'?s[-_/]?new|deprecations?|breaking[-_/]?changes?)(?:\/|$|[?#])|CHANGELOG\.md(?:$|[?#])/iu.test(
+    url
+  );
+}
+
+function isGenericSoftwareSupportPage(url, text) {
+  const normalized = `${url}\n${text}`;
+  if (hasSoftwareChangelogPath(url)) return false;
+  return /\/(?:support|download|help|answers\/questions|learn\/answers|migration-assistant)(?:\/|$)|\bdownload\b|\bsupport page\b|\bhelp center\b|\bquestion\b|\banswers\b/iu.test(
+    normalized
+  );
+}
+
+function sourceShapeScore(pack, candidate) {
+  const url = canonicalUrl(candidate).toLowerCase();
+  const domain = canonicalDomain(candidate).toLowerCase();
+  const text = discoveryEvidenceText(candidate);
+  let score = 0;
+  if (isLikelyOfficialDomain(domain)) score += 120;
+  if (/\bofficial\b|\bgovernment\b|\bregulator\b|\bauthority\b|\bpublic consultation\b|\bsecurity advisory\b|\brelease notes?\b|\bchangelog\b|\bdeprecation\b|\bwhat'?s new\b/iu.test(text)) {
+    score += 70;
+  }
+  if (/\bconsultation\b|\bregulatory\b|\bregulation\b|\bnotice\b|\bguidance\b|\bdeadline\b|\bfederal-register\b|\bpublications?\b/iu.test(text)) {
+    score += pack.key === "policy_regulatory" ? 70 : 20;
+  }
+  if (/\brelease[-_/ ]?notes?\b|\bchangelog\b|\breleases?\b|\bdeprecat(?:ed|ion)\b|\bbreaking[-_/ ]?changes?\b|\bmigration[-_/ ]?guide\b|\bupgrade[-_/ ]?notes?\b|\bwhat'?s[-_/ ]?new\b/iu.test(text)) {
+    score += pack.key === "software_changelogs" ? 80 : 20;
+  }
+  if (isSoftwareChangelogPack(pack) && hasSoftwareChangelogPath(url)) {
+    score += 180;
+  }
+  if (isSoftwareChangelogPack(pack) && /github\.com$/iu.test(domain) && /\/(?:releases|blob\/[^/]+\/CHANGELOG\.md)(?:\/|$|[?#])/iu.test(url)) {
+    score += 120;
+  }
+  if (/\/feed(?:\/|$)|\.rss(?:$|\?)|atom\.xml|rss\.xml/iu.test(url)) score += 90;
+  if (/\/(?:news|notices?|consultations?|publications?|guidance|release|releases|release-notes|changelog|docs|developer|security|advisories)(?:\/|$)/iu.test(url)) {
+    score += 35;
+  }
+  if (SOCIAL_OR_WRAPPER_DOMAINS.some((blocked) => domain === blocked || domain.endsWith(`.${blocked}`))) {
+    score -= 220;
+  }
+  if (/\bconsult(?:ant|ancy|ing)\b|\bmarketing\b|\bsales\b|\bwebinar\b|\bevent invitation\b|\btraining course\b|\bvirtual assistant\b|\bseo\b|\broundup\b|\bhow to\b|\bguide for\b/iu.test(text)) {
+    score -= 90;
+  }
+  if (isSoftwareChangelogPack(pack) && isGenericSoftwareSupportPage(url, text)) {
+    score -= 140;
+  }
+  if (isSoftwareChangelogPack(pack) && /\bthird[- ]party\b|\broundup\b|\bchecklist\b|\bcommentary\b|\btutorial\b|\bforum\b|\bcommunity post\b/iu.test(text)) {
+    score -= 100;
+  }
+  if (/^https?:\/\/[^/]+\/?$/iu.test(url) && !/\b(regulations\.gov|trai\.gov\.in)\b/iu.test(domain)) {
+    score -= 45;
+  }
+  if (wrapperPenalty({ title: text, url }) > 0) score -= wrapperPenalty({ title: text, url });
+  return score;
+}
+
+export function rankDiscoveryCandidatesForProof(pack, candidates) {
+  return [...rows(candidates)].sort((left, right) => {
+    const scoreDelta =
+      signalScore(pack, right) * 30 +
+      sourceShapeScore(pack, right) -
+      (signalScore(pack, left) * 30 + sourceShapeScore(pack, left));
+    if (scoreDelta !== 0) return scoreDelta;
+    return canonicalUrl(left).localeCompare(canonicalUrl(right));
+  });
 }
 
 function proofCandidateScore(pack, item) {
@@ -803,11 +925,12 @@ async function runPack(harness, token, report, pack) {
     artifactTypes: [...new Set(discovery.artifacts.map(artifactType).filter(Boolean))].sort(),
   });
 
-  const preferred = discovery.candidates
-    .filter((candidate) => /^https?:\/\//i.test(canonicalUrl(candidate)))
-    .filter((candidate) => !/google\.com|bing\.com|duckduckgo\.com|search\./i.test(canonicalDomain(candidate)))
-    .sort((left, right) => signalScore(pack, right) - signalScore(pack, left))
-    .slice(0, 10);
+  const preferred = rankDiscoveryCandidatesForProof(
+    pack,
+    discovery.candidates
+      .filter((candidate) => /^https?:\/\//i.test(canonicalUrl(candidate)))
+      .filter((candidate) => !/google\.com|bing\.com|duckduckgo\.com|search\./i.test(canonicalDomain(candidate)))
+  ).slice(0, isSoftwareChangelogPack(pack) ? 15 : 10);
   let bestFetchedAttempt = null;
   for (const candidate of preferred) {
     const routed = await routeCandidate(harness, token, report, packReport, candidate);

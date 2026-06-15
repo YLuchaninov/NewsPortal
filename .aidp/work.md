@@ -1,5 +1,741 @@
 # AIDP Work State
 
+## Completed Bugfix: SIGNALOPS-FOLLOWING-BETA-GATE-UNBLOCK-1
+
+- id: `SIGNALOPS-FOLLOWING-BETA-GATE-UNBLOCK-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `completed-following-beta-gate-unblock`
+- route-specific next step: no further work inside this item; both tails are closed and Public Beta gate is green on the current dirty worktree.
+- route-specific proof: targeted relay smoke proof, `pnpm test:mvp:internal`, `pnpm test:product:local:core`, `pnpm ci:fast`, live signal-flow rerun, `pnpm test:product:local:full`, `pnpm release:beta:verify`, cleanup down, final `docker ps` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "PLEASE IMPLEMENT THIS PLAN: Завершение Двух Хвостов: Software Changelogs + Full Beta Gate".
+- planning required: yes because this unblocks canonical product-local/beta gates and touches compose-backed user/selection state.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- invariant: do not change DB schema, env names, root commands, API routes/payloads, MCP tool names, queue names or product behavior; keep `/following` proof required and deterministic.
+- allowed paths: `.aidp/work.md`, `infra/scripts/proof/**`, `infra/scripts/relay/test-phase45-routing.ts`, `runtime/node/apps/web/src/lib/server/user-content-state.ts`, `runtime/node/apps/web/src/pages/following.astro`, `tests/unit/ts/**`.
+- context manifest: `.aidp/blueprint.md` selection/personalization boundaries, `.aidp/engineering.md` stateful proof discipline, `.aidp/verification.md` product-local and beta gates, `.aidp/contracts/test-access-and-fixtures.md`, `.aidp/contracts/content-model.md`, `.aidp/contracts/universal-selection-profiles.md`.
+- blueprint context checked: system selection vs personalization; user-facing following must consume selected/eligible system content and must not bypass system gates.
+- baseline:
+  - latest known blocker: `pnpm test:product:local:core` failed inside `pnpm test:mvp:internal` because `http://127.0.0.1:4321/following` still contained `No followed stories yet` after deterministic follow/selection materialization.
+  - current narrow reproducer found an earlier proof-race blocker: `pnpm test:relay:phase45:compose` failed because `notification.feedback.recorded` sequence run had already reached `completed` while the relay routing smoke expected exactly `pending`.
+  - `SIGNALOPS-LIVE-SIGNAL-FLOW-SOFTWARE-CHANGELOGS-1` completed before this item; `software_changelogs` now reaches `signal_content_fetched`.
+  - baseline `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers after live-signal cleanup.
+- out of scope: changing `/following` product priority, removing the assertion, fresh destructive volume reset beyond command-owned cleanup, production deployment, migrations, dependency changes, secret printing, `aidp-monitor/**`.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` returned exit `0`, final `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and final `git diff --check` was clean.
+- implementation summary:
+  - relaxed `test:relay:phase45:compose` sequence-run proof to accept `pending`, `running` or already `completed` sequence rows, fixing the deterministic race where the worker completed `notification.feedback.recorded` before the smoke read-back.
+  - preserved the `/following` proof requirement and validated that deterministic MVP seeding/materialization now shows the followed story instead of `No followed stories yet`.
+  - reran the live software changelog signal-flow proof as part of the final tail closeout; `software_changelogs` reached `signal_content_fetched` without hardcoded fallback URLs.
+- proof result:
+  - `pnpm unit_tests:ts -- discovery-live-signal-flow` passed.
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/workers/content_analysis.py runtime/python/src/signalops/workers/content_analysis_filter_runtime.py` passed.
+  - `pnpm unit_tests:py tests/unit/python/test_content_analysis.py` passed.
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` passed with all three live families fetched. Artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-f3cab331-d06c-4b3d-8887-f26739f0ee4d.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-f3cab331-d06c-4b3d-8887-f26739f0ee4d.md`
+  - live signal-flow summary: `packsWithContent: 3`, `explainableItems: 30`, `selectedOrContentItems: 48`; `software_changelogs.status === "signal_content_fetched"` via `https://developer.apple.com/news/releases`, with `20` web resources, `20` signal candidates, `20` content items and `11` explainable items.
+  - `pnpm test:mvp:internal` passed; `/following` no longer showed the empty state after deterministic follow/materialization.
+  - `pnpm test:product:local:core` passed. Artifacts:
+    - `/tmp/signalops-product-local-core-bf7de063.json`
+    - `/tmp/signalops-product-local-core-bf7de063.md`
+  - `pnpm ci:fast` passed: repo taxonomy, TS units `495/495`, Python units `411/411`, lint and typecheck.
+  - first `pnpm test:product:local:full` attempt hit a transient MCP compose timeout, but standalone `pnpm test:mcp:compose` immediately passed and the full rerun passed. Artifacts:
+    - `/tmp/signalops-mcp-http-deterministic-59483c18-ad98-4004-b721-73d31429c0ea.json`
+    - `/tmp/signalops-product-local-full-98fc8b52.json`
+    - `/tmp/signalops-product-local-full-98fc8b52.md`
+  - `pnpm release:beta:verify` passed. Artifact directory:
+    - `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-544d4977`
+    - `/var/folders/gj/98r17hrj3kbbssygxmn76nlm0000gn/T/signalops-release-beta-verify-544d4977/release-beta-verify-summary.json`
+  - release beta nested artifacts:
+    - `/tmp/signalops-product-local-core-83db4a30.json`
+    - `/tmp/signalops-product-local-core-83db4a30.md`
+    - `/tmp/signalops-product-local-full-ea9990d0.json`
+    - `/tmp/signalops-product-local-full-ea9990d0.md`
+    - `/tmp/signalops-product-beta-readiness-aac0f55c.json`
+    - `/tmp/signalops-product-beta-readiness-aac0f55c.md`
+    - `/tmp/signalops-mcp-http-deterministic-67f614f7-30d4-4dff-aefd-ef63d582936b.json`
+    - `/tmp/signalops-mcp-http-deterministic-acb0e79d-63a2-4c14-8764-8813a862c021.json`
+  - live website matrix inside full/beta recorded classified external residuals only, not product failures: `16` sites, `7` `observed_expected_shape`, `8` `observed_truthful_unsupported_or_blocked`, `1` `observed_partial_or_empty_shape`, `0` cleanup residuals. Artifact:
+    - `/tmp/signalops-live-website-matrix-baseline-e9653ea6-7fb1-4295-887b-a88ba6182d37.json`
+- residual note:
+  - During the nested `product-local-full` run inside `release:beta:verify`, one `docker compose down -v --remove-orphans` cleanup process hung after `test:mvp:internal` had already passed. The stuck Docker CLI was killed, the harness recorded a cleanup warning and continued; the subsequent full/beta gates passed, the official release cleanup passed, and final `docker ps` was empty. This is an OrbStack/Docker CLI cleanup residual, not a product acceptance failure.
+
+## Completed Bugfix: SIGNALOPS-LIVE-SIGNAL-FLOW-SOFTWARE-CHANGELOGS-1
+
+- id: `SIGNALOPS-LIVE-SIGNAL-FLOW-SOFTWARE-CHANGELOGS-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `completed-software-changelog-live-proof`
+- route-specific next step: no further work inside this item; continue with `SIGNALOPS-FOLLOWING-BETA-GATE-UNBLOCK-1`.
+- route-specific proof: targeted ranking/unit proof, reran `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow`, inspected artifact for `software_changelogs.status === "signal_content_fetched"`, cleaned up compose, final worker log grep for content-filter compatibility errors.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "PLEASE IMPLEMENT THIS PLAN: Завершение Двух Хвостов: Software Changelogs + Full Beta Gate".
+- planning required: yes because the fix touches live Discovery vNext proof behavior and external/provider nondeterminism.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- invariant: do not change DB schema, env names, root commands, API routes/payloads, MCP tool names, queue names or product behavior; improve proof candidate quality without fake/static fallback sources.
+- allowed paths: `.aidp/work.md`, `infra/scripts/proof/**`, `runtime/python/src/signalops/workers/content_analysis.py`, `tests/unit/ts/**`, `tests/unit/python/test_content_analysis.py`.
+- context manifest: `.aidp/blueprint.md` source/discovery/selection neighborhoods, `.aidp/engineering.md` discovery/live proof discipline, `.aidp/verification.md` live/external-provider gate policy, `.aidp/contracts/discovery-agent.md`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/content-analysis-and-gating.md`, previous green artifact `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-744115b7-5c09-4cc1-9629-f70593496a43.json`.
+- blueprint context checked: source/discovery/selection boundaries and live external proof nondeterminism discipline.
+- baseline:
+  - previous green live artifact had command status `passed`, but `software_changelogs` ended as `no_fetchable_probation_signal`.
+  - live rerun after changelog ranking showed `software_changelogs.status === "signal_content_fetched"` but worker logs also exposed a content-analysis compatibility facade call using the historical `(subject_type, subject_id, policy_key=...)` shape.
+  - latest `/following` blocker remains out of scope for this item and will be handled by `SIGNALOPS-FOLLOWING-BETA-GATE-UNBLOCK-1`.
+  - baseline `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+  - baseline `git status --short` showed the expected dirty worktree from prior approved sweeps plus the current proof files.
+- out of scope: `/following` beta blocker, product-local/full beta reruns, fresh destructive volume reset, production deployment, migrations, dependency changes, secret printing, `aidp-monitor/**`.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` removed the compose stack after live proof.
+- implementation summary:
+  - strengthened software changelog proof hints and source-shape ranking for official changelog, release notes, releases, deprecations, breaking-change and update-feed sources while penalizing generic support/download/help/tutorial noise.
+  - changed live candidate selection to use full deterministic ranking before slicing, and gave only `software_changelogs` a 15-candidate routing budget.
+  - preserved content-analysis facade compatibility for both `ContentSubject` and legacy `(subject_type, subject_id, policy_key=..., mode_override=...)` runtime call shapes observed during live proof.
+- proof result:
+  - `pnpm unit_tests:ts -- discovery-live-signal-flow` passed.
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/workers/content_analysis.py runtime/python/src/signalops/workers/content_analysis_filter_runtime.py` passed.
+  - `pnpm unit_tests:py tests/unit/python/test_content_analysis.py` passed.
+  - first live rerun after ranking passed and produced `software_changelogs.status === "signal_content_fetched"`, but worker logs exposed content-filter facade compatibility errors.
+  - final `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` passed. Artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-80744d1f-8815-41da-8297-639b1154142d.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-80744d1f-8815-41da-8297-639b1154142d.md`
+  - final live summary: status `passed`, `packsWithContent: 3`, `explainableItems: 39`, `selectedOrContentItems: 104`, no gaps.
+  - `software_changelogs` status: `signal_content_fetched`; routed candidate `https://developer.apple.com/news/releases`; 20 web resources, 20 signal candidates, 20 content items and 10 explainable items.
+  - `docker logs docker-worker-1 | rg "persist_content_filter_result|ERROR signalops\\.workers sequence worker event"` returned no matches on the final run.
+
+## Completed Bugfix: SIGNALOPS-LIVE-SIGNAL-FLOW-PROBATION-FETCH-1
+
+- id: `SIGNALOPS-LIVE-SIGNAL-FLOW-PROBATION-FETCH-1`
+- lifecycle: `normal`
+- route: `bugfix`
+- route phase: `completed-live-signal-flow-proof`
+- route-specific next step: no further work inside this bugfix; optional future tuning can improve `software_changelogs` live routing/fetch depth, but the live signal-flow gate now passes with two fetched/explainable signal families.
+- route-specific proof: reproduced/inspected failing artifact, added targeted unit/compile proof for touched discovery and worker content-analysis code, reran `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow`, cleaned up compose, final `docker ps` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "исправляй pnpm test:discovery:vnext-mcp-live-signal-flow".
+- planning required: yes because the bug touches live Discovery vNext routing/fetch behavior and may cross API/fetcher/MCP/proof boundaries.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- invariant: fix the live signal-flow failure without DB schema, env name, root command, API route/payload, MCP tool, queue name or public package export changes; do not mark external failures as pass unless they are explicitly classified by existing product policy.
+- allowed paths: `.aidp/work.md`, `infra/scripts/proof/**`, `infra/scripts/lib/**`, `runtime/python/src/signalops/api/**`, `runtime/python/src/signalops/workers/**`, `runtime/node/services/fetchers/src/**`, `runtime/node/services/mcp/src/**`, `tests/unit/**`.
+- context manifest: `.aidp/contracts/discovery-agent.md`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/mcp-control-plane.md`, `.aidp/contracts/browser-assisted-websites.md`, previous artifacts `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-65fde746-ec97-4bb1-97d9-61893d0776f1.json` and `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-11731021-bece-40c0-8be2-969524cc2704.json`.
+- blueprint context checked: `.aidp/blueprint.md` source/discovery/selection neighborhoods plus `.aidp/contracts/discovery-agent.md`, `.aidp/contracts/feed-ingress-adapters.md`, `.aidp/contracts/mcp-control-plane.md`.
+- out of scope: `/following` blocker, beta gate broad rerun, fresh destructive volume reset, production deployment, migrations, dependency changes, secret printing, `aidp-monitor/**`.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` removed the compose stack, final `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and final `git diff --check` was clean.
+- implementation summary:
+  - `test-discovery-vnext-mcp-live-signal-flow.mjs` now ranks proof candidates toward official/update/feed/listing sources and away from social, wrapper, consultancy, generic marketing and homepage noise before attempting probation fetches. The fetched/explainable acceptance criteria were not weakened.
+  - `signalops.workers.content_analysis.persist_content_filter_result` now calls the owner runtime persistence signature with `subject_type`, `subject_id` and keyword-only `policy_key`, fixing the live worker error `persist_content_filter_result() got multiple values for argument 'policy_key'`.
+- proof result:
+  - previous failing artifact inspected: `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-65fde746-ec97-4bb1-97d9-61893d0776f1.json`; failure was `Fewer than 2 signal families produced real fetched content` with `policy_regulatory` and `software_changelogs` at `no_fetchable_probation_signal`.
+  - `pnpm unit_tests:ts -- discovery-live-signal-flow` passed.
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/workers/content_analysis.py runtime/python/src/signalops/workers/content_analysis_filter_runtime.py` passed.
+  - `pnpm unit_tests:py tests/unit/python/test_content_analysis.py` passed.
+  - first rerun of `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` exposed the worker content-filter persistence facade error, was interrupted after diagnosis, then cleaned up with `pnpm dev:mvp:internal:down`.
+  - final `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` passed. Artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-744115b7-5c09-4cc1-9629-f70593496a43.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-744115b7-5c09-4cc1-9629-f70593496a43.md`
+  - final live summary: status `passed`, `packsWithContent: 2`, `explainableItems: 29`, `selectedOrContentItems: 64`, no blocking gaps.
+  - fetched live families: `security_advisories` via `https://developer.apple.com/news/releases` with 20 fetched items and 15 explainable items; `policy_regulatory` via `https://pvara.gov.pk/consultations` with 10 fetched items and 14 explainable items.
+  - residual note: `software_changelogs` still ended as `no_fetchable_probation_signal` in this run, but the command's live acceptance criteria passed with two fetched/explainable families; further tuning should be a separate narrow improvement item if needed.
+  - `pnpm lint:py` passed.
+  - `pnpm lint` passed.
+
+## Completed Delivery: SIGNALOPS-MCP-HIDDEN-SIGNAL-DISCOVERY-PROOF-1
+
+- id: `SIGNALOPS-MCP-HIDDEN-SIGNAL-DISCOVERY-PROOF-1`
+- lifecycle: `normal`
+- route: `delivery`
+- route phase: `completed-mcp-hidden-signal-proof`
+- route-specific next step: no further execution inside this item; if fully-green live signal content is required, open a narrow bugfix/tuning item for the live `policy_regulatory` and `software_changelogs` probation-fetch gaps, then rerun `test:discovery:vnext-mcp-live-signal-flow`.
+- route-specific proof: baseline `git status`/`docker ps`, targeted deterministic MCP funnel scenario, MCP discovery scenario, optional scenario-pack verification, real MCP live signal/discovery flow where credentials are available, cleanup down, final `docker ps` and `git diff --check`.
+- status: `done-with-live-residual`
+- risk: `high`
+- approval: explicit operator request: "мне не надо пока /following ... надо тестирование через МСП построение воронки по любым скрытым сигналам и нахождение чегото + дискавери".
+- planning required: yes for external/runtime proof execution.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- invariant: proof execution only; no source/config/test implementation writes, no DB schema, env, root command, API route/payload, MCP tool, queue or public behavior changes.
+- allowed paths: `.aidp/work.md` only.
+- blueprint/context checked: `.aidp/contracts/mcp-control-plane.md` Funnel Autopilot and Discovery Tools; `.aidp/contracts/discovery-agent.md` live Discovery vNext runtime rules.
+- out of scope: `/following` product-local blocker, product source fixes, fresh destructive volume reset, production deployment, migrations, dependency changes, printing secret values, `aidp-monitor/**`.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` removed the compose stack, final `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and final `git diff --check` was clean.
+- proof result:
+  - baseline `git status --short` captured the expected dirty refactor/dead-code worktree plus this AIDP proof item.
+  - baseline `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+  - `pnpm test:mcp:compose -- --scenario=funnel-autopilot-flows` passed; it exercised auth/token lifecycle plus MCP funnel autopilot flows for hidden-intent funnel construction, plan validation/staging, scoped discovery run creation, funnel-scoped hidden-intent interest creation, funnel/report verification, scoped reads, bounded reindex/replay and overlap audit. Artifacts:
+    - `/tmp/signalops-mcp-http-deterministic-18933159-3dfc-4aee-870a-9a61441ddf2d.json`
+    - `/tmp/signalops-mcp-http-deterministic-18933159-3dfc-4aee-870a-9a61441ddf2d.md`
+  - `pnpm test:mcp:http:discovery` passed deterministic MCP Discovery vNext flows; artifacts:
+    - `/tmp/signalops-mcp-http-deterministic-f80853d5-7823-4cd0-8c92-cc9ff8d9ff76.json`
+    - `/tmp/signalops-mcp-http-deterministic-f80853d5-7823-4cd0-8c92-cc9ff8d9ff76.md`
+  - `pnpm test:discovery:vnext-mcp-scenario-verification` initially hit sandbox Docker socket permission, then passed after approved escalation; artifact:
+    - `/tmp/signalops-discovery-vnext-mcp-scenario-verification-971f3e44-77a8-4a71-8598-afde54003a7d.json`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-gap-flow` passed real live MCP discovery; summary: `5` packs with candidates, `5` successful artifact families, `100` query attempts, `hasLiveProviderMetadata: true`, no gaps. Live packs: `public_procurement`, `security_advisories`, `policy_regulatory`, `research_grants`, `software_changelogs`. Artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-11731021-bece-40c0-8be2-969524cc2704.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-11731021-bece-40c0-8be2-969524cc2704.md`
+  - live discovery sample findings included `https://www.gov.rw/` for procurement-style public tender discovery, `https://www.emsl.pnnl.gov/proposals/call-ficus-emsl-arm-proposals-fy-2027` for research grants, and `https://www.keycloak.org/docs/latest/release_notes/index.html` for software changelog discovery. Candidate counts by pack were `100`, `100`, `83`, `100`, `87` respectively.
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` ran real live signal flow but exited `1`; it found/routed real candidates and `security_advisories` reached `signal_content_fetched`, but `policy_regulatory` and `software_changelogs` reached `no_fetchable_probation_signal`, so the artifact recorded runtime gaps and `Fewer than 2 signal families produced real fetched content`. Artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-65fde746-ec97-4bb1-97d9-61893d0776f1.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-65fde746-ec97-4bb1-97d9-61893d0776f1.md`
+  - live signal-flow residual examples: `policy_regulatory` routed `canada.ca` and `gov.uk` pages as `auto_register_probation` but did not fetch probation content; `software_changelogs` routed `github.com/GetTerminus/terminus-ui/.../CHANGELOG.md` and `support.apple.com/en-us/106445` as `auto_register_probation` but did not fetch probation content.
+
+## Completed Delivery: SIGNALOPS-REAL-LIVE-DIAGNOSTIC-PROOF-1
+
+- id: `SIGNALOPS-REAL-LIVE-DIAGNOSTIC-PROOF-1`
+- lifecycle: `normal`
+- route: `delivery`
+- route phase: `completed-live-proof`
+- route-specific next step: no further live-proof execution in this item; beta acceptance still requires a separate fix for the inherited deterministic `test:mvp:internal` following-page blocker.
+- route-specific proof: baseline `git status`/`docker ps`, env/preflight commands, live website/provider diagnostics, Discovery vNext live smoke/gap/signal flows, strict total-live diagnostic where feasible, cleanup down, final `docker ps` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "но мне надо провести реальное лайв тестирование".
+- planning required: yes for live/external diagnostic execution.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- invariant: live diagnostic/proof only; no source/config/test implementation writes, no DB schema, env, root command, API route/payload, MCP tool, queue or public behavior changes.
+- allowed paths: `.aidp/work.md` only.
+- out of scope: fixing the known `test:mvp:internal` following-page blocker, fresh destructive volume reset, production deployment, migrations, dependency changes, printing secret values, `aidp-monitor/**`.
+- live budget caps: `DISCOVERY_LIVE_SMOKE_MAX_RUN_COST_CENTS=50`, `DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100`.
+- known inherited blocker: Public Beta acceptance remains blocked by `SIGNALOPS-FULL-BETA-REGRESSION-PROOF-1`; this item can produce diagnostic live evidence but cannot mark beta acceptance green.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` removed the compose stack, final `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and final `git diff --check` was clean.
+- proof result:
+  - baseline `git status --short` captured the expected dirty refactor/dead-code worktree plus this AIDP proof item.
+  - baseline `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-gap-flow:preflight` passed; artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-bc32f11e-329b-45b4-a752-10de23a09e8e.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-bc32f11e-329b-45b4-a752-10de23a09e8e.md`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow:preflight` passed; artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-75fcf2a6-2ace-4a1c-b04b-31b559a4383b.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-75fcf2a6-2ace-4a1c-b04b-31b559a4383b.md`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_LIVE_SMOKE_MAX_RUN_COST_CENTS=50 pnpm test:discovery:vnext-live-smoke` exited `0` but was classified by the harness as skipped because the process env did not expose the required live smoke credentials.
+  - masked env-presence check found no required live discovery keys in `.env.dev`, `.env.prod`, `.env.prod.before-dev-derived-20260613125351`, `.env.example` or `.env.prod.example`; no secret values were printed.
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-gap-flow` passed real live execution; summary: `5` packs with candidates, `100` query attempts, `hasLiveProviderMetadata: true`, `final status: passed`; artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-7733553b-360e-4316-be74-7518f2c933f6.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-gap-flow-7733553b-360e-4316-be74-7518f2c933f6.md`
+  - `DISCOVERY_ENABLED=1 DISCOVERY_MCP_LIVE_GAP_MAX_COST_CENTS=100 pnpm test:discovery:vnext-mcp-live-signal-flow` passed real live execution; summary: `security_advisories` and `policy_regulatory` reached `signal_content_fetched`, `software_changelogs` reached `no_fetchable_probation_signal`, `final status: passed`; artifacts:
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-bd8833ea-1a42-4347-9ec2-9a80260b3909.json`
+    - `/tmp/signalops-discovery-vnext-mcp-live-signal-flow-bd8833ea-1a42-4347-9ec2-9a80260b3909.md`
+  - `pnpm test:website:matrix:compose` passed real live website matrix; summary: `16` sites, `7` `observed_expected_shape`, `8` `observed_truthful_unsupported_or_blocked`, `1` `observed_partial_or_empty_shape`, `0` cleanup residuals; artifact:
+    - `/tmp/signalops-live-website-matrix-baseline-0523650d-0fb2-48f4-ad19-e0a0b040308e.json`
+  - `SIGNALOPS_STRICT_LIVE_INTERNET=1 DISCOVERY_ENABLED=1 node infra/scripts/proof/test-product-total-live-audit.mjs --skip-stack-build` passed as a strict live diagnostic audit; `runtimeVerdict: pass`, `finalVerdict: weak`, `requiredMissing: []`, `requiredFailures: []`, `diagnosticFailures: []`, weak diagnostic only for `website-matrix-compose` classified as `classified_live_website_unsupported_or_blocked_residual`; artifacts:
+    - `/tmp/signalops-product-total-live-13ff7b11.json`
+    - `/tmp/signalops-product-total-live-13ff7b11.md`
+
+## Blocked Delivery: SIGNALOPS-FULL-BETA-REGRESSION-PROOF-1
+
+- id: `SIGNALOPS-FULL-BETA-REGRESSION-PROOF-1`
+- lifecycle: `normal`
+- route: `delivery`
+- route phase: `blocked-on-product-proof`
+- route-specific next step: open a separate narrow bugfix item for the `test:mvp:internal` following-page failure, then rerun `pnpm test:product:local:core` and only continue to `local:full`/`release:beta:verify` after core is green.
+- route-specific proof: baseline `git status`/`docker ps`, package typechecks, targeted Python compile, targeted TS/Python units, ownership/taxonomy/compliance guards, lint/typecheck, `pnpm ci:fast`, `pnpm test:mcp:compose`, attempted `pnpm test:product:local:core`, cleanup down, final `docker ps` and `git diff --check`.
+- status: `blocked`
+- risk: `high`
+- approval: explicit operator request: "PLEASE IMPLEMENT THIS PLAN: Full Beta Gate Retest Plan".
+- planning required: yes for broad proof/delivery run with compose and beta gates.
+- planning source: `tool-native`
+- planning status: `accepted-for-this-item`
+- invariant: verification-only; no product/source/config/test writes, no DB schema, env, root command, API route/payload, MCP tool, queue or public behavior changes.
+- allowed paths: `.aidp/work.md` only.
+- out of scope: source fixes, fresh destructive volume reset, production deployment, migrations, dependency changes, live secret inspection, `aidp-monitor/**`.
+- baseline expectations: validate the existing dirty worktree from recent refactor/dead-code sweeps as-is; do not revert unrelated changes.
+- cleanup status: completed; `pnpm dev:mvp:internal:down` removed the compose stack, final `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers, and final `git diff --check` was clean.
+- blocker:
+  - `pnpm test:product:local:core` hit a hard product/runtime failure inside `pnpm test:mvp:internal`.
+  - failing assertion: `Did not expect HTML from http://127.0.0.1:4321/following to include No followed stories yet.`
+  - stack owner from stdout: `infra/scripts/proof/test-mvp-internal.mjs:288` via `assertHtmlDoesNotContain`, called from `main` around `test-mvp-internal.mjs:1747`.
+  - impact: `pnpm test:product:local:full` and `pnpm release:beta:verify` were not run because the approved stop policy says to stop on the first product/runtime failure.
+  - current product-local run id observed in stdout: `613b160d`; no matching `/tmp/signalops-product-local-core-613b160d.*` artifact was present after interrupting the remaining lanes.
+- proof passed before blocker:
+  - baseline `git status --short` captured the expected dirty refactor/dead-code worktree plus this AIDP proof item.
+  - baseline `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers.
+  - `pnpm --filter @signalops/mcp typecheck`
+  - `pnpm --filter @signalops/fetchers typecheck`
+  - `pnpm --filter @signalops/control-plane typecheck`
+  - `pnpm --filter @signalops/admin typecheck` with existing Astro hint-style diagnostics only, no errors.
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile` over touched API/worker compatibility/read-model modules.
+  - `pnpm unit_tests:py tests/unit/python/test_final_selection.py tests/unit/python/test_selection_write_repository.py tests/unit/python/test_api_app_context.py tests/unit/python/test_discovery_vnext_foundation.py` (`409` tests passed).
+  - `pnpm unit_tests:ts -- mcp-control-plane web-ingestion-browser enrichment-smoke-fixture admin-bulk-channel-import admin-website-channels` (`491` tests passed).
+  - `pnpm check:control-plane-ownership`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm check:compliance`
+  - `pnpm lint:py`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hints only).
+  - `git diff --check`
+  - `pnpm test:mcp:compose` passed; artifacts:
+    - `/tmp/signalops-mcp-http-deterministic-5de58da9-d6fa-4d5c-a39a-8415ba696fe6.json`
+    - `/tmp/signalops-mcp-http-deterministic-5de58da9-d6fa-4d5c-a39a-8415ba696fe6.md`
+- evidence collected during blocked core run:
+  - `test:providers:compose` passed inside product-local core for API and Email IMAP with `providersVerified: ["api", "email_imap"]`, `apiSignalCandidates: 2`, `imapSignalCandidates: 1`.
+  - `test:website:compose` passed inside product-local core.
+  - `test:website:admin:compose` passed inside product-local core with `status: "website-admin-ok"` and `providerChannelsVerified: ["website"]`.
+  - `test:automation:admin:compose` passed inside product-local core with `status: "automation-admin-ok"`.
+
+## Completed Sweep: SIGNALOPS-RESIDUAL-HOTSPOT-FINISH-2
+
+- id: `SIGNALOPS-RESIDUAL-HOTSPOT-FINISH-2`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; remaining large-but-below-threshold files are watchlist-only and should become separate scoped items only when they show a concrete dependency, behavior or ownership problem.
+- route-specific proof: completed targeted package typechecks, targeted TS/Python unit tests, repo taxonomy/control-plane ownership/compliance checks, lint/typecheck, `pnpm ci:fast` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "давай добивай" after the previous hotspot sweep completed with recorded residuals.
+- planning required: yes for broad behavior-preserving hotspot sweep.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor; no DB schema, env, root command, API route/payload, MCP tool name/schema, permission scope, queue name, public package export or intentional product behavior change.
+- trust boundary: MCP, admin UI/BFF, fetchers, API read models and worker selection remain separate ownership surfaces; extraction must not loosen auth, validation, sanitization, destructive confirmation, funnel scoping, source safety or selection persistence semantics.
+- abuse case checked: refactor must not expose write/destructive MCP/admin actions through read paths, bypass website/fetcher safety checks, silently broaden final-selection writes or leak user/provider content across UI/API boundaries.
+- blueprint context checked: MCP control-plane, UI/admin, source/fetcher, worker selection, API/read-model and dependency direction/layering neighborhoods.
+- context manifest:
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/mcp-control-plane.md`
+  - `.aidp/contracts/discovery-agent.md`
+  - `.aidp/contracts/signal_candidate-pipeline-core.md`
+  - `.aidp/contracts/feed-ingress-adapters.md`
+  - `.aidp/contracts/content-model.md`
+  - `.aidp/contracts/universal-selection-profiles.md`
+  - `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`
+  - `runtime/node/services/mcp/src/resources/scenarios.ts`
+  - `runtime/python/src/signalops/workers/selection_write_repository.py`
+  - `runtime/node/apps/admin/src/components/BulkChannelImport.tsx`
+  - `runtime/node/services/fetchers/src/web-ingestion.ts`
+  - `runtime/node/services/fetchers/src/enrichment.ts`
+  - `runtime/python/src/signalops/api/content_analysis_read_model.py`
+  - `runtime/node/apps/admin/src/pages/user-interests.astro`
+  - `runtime/node/packages/control-plane/src/channel-bottlenecks.ts`
+- allowed paths: `.aidp/work.md`, `runtime/node/services/mcp/src/**`, `runtime/node/apps/admin/src/**`, `runtime/node/services/fetchers/src/**`, `runtime/node/packages/control-plane/src/**`, `runtime/python/src/signalops/api/**`, `runtime/python/src/signalops/workers/**`, `tests/unit/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, root scripts, dependency changes, production deployment, broad UI redesign, live/provider behavior changes, new proof harnesses.
+- baseline hotspot sizes:
+  - `runtime/python/src/signalops/workers/selection_write_repository.py`: `985`
+  - `runtime/node/apps/admin/src/components/BulkChannelImport.tsx`: `933`
+  - `runtime/node/services/fetchers/src/web-ingestion.ts`: `903`
+  - `runtime/node/services/fetchers/src/enrichment.ts`: `890`
+  - `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`: `874`
+  - `runtime/node/packages/control-plane/src/channel-bottlenecks.ts`: `826`
+  - `runtime/node/services/fetchers/src/web-ingestion-extraction.ts`: `824` if touched by fetcher extraction
+  - `runtime/python/src/signalops/api/content_analysis_read_model.py`: `823`
+  - `runtime/node/apps/admin/src/pages/user-interests.astro`: `816`
+  - `runtime/node/services/mcp/src/resources/scenarios.ts`: `811`
+- wave plan:
+  - Wave 1 MCP residuals: split Discovery vNext tool schemas/factories/aliases and resource scenario catalog data without changing tool names or prompt/resource payloads.
+  - Wave 2 Python selection/API residuals: split final-selection write repository and content-analysis read model into query/mapping/write helpers while preserving SQL semantics and response shapes.
+  - Wave 3 fetchers residuals: split web ingestion/enrichment by classification/extraction/persistence orchestration boundaries, preserving provider safety and output payloads.
+  - Wave 4 admin/control-plane residuals: split bulk import UI/page and channel bottleneck read model into cohesive helpers without UI behavior or public exports changing.
+- cleanup status: completed; no runtime/compose services were started for this item, and generated test/build artifacts are expected to stay ignored.
+- implementation summary:
+  - split MCP Discovery vNext tools and MCP resource scenarios into schema/funnel/calibration modules while preserving tool names, resource names and payload shapes.
+  - split final-selection attribution and content-analysis filtering into narrower Python owner modules while preserving SQL/read model outputs.
+  - split fetcher web ingestion, enrichment, cursor handling and signal-candidate-yield reporting into cohesive helper modules while preserving public exports and CLI artifacts.
+  - split admin bulk channel import preview rendering, user-interest page formatting and control-plane channel bottleneck model types without changing UI behavior or package exports.
+  - reduced all touched residual hotspot entrypoints below the 800-line engineering threshold; current largest touched/watchlist files are below threshold, led by `runtime/node/services/mcp/src/tools/shared.ts` at `799` lines.
+- proof:
+  - `pnpm --filter @signalops/mcp typecheck`
+  - `pnpm --filter @signalops/fetchers typecheck`
+  - `pnpm --filter @signalops/control-plane typecheck`
+  - `pnpm --filter @signalops/admin typecheck`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/api/content_analysis_filters.py runtime/python/src/signalops/api/content_analysis_read_model.py runtime/python/src/signalops/workers/selection_write_repository.py runtime/python/src/signalops/workers/selection_funnel_attribution.py`
+  - `pnpm unit_tests:py tests/unit/python/test_final_selection.py tests/unit/python/test_selection_write_repository.py tests/unit/python/test_api_app_context.py tests/unit/python/test_discovery_vnext_foundation.py` (`409` tests passed)
+  - `pnpm unit_tests:ts -- mcp-control-plane web-ingestion-browser enrichment-smoke-fixture admin-bulk-channel-import admin-website-channels` (`491` tests passed)
+  - `pnpm check:control-plane-ownership`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm check:compliance`
+  - `pnpm lint:py`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm ci:fast`
+  - `git diff --check`
+
+## Completed Bugfix: SIGNALOPS-DISCOVERY-VNEXT-COMPAT-ROUTE-SIGNATURE-1
+
+- id: `SIGNALOPS-DISCOVERY-VNEXT-COMPAT-ROUTE-SIGNATURE-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-runtime-proof`
+- route-specific next step: no further implementation inside this item; keep future Discovery vNext route compatibility work explicit in `discovery_vnext_api_compat.py`.
+- route-specific proof: targeted Python route signature/compile checks, Discovery vNext foundation/API context tests, `pnpm lint:py`, `pnpm check:repo-taxonomy`, rerun `pnpm test:mcp:compose`, and then resume MCP hotspot closeout.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "продолжай"; opened as a narrow bugfix because `pnpm test:mcp:compose` reached live compose runtime and failed on `discovery.brief.preview` with FastAPI `query.payload` 422.
+- planning required: yes for compatibility bugfix inside a high-risk sweep.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving bugfix; no DB schema, env, root command, MCP tool name/schema, permission scope, queue name or intended product behavior changes.
+- trust boundary: Discovery vNext maintenance routes remain protected by existing API/MCP boundaries; this item only restores typed request-body interpretation for compatibility-wrapped route handlers.
+- context manifest:
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `runtime/python/src/signalops/api/discovery_vnext_api.py`
+  - `runtime/python/src/signalops/api/discovery_vnext_api_compat.py`
+  - `runtime/python/src/signalops/api/routes/discovery_routes.py`
+  - `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts`
+  - `infra/scripts/lib/mcp-http-scenarios/discovery.mjs`
+- allowed paths: `.aidp/work.md`, `runtime/python/src/signalops/api/**`, `tests/unit/python/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, root scripts, MCP tool registry/schema changes, broad API facade redesign, production deployment.
+- cleanup status: completed; failed compose stack and successful rerun stack were both stopped with `pnpm dev:mvp:internal:down`, and `docker ps --format '{{.Names}} {{.Status}}'` returned no running containers after closeout.
+- observed failure:
+  - `pnpm test:mcp:compose` passed image build and initial deterministic scenarios, then failed on `discovery.brief.preview` with `Request failed with 422 Unprocessable Entity. query.payload: Field required`.
+  - Narrowed cause: Discovery vNext API route handlers are imported from compatibility wrappers; FastAPI sees unresolved string annotations in wrapper globals and treats the typed `payload` body parameter as a query field.
+- implementation summary:
+  - added an explicit `_PAYLOAD_MODEL_NAMES` registry in `discovery_vnext_api_compat.py` that publishes Discovery vNext payload model classes into the wrapper module globals used by FastAPI signature resolution.
+  - kept wrapper/monkeypatch behavior, route URLs, request/response payload models and MCP tool schemas unchanged.
+  - avoided broad compatibility imports and `F401` suppressions by making the signature-global registry explicit.
+- proof:
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/api/discovery_vnext_api.py runtime/python/src/signalops/api/discovery_vnext_api_compat.py runtime/python/src/signalops/api/routes/discovery_routes.py`
+  - FastAPI route introspection for `/maintenance/discovery/brief/preview`: `payload` is a body param and query params are empty.
+  - `PYTHON_TEST_PYTHON=.venv/bin/python pnpm unit_tests:py tests/unit/python/test_discovery_vnext_foundation.py tests/unit/python/test_api_app_context.py` (`409` tests passed)
+  - `pnpm lint:py`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm test:mcp:compose` passed after rerun; artifact `/tmp/signalops-mcp-http-deterministic-8dc3666f-a346-4069-941d-8b78ade5f28f.json`, markdown `/tmp/signalops-mcp-http-deterministic-8dc3666f-a346-4069-941d-8b78ade5f28f.md`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hint-style diagnostics only, no errors)
+  - `git diff --check`
+
+## Completed Sweep: SIGNALOPS-MCP-TOOLS-HOTSPOT-SPLIT-1
+
+- id: `SIGNALOPS-MCP-TOOLS-HOTSPOT-SPLIT-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-runtime-proof`
+- route-specific next step: no further implementation inside this item; remaining MCP/read-model hotspots should be opened as separate scoped items.
+- route-specific proof: MCP service typecheck, targeted MCP/control-plane TS unit tests, `pnpm test:mcp:compose` if feasible, `pnpm lint`, `pnpm typecheck`, `pnpm check:repo-taxonomy`, `pnpm ci:fast` and `git diff --check` as time permits.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "продолжай" after hotspot cleanup.
+- planning required: yes for behavior-preserving MCP hotspot split sweep.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor; no DB schema, env, root command, API route/payload, MCP tool name/schema, permission scope, queue name or product behavior changes.
+- trust boundary: MCP is an operator/control-plane surface; malformed write payloads must remain rejected by schema validation before backend calls and existing scope checks must remain in place.
+- abuse case checked: refactor must not accidentally expose write/destructive tools through a read-only registry path, drop funnel-bound token restrictions or loosen discovery/content-analysis write validation.
+- blueprint context checked: MCP control-plane contract, content-analysis MCP surface, dependency direction/layering and god-module pressure.
+- context manifest:
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/mcp-control-plane.md`
+  - `.aidp/contracts/content-analysis-and-gating.md`
+  - `runtime/node/services/mcp/src/tools.ts`
+  - `runtime/node/services/mcp/src/tools/**`
+- allowed paths: `.aidp/work.md`, `runtime/node/services/mcp/src/**`, `tests/unit/ts/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, root scripts, runtime behavior changes, live/compose service edits outside MCP proof, Python/worker/UI/fetcher hotspot splits.
+- cleanup status: completed; `pnpm test:mcp:compose` started the dev compose stack for proof and `pnpm dev:mvp:internal:down` removed it after the successful rerun.
+- implementation summary:
+  - reduced `runtime/node/services/mcp/src/tools.ts` from `1750` lines to a `206` line registry/execute facade.
+  - extracted content-analysis tools, operator intelligence tools and operator report tools into cohesive modules under `runtime/node/services/mcp/src/tools/`.
+  - extracted template and channel schema/read-back helpers into focused helper modules while keeping `templates-tools.ts` and `channels-tools.ts` as the public tool-family owners.
+  - preserved MCP tool names, tool order, input/output schema contracts, permission scopes, destructive confirmation behavior, read-back hints and funnel-bound write auditing.
+- proof:
+  - `pnpm --filter @signalops/mcp typecheck`
+  - `pnpm unit_tests:ts -- mcp-control-plane mcp-content-analysis-helpers schema-registry` (`491` TS tests passed)
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm test:mcp:compose` passed after the Discovery vNext compatibility route-signature bugfix; artifact `/tmp/signalops-mcp-http-deterministic-8dc3666f-a346-4069-941d-8b78ade5f28f.json`, markdown `/tmp/signalops-mcp-http-deterministic-8dc3666f-a346-4069-941d-8b78ade5f28f.md`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hint-style diagnostics only, no errors)
+  - `git diff --check`
+- residuals:
+  - MCP still has two >800-line but more cohesive residuals: `runtime/node/services/mcp/src/tools/discovery/vnext-tools.ts` (`874` lines) and `runtime/node/services/mcp/src/resources/scenarios.ts` (`811` lines).
+  - Non-MCP residual hotspots remain outside this item and require separate AIDP items: `selection_write_repository.py`, admin `BulkChannelImport.tsx`, fetcher ingestion modules, `content_analysis_read_model.py`, admin `user-interests.astro` and control-plane `channel-bottlenecks.ts`.
+
+## Completed Sweep: SIGNALOPS-CONTENT-ANALYSIS-HOTSPOT-SPLIT-1
+
+- id: `SIGNALOPS-CONTENT-ANALYSIS-HOTSPOT-SPLIT-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; remaining Node/MCP/UI hotspots require separate scoped items.
+- route-specific proof: Python compile for touched worker modules, targeted content-analysis/reindex tests, `pnpm lint:py`, `pnpm unit_tests:py`, `pnpm check:repo-taxonomy`, `pnpm ci:fast` and `git diff --check` as time permits.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "продолжай".
+- planning required: yes for behavior-preserving hotspot split sweep.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor; no DB schema, env, root command, API route/payload, MCP tool, queue name or worker payload shape changes.
+- blueprint context checked: worker/content-analysis neighborhood, PostgreSQL truth, content/filter policy ownership, dependency direction/layering and god-module pressure.
+- context manifest:
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `runtime/python/src/signalops/workers/content_analysis.py`
+  - `runtime/python/src/signalops/workers/content_analysis_runtime.py`
+  - `runtime/python/src/signalops/workers/content_analysis_subjects.py`
+  - `runtime/python/src/signalops/workers/content_analysis_structured.py`
+  - `tests/unit/python/test_content_analysis.py`
+- allowed paths: `.aidp/work.md`, `runtime/python/src/signalops/workers/**`, `tests/unit/python/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, root scripts, runtime behavior changes, live/compose proof, MCP/Node/UI hotspot splits.
+- cleanup status: completed; no compose/runtime services started for this item, Python bytecode/cache outputs remain ignored/generated.
+- implementation summary:
+  - reduced `content_analysis.py` from `1452` lines to a `135` line compatibility facade preserving legacy imports and private test monkeypatch hooks.
+  - added cohesive owner modules for analysis-result persistence, local heuristic persistence, structured extraction runtime, cluster/system-label projection and content-filter policy evaluation.
+  - kept persisted output shapes, policy behavior, backfill call sites and `signalops.workers.content_analysis.*` compatibility surface stable.
+- proof:
+  - `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile runtime/python/src/signalops/workers/content_analysis.py runtime/python/src/signalops/workers/content_analysis_repository.py runtime/python/src/signalops/workers/content_analysis_local_persistence.py runtime/python/src/signalops/workers/content_analysis_structured_runtime.py runtime/python/src/signalops/workers/content_analysis_cluster_labels.py runtime/python/src/signalops/workers/content_analysis_filter_runtime.py`
+  - `PYTHONPATH=runtime/python/src:tests/unit/python:. .venv/bin/python -m unittest test_content_analysis test_reindex_backfill_progress test_worker_entrypoint_runtime_deps` (`26` tests passed)
+  - `pnpm lint:py`
+  - `PYTHON_TEST_PYTHON=.venv/bin/python pnpm unit_tests:py` (`409` tests passed)
+  - `pnpm check:repo-taxonomy`
+- residuals:
+  - Remaining >800-line hotspots are now primarily Node/MCP/UI/fetcher/read-model files. MCP `tools.ts`, `tools/templates-tools.ts` and `tools/channels-tools.ts` are opened under `SIGNALOPS-MCP-TOOLS-HOTSPOT-SPLIT-1`.
+
+## Completed Sweep: SIGNALOPS-WORKER-HOTSPOT-SPLIT-1
+
+- id: `SIGNALOPS-WORKER-HOTSPOT-SPLIT-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; split `content_analysis.py` and MCP `tools.ts` under separate hotspot items because they touch different ownership/test surfaces.
+- route-specific proof: Python compile for touched worker modules, targeted reindex/worker tests, import-cycle audit, `pnpm lint:py`, `pnpm unit_tests:py`, `pnpm check:repo-taxonomy`, `pnpm lint`, `pnpm ci:fast` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request: "давай чини хотспоты".
+- planning required: yes for behavior-preserving hotspot split sweep.
+- planning source: `AIDP-native`
+- planning status: `accepted-for-this-item`
+- sweep invariant: behavior-preserving refactor; no DB schema, env, root command, API route/payload, MCP tool, queue name or worker payload shape changes.
+- blueprint context checked: worker/selection/discovery neighborhood, dependency direction/layering, god-module pressure and PostgreSQL/queue ownership invariants.
+- context manifest:
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `runtime/python/src/signalops/workers/reindex_backfill_runtime.py`
+  - `runtime/python/src/signalops/workers/reindex_processor.py`
+  - `runtime/python/src/signalops/workers/compile_processors.py`
+  - `tests/unit/python/test_reindex_backfill_progress.py`
+  - `tests/unit/python/test_worker_hard_filters.py`
+- allowed paths: `.aidp/work.md`, `runtime/python/src/signalops/workers/**`, `tests/unit/python/**`, `infra/scripts/checks/check-repo-taxonomy.mjs`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, root scripts, runtime behavior changes, live/compose proof, MCP/Node/UI hotspot splits unless opened as a separate item.
+- cleanup status: completed; no compose/runtime services started for this item, Python bytecode/cache outputs remain ignored/generated.
+- implementation summary:
+  - split `reindex_backfill_runtime.py` from a `1150` line mixed runtime module into a `132` line compatibility facade.
+  - added cohesive owner modules: `reindex_runtime_jobs.py` for cancellation/job state/selection snapshot, `reindex_historical_replay_runtime.py` for historical signal replay and gray-zone review replay, `reindex_content_analysis_backfill.py` for content-analysis backfill target/progress/replay logic, and `reindex_interest_auto_repair.py` for interest compile repair job queueing.
+  - moved internal imports in `reindex_processor.py`, `compile_processors.py` and `workers/main.py` to the new owner modules so the old `reindex_backfill_runtime.py` is no longer an internal implementation owner.
+  - preserved existing `reindex_backfill_runtime.*` compatibility/test monkeypatch behavior for `open_connection`, snapshot count, gray-zone prompt lookup, outbox publish and LLM review processor patching.
+- proof:
+  - `python3 -m py_compile runtime/python/src/signalops/workers/reindex_backfill_runtime.py runtime/python/src/signalops/workers/reindex_runtime_jobs.py runtime/python/src/signalops/workers/reindex_historical_replay_runtime.py runtime/python/src/signalops/workers/reindex_content_analysis_backfill.py runtime/python/src/signalops/workers/reindex_interest_auto_repair.py runtime/python/src/signalops/workers/reindex_processor.py runtime/python/src/signalops/workers/compile_processors.py runtime/python/src/signalops/workers/main.py`
+  - `pnpm lint:py`
+  - `pnpm unit_tests:py tests/unit/python/test_reindex_backfill_progress.py tests/unit/python/test_worker_hard_filters.py tests/unit/python/test_interest_auto_repair.py tests/unit/python/test_worker_entrypoint_runtime_deps.py tests/unit/python/test_task_engine_pipeline_plugins.py` (`409` tests passed)
+  - one-off Python AST import graph audit over `runtime/python/src/signalops/workers`: `worker_python_modules=116`, `worker_python_cycles=0`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm unit_tests:py` (`409` tests passed)
+  - `pnpm lint`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hint-style diagnostics only, no errors)
+  - `git diff --check`
+- residuals:
+  - `runtime/python/src/signalops/workers/content_analysis.py` remains a `1452` line hotspot. A safe split needs a separate item because it requires extracting the analysis-result repository/common write owner and preserving current private test patch surfaces for content filter helpers.
+  - `runtime/node/services/mcp/src/tools.ts` remains a `1750` line Node hotspot and should be split separately by MCP tool family/router ownership.
+
+## Completed Sweep: SIGNALOPS-POST-AUDIT-RESIDUAL-CLEANUP-1
+
+- id: `SIGNALOPS-POST-AUDIT-RESIDUAL-CLEANUP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; remaining large-file pressure should be handled by a separate hotspot split item rather than hidden inside compatibility cleanup.
+- route-specific proof: Python compile for touched API/worker modules, targeted worker/discovery/API unit tests, one-off Python import-cycle audit for API/worker/task-engine neighborhoods, `pnpm check:repo-taxonomy`, `pnpm lint:py`, `pnpm unit_tests:py`, `pnpm lint`, `pnpm check:compliance`, `pnpm ci:fast` and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request to implement the accepted `Residual Debt Cleanup Plan: Worker Cycle + Discovery Compatibility`.
+- planning required: yes for broad boundary/cycle cleanup sweep.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- sweep invariant: no DB schema, env names, root commands, API routes/payloads, MCP tool names, queue names, worker payload shapes or intentional product behavior change; existing test monkeypatch surfaces remain stable while compatibility ownership becomes explicit.
+- blueprint context checked: runtime/source taxonomy, API/control-plane work, worker/discovery/selection work, dependency direction/layering, god-module pressure and behavior-preservation proof obligations.
+- context manifest:
+  - user-provided `Residual Debt Cleanup Plan: Worker Cycle + Discovery Compatibility` in current thread.
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/universal-task-engine.md`
+  - `.aidp/contracts/discovery-agent.md`
+  - `runtime/python/src/signalops/workers/reindex_backfill_runtime.py`
+  - `runtime/python/src/signalops/workers/main.py`
+  - `runtime/python/src/signalops/workers/worker_runtime_deps.py`
+  - `runtime/python/src/signalops/api/discovery_vnext_api.py`
+  - `infra/scripts/checks/check-repo-taxonomy.mjs`
+  - `tests/unit/python/**`
+- allowed paths: `.aidp/work.md`, `runtime/python/src/signalops/api/**`, `runtime/python/src/signalops/workers/**`, `infra/scripts/checks/check-repo-taxonomy.mjs`, `tests/unit/python/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, route/payload/MCP/queue behavior changes, root script changes, production deployment, live proof execution, broad hotspot splits beyond files required by the cycle/compat cleanup.
+- cleanup status: completed; no compose/runtime services were started, and Python compile bytecode/cache outputs are ignored/generated.
+- implementation summary:
+  - removed the remaining `reindex_backfill_runtime.py -> workers.main` lazy dependency by importing the real owners for DB, outbox, prompt lookup, processor wrappers and selection eligibility.
+  - replaced `build_worker_runtime_deps_from_namespace(globals())` with an explicit `WorkerRuntimeDeps` dataclass and identity-preserving dict conversion at the worker bootstrap boundary.
+  - moved Discovery vNext API dynamic monkeypatch wrapper ownership into `discovery_vnext_api_compat.py`; `discovery_vnext_api.py` is now an explicit facade with stable payload/function exports and no local `globals()` wrapper install or `F822` suppression.
+  - extended `check:repo-taxonomy` to reject worker runtime backrefs to `workers.main`, runtime deps built from `globals()`, dynamic Discovery facade wrapper drift outside the compat owner and lost Discovery facade compatibility exports used by tests.
+- proof:
+  - `python3 -m py_compile runtime/python/src/signalops/workers/reindex_backfill_runtime.py runtime/python/src/signalops/workers/worker_runtime_deps.py runtime/python/src/signalops/workers/main.py runtime/python/src/signalops/api/discovery_vnext_api.py runtime/python/src/signalops/api/discovery_vnext_api_compat.py`
+  - `node --check infra/scripts/checks/check-repo-taxonomy.mjs`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm unit_tests:py tests/unit/python/test_worker_entrypoint_runtime_deps.py tests/unit/python/test_interest_auto_repair.py tests/unit/python/test_worker_hard_filters.py tests/unit/python/test_task_engine_pipeline_plugins.py tests/unit/python/test_task_engine_discovery_plugins.py tests/unit/python/test_discovery_vnext_foundation.py` (`409` tests passed)
+  - `PYTHONPATH=runtime/python/src python3 -m compileall -q runtime/python/src/signalops/api runtime/python/src/signalops/workers`
+  - `pnpm lint:py`
+  - one-off Python AST import graph audit over `runtime/python/src/signalops/api` and `runtime/python/src/signalops/workers`: `python_modules=195`, `python_cycles=0`
+  - `pnpm unit_tests:py` (`409` tests passed)
+  - `pnpm lint`
+  - `pnpm check:compliance`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hint-style diagnostics only, no errors)
+  - `git diff --check`
+- residuals:
+  - `runtime/python/src/signalops/workers/reindex_backfill_runtime.py` is still a large cohesive hotspot at `1150` lines, but the import-cycle/compatibility debt is removed. Split it only in a separate behavior-preserving hotspot item.
+  - The worktree still includes unrelated dirty changes from previous approved sweeps; this item did not revert or normalize them.
+
+## Completed Sweep: SIGNALOPS-API-COMPAT-FACADE-CLEANUP-1
+
+- id: `SIGNALOPS-API-COMPAT-FACADE-CLEANUP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; keep future API facade compatibility changes explicit in `main_compat.py` and guarded by `check:repo-taxonomy`.
+- route-specific proof: targeted F401/static proof, Python compile, targeted `api_main` compatibility tests, repo taxonomy guard, Python unit/lint/compliance/ci gates and `git diff --check`.
+- status: `done`
+- risk: `high`
+- approval: explicit operator request to implement the accepted Compatibility-Design Cleanup Item plan.
+- planning required: yes for compatibility/boundary cleanup sweep.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- sweep invariant: no FastAPI route, response payload, DB schema, env, MCP, queue, root command or intentional product behavior change; `signalops.api.main.*` remains a supported compatibility/test patch surface for this item.
+- residual source: `SIGNALOPS-DEAD-CODE-DEDUP-CLEANUP-1` recorded unresolved route-facade `# ruff: noqa: F401` in API facade modules and a broad `main_route_prelude` import bag.
+- blueprint context checked: API/control-plane work, Python runtime boundaries, API compatibility/deprecation discipline, route-specific proof and repo taxonomy/runtime source guard requirements.
+- context manifest:
+  - user-provided `Compatibility-Design Cleanup Item` in current thread.
+  - `.aidp/AGENTS.md`
+  - `.aidp/routes.md`
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `runtime/python/src/signalops/api/main.py`
+  - `runtime/python/src/signalops/api/main_compat.py`
+  - `runtime/python/src/signalops/api/main_route_prelude.py`
+  - `runtime/python/src/signalops/api/main_common.py`
+  - `runtime/python/src/signalops/api/main_content.py`
+  - `runtime/python/src/signalops/api/main_content_analysis.py`
+  - `runtime/python/src/signalops/api/main_observability.py`
+  - `runtime/python/src/signalops/api/main_sequence.py`
+  - `runtime/python/src/signalops/api/discovery_vnext/orchestration.py`
+  - `infra/scripts/checks/check-repo-taxonomy.mjs`
+  - `tests/unit/python/**`
+- allowed paths: `.aidp/work.md`, `runtime/python/src/signalops/api/**`, `infra/scripts/checks/check-repo-taxonomy.mjs`, `tests/unit/python/**`.
+- out of scope: `aidp-monitor/**`, DB migrations, env changes, route/payload changes, root script changes, MCP/queue changes, production deployment, live proof execution, removing existing `signalops.api.main.*` compatibility exports without a separate explicit surface-contraction item.
+- cleanup status: completed; no compose/runtime services were started, and Python compile artifacts are ignored by repo taxonomy/runtime artifact guards.
+- baseline inventory to record before edits:
+  - `api_main` tests patch/call `query_all`, `query_one`, `query_count`, route helper functions, payload classes, sequence helpers and `os.environ`.
+  - current residual suppressions are in `main_route_prelude.py`, `main_common.py`, `main_content.py`, `main_content_analysis.py`, `main_observability.py`, `main_sequence.py` and `discovery_vnext/orchestration.py`.
+  - active route facades currently import through `main_route_prelude`; compatibility export ownership must move to explicit owner imports/registry rather than incidental facade imports.
+- implementation summary:
+  - replaced broad `main_route_prelude` imports in `main_common.py`, `main_content.py`, `main_content_analysis.py`, `main_observability.py` and `main_sequence.py` with explicit owner-module imports.
+  - removed duplicated per-facade `query_count`/optional helper scaffolding outside `main_common.py`.
+  - removed accidental sequence alias exports from `main_content_analysis.py`; public `signalops.api.main.*` sequence compatibility remains owned by `main_sequence.py` through `main_compat.py`.
+  - deleted retired `runtime/python/src/signalops/api/main_route_prelude.py`.
+  - converted `discovery_vnext/orchestration.py` into an explicit `__all__` compatibility facade without module-level F401 suppression.
+  - extended `check:repo-taxonomy` to reject reintroduced API route prelude imports/files, broad API facade F401 suppressions and loss of `api_main.*` compatibility exports still used by unit tests.
+- proof:
+  - `PYTHONPATH=runtime/python/src python3 -m py_compile runtime/python/src/signalops/api/main.py runtime/python/src/signalops/api/main_compat.py runtime/python/src/signalops/api/main_common.py runtime/python/src/signalops/api/main_content.py runtime/python/src/signalops/api/main_content_analysis.py runtime/python/src/signalops/api/main_observability.py runtime/python/src/signalops/api/main_sequence.py runtime/python/src/signalops/api/discovery_vnext/orchestration.py`
+  - `.venv/bin/ruff check --select F401 runtime/python/src/signalops/api/main.py runtime/python/src/signalops/api/main_compat.py runtime/python/src/signalops/api/main_common.py runtime/python/src/signalops/api/main_content.py runtime/python/src/signalops/api/main_content_analysis.py runtime/python/src/signalops/api/main_observability.py runtime/python/src/signalops/api/main_sequence.py runtime/python/src/signalops/api/discovery_vnext/orchestration.py`
+  - `rg -n "# ruff: noqa: F401|main_route_prelude" runtime/python/src/signalops/api tests/unit/python infra/scripts/checks/check-repo-taxonomy.mjs` returned no residual product/test references; only guard constants mention `main_route_prelude`.
+  - `pnpm unit_tests:py tests/unit/python/test_api_*.py tests/unit/python/test_discovery_vnext_foundation.py` (`409` tests passed)
+  - `PYTHONPATH=runtime/python/src python3 -m compileall -q runtime/python/src/signalops/api`
+  - `pnpm lint:py`
+  - `pnpm check:repo-taxonomy`
+  - `node --check infra/scripts/checks/check-repo-taxonomy.mjs`
+  - `pnpm lint`
+  - `pnpm unit_tests:py` (`409` tests passed)
+  - `pnpm check:compliance`
+  - `pnpm ci:fast` (`491` TS tests, `409` Python tests, lint and typecheck passed; existing Astro hints only, no errors)
+  - `git diff --check`
+- residuals: none for this compatibility-design item.
+
+## Completed Sweep: SIGNALOPS-DEAD-CODE-DEDUP-CLEANUP-1
+
+- id: `SIGNALOPS-DEAD-CODE-DEDUP-CLEANUP-1`
+- lifecycle: `normal`
+- route: `sweep`
+- route phase: `completed-static-proof`
+- route-specific next step: no further implementation inside this item; remaining API route-facade `ruff: noqa: F401` cleanup requires a separate compatibility-design item.
+- route-specific proof: targeted MCP/fetchers/UI typechecks, Python compile proof, targeted TS/Python unit proof, structural guards, one-off TS/Python import-cycle audits, full lint/typecheck/unit/compliance/ci gates and `git diff --check`.
+- status: `done-with-recorded-residual`
+- risk: `high`
+- approval: explicit operator request to implement the accepted Dead-Code / Dedup Cleanup Sweep plan.
+- planning required: yes for broad boundary/cycle cleanup sweep.
+- planning source: `external-spec`
+- planning status: `accepted-for-this-item`
+- sweep invariant: no DB schema, env, API route, MCP tool, queue name, payload, root command or intentional product behavior change.
+- blueprint context checked: runtime/module boundaries, API assembly, worker task-engine, MCP operating intelligence, UI package surface, generated/runtime artifact boundary and AIDP verification/OS truth.
+- context manifest:
+  - user-provided `Dead-Code / Dedup Cleanup Sweep` in current thread.
+  - `.aidp/blueprint.md`
+  - `.aidp/engineering.md`
+  - `.aidp/verification.md`
+  - `.aidp/contracts/universal-task-engine.md`
+  - `.aidp/contracts/runtime-migrations-and-derived-state.md`
+  - `.aidp/contracts/mcp-control-plane.md`
+  - `runtime/node/services/mcp/src/operating-intelligence*`
+  - `runtime/node/services/fetchers/src/web-ingestion*`
+  - `runtime/node/packages/ui/**`
+  - `runtime/python/src/signalops/api/main*.py`
+  - `runtime/python/src/signalops/workers/**`
+  - `runtime/python/src/signalops/workers/task_engine/**`
+  - `infra/scripts/checks/check-repo-taxonomy.mjs`
+  - `tests/unit/**`
+- allowed paths: `.aidp/work.md`, `.aidp/os.yaml`, `runtime/node/services/mcp/**`, `runtime/node/services/fetchers/**`, `runtime/node/packages/ui/**`, `runtime/python/src/signalops/api/**`, `runtime/python/src/signalops/workers/**`, `infra/scripts/checks/**`, `tests/unit/**`, `package.json`, `pnpm-lock.yaml`.
+- out of scope: `aidp-monitor/**`, DB migrations, env contract changes, route/payload/MCP/queue behavior changes, broad UI public surface contraction beyond the two confirmed legacy exports, dependency upgrades beyond removing the confirmed unused UI dependency, production deployment, live proof execution.
+- cleanup status: completed; ignored Python bytecode/cache artifacts under `runtime/python/src/signalops/**` were removed after compile/unit/ci proof, and this sweep did not start compose services.
+- implementation summary:
+  - removed retired MCP operating-intelligence `core.ts` compatibility barrel while preserving the public `operating-intelligence.ts` surface.
+  - removed confirmed unused UI exports `APP_SHELL_STYLES` and `formatScore`; removed unused `@radix-ui/react-checkbox` dependency from `@signalops/ui` and lockfile.
+  - broke the fetchers `web-ingestion-persistence -> web-ingestion` type cycle by importing persistence-only types from `web-ingestion-types`.
+  - broke worker/task-engine cycles by moving worker runtime singletons to `worker_runtime_singletons.py`, replacing `legacy_main` fallback imports with owner-module dependencies, and keeping only explicit `workers/main.py` compatibility wrappers for patched test/smoke surfaces.
+  - renamed internal task-engine `pipeline_legacy.py` implementation to `pipeline_processor_adapters.py` with lazy processor handler loading; existing payload key `legacy_handler` remains stable.
+  - moved Discovery plugin runtime access to the `discovery_runtime` owner module instead of the `discovery_plugins` aggregator.
+  - made `signalops.api.main` a thin assembly layer and moved direct compatibility export installation to `main_compat.py`.
+  - extended `check:repo-taxonomy` to guard retired MCP/task-engine files, worker main-cycle imports, Discovery aggregator runtime lookups, the fetchers persistence cycle and retired UI exports.
+  - synchronized `.aidp/os.yaml` capabilities away from stale `integration_tests` truth toward compose smoke/product-local/beta/live-diagnostic gates.
+- proof:
+  - `pnpm --filter @signalops/mcp typecheck`
+  - `pnpm --filter @signalops/fetchers typecheck`
+  - `pnpm --filter @signalops/ui typecheck`
+  - `PYTHONPATH=runtime/python/src python3 -m py_compile $(find runtime/python/src/signalops -name '*.py' -print)`
+  - `pnpm unit_tests:ts -- mcp-control-plane web-ingestion-browser enrichment-smoke-fixture`
+  - `pnpm unit_tests:py tests/unit/python/test_api_app_context.py tests/unit/python/test_discovery_vnext_foundation.py tests/unit/python/test_task_engine_pipeline_plugins.py tests/unit/python/test_task_engine_discovery_plugins.py`
+  - `pnpm check:repo-taxonomy`
+  - `pnpm check:test-layout`
+  - `pnpm check:control-plane-ownership`
+  - `pnpm check:runtime-artifacts`
+  - `pnpm check:dependency-compliance`
+  - one-off Python import graph audit: `python_cycles_in_target_neighborhoods=0`
+  - one-off TS import graph audit: `ts_files=147`, `ts_cycles=0`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm unit_tests:ts` (`491` tests passed)
+  - `pnpm unit_tests:py` (`409` tests passed)
+  - `pnpm check:compliance`
+  - `pnpm ci:fast`
+  - `git diff --check`
+- recorded residual:
+  - `runtime/python/src/signalops/api/main_common.py`, `main_content.py`, `main_content_analysis.py`, `main_observability.py`, `main_sequence.py` and `discovery_vnext/orchestration.py` still carry route-facade `# ruff: noqa: F401`. A dry-run without the module-level ignores showed dozens of prelude/compat imports per facade; removing them safely requires a separate route-compatibility redesign so test monkeypatch and route dependency surfaces are not silently broken.
+
 ## Active Sweep: SIGNALOPS-RADICAL-DEV-LIVE-TEST-1
 
 - id: `SIGNALOPS-RADICAL-DEV-LIVE-TEST-1`

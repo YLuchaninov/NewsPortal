@@ -31,7 +31,7 @@ from signalops.workers.task_engine.pipeline_maintenance_plugins import (
     InterestCompilePlugin,
     ReindexPlugin,
 )
-from signalops.workers.task_engine.pipeline_legacy import (
+from signalops.workers.task_engine.pipeline_processor_adapters import (
     DIRECT_PROCESSOR_HANDLERS,
     load_legacy_handler,
 )
@@ -172,7 +172,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = EmbedSignalCandidatePlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -406,7 +406,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = MatchInterestsPlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -454,7 +454,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = LlmReviewPlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -510,7 +510,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = InterestCompilePlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -551,7 +551,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = FeedbackIngestPlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(
@@ -585,7 +585,7 @@ class CorePipelinePluginAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         plugin = ReindexPlugin()
         with patch(
-            "signalops.workers.task_engine.pipeline_legacy.load_legacy_handler",
+            "signalops.workers.task_engine.pipeline_processor_adapters.load_legacy_handler",
             return_value=fake_handler,
         ):
             result = await plugin.execute(

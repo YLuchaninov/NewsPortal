@@ -20,6 +20,7 @@ from signalops.workers.content_analysis import (  # noqa: E402
     build_structured_extraction_hints,
     evaluate_content_filter_policy,
     extract_heuristic_entities,
+    persist_content_filter_result,
     validate_structured_extraction_output,
 )
 from signalops.workers.content_analysis_structured import (  # noqa: E402
@@ -397,6 +398,33 @@ class ContentAnalysisTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(result["decision"], "keep")
         self.assertEqual(result["matchedRules"][0]["key"], "remote_job")
+
+    def test_content_filter_persist_facade_uses_owner_signature(self) -> None:
+        subject = self._make_subject(published_at=datetime.now(timezone.utc))
+
+        with patch(
+            "signalops.workers.content_analysis._persist_content_filter_result",
+            return_value={"policyKey": "gate"},
+        ) as persist:
+            result = persist_content_filter_result(subject, policy_key="gate")
+
+        self.assertEqual(result["policyKey"], "gate")
+        persist.assert_called_once_with("signal_candidate", "doc-1", policy_key="gate")
+
+    def test_content_filter_persist_facade_preserves_legacy_subject_type_signature(self) -> None:
+        with patch(
+            "signalops.workers.content_analysis._persist_content_filter_result",
+            return_value={"policyKey": "gate"},
+        ) as persist:
+            result = persist_content_filter_result(
+                "signal_candidate",
+                "doc-1",
+                policy_key="gate",
+                mode_override="observe",
+            )
+
+        self.assertEqual(result["policyKey"], "gate")
+        persist.assert_called_once_with("signal_candidate", "doc-1", policy_key="gate", mode_override="observe")
 
 
 if __name__ == "__main__":

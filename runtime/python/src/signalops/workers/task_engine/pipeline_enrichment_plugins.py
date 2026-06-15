@@ -9,7 +9,7 @@ from .pipeline_fetchers_client import (
     build_fetchers_internal_base_url,
     request_fetchers_json,
 )
-from .pipeline_legacy import (
+from .pipeline_processor_adapters import (
     _camel_to_snake,
     LegacyHandlerTaskPlugin,
 )

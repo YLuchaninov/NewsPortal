@@ -10,10 +10,12 @@ import {
   buildComparison,
   collectSignalCandidateYieldSnapshot,
   createSignalCandidateYieldPackRoot,
-  createConfiguredPoolFromLocalEnv,
+  createConfiguredPoolFromLocalEnv
+} from "./signal-candidate-yield-shared";
+import {
   writeComparisonPack,
   writeSnapshotPack
-} from "./signal-candidate-yield-shared";
+} from "./signal-candidate-yield-pack";
 
 interface HnChannelRow {
   channelId: string;

@@ -7,8 +7,36 @@ from typing import Any
 
 from psycopg.types.json import Json
 
+from .gemini import review_with_gemini
+from .interest_filters import (
+    build_interest_filter_explain,
+    resolve_criterion_filter_outcome,
+    resolve_interest_filter_context,
+    resolve_user_interest_filter_outcome,
+    upsert_interest_filter_result,
+)
+from .llm_budget import (
+    build_llm_budget_gate_explain,
+    get_llm_review_monthly_quota_snapshot,
+    resolve_criterion_gray_zone_runtime_resolution,
+)
+from .matching_read_repository import find_prompt_template
+from .prompting import render_llm_prompt_template
+from .runtime_db import open_connection
 from .runtime_json import coerce_json_object, make_json_safe
 from .runtime_values import coerce_bool
+from .selection_write_repository import (
+    persist_criterion_review_resolution,
+    should_dispatch_clustering,
+    upsert_system_feed_result,
+)
+from .signal_candidate_repository import fetch_signal_candidate_for_update
+from .worker_events import (
+    insert_outbox_event,
+    is_event_processed,
+    record_processed_event,
+    suppress_downstream_outbox,
+)
 from .worker_queues import (
     SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
     SIGNAL_CANDIDATE_INTERESTS_MATCHED_EVENT,
@@ -41,29 +69,27 @@ class LlmReviewProcessorDependencies:
 
 
 def build_llm_review_processor_dependencies() -> LlmReviewProcessorDependencies:
-    from . import main as legacy_main
-
     return LlmReviewProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
-        is_event_processed=legacy_main.is_event_processed,
-        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
-        find_prompt_template=legacy_main.find_prompt_template,
-        get_llm_review_monthly_quota_snapshot=legacy_main.get_llm_review_monthly_quota_snapshot,
-        resolve_criterion_gray_zone_runtime_resolution=legacy_main.resolve_criterion_gray_zone_runtime_resolution,
-        build_llm_budget_gate_explain=legacy_main.build_llm_budget_gate_explain,
-        resolve_interest_filter_context=legacy_main.resolve_interest_filter_context,
-        resolve_criterion_filter_outcome=legacy_main.resolve_criterion_filter_outcome,
-        upsert_interest_filter_result=legacy_main.upsert_interest_filter_result,
-        build_interest_filter_explain=legacy_main.build_interest_filter_explain,
-        upsert_system_feed_result=legacy_main.upsert_system_feed_result,
-        should_dispatch_clustering=legacy_main.should_dispatch_clustering,
-        insert_outbox_event=legacy_main.insert_outbox_event,
-        record_processed_event=legacy_main.record_processed_event,
-        render_llm_prompt_template=legacy_main.render_llm_prompt_template,
-        review_with_gemini=legacy_main.review_with_gemini,
-        persist_criterion_review_resolution=legacy_main.persist_criterion_review_resolution,
-        resolve_user_interest_filter_outcome=legacy_main.resolve_user_interest_filter_outcome,
+        open_connection=open_connection,
+        suppress_downstream_outbox=suppress_downstream_outbox,
+        is_event_processed=is_event_processed,
+        fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+        find_prompt_template=find_prompt_template,
+        get_llm_review_monthly_quota_snapshot=get_llm_review_monthly_quota_snapshot,
+        resolve_criterion_gray_zone_runtime_resolution=resolve_criterion_gray_zone_runtime_resolution,
+        build_llm_budget_gate_explain=build_llm_budget_gate_explain,
+        resolve_interest_filter_context=resolve_interest_filter_context,
+        resolve_criterion_filter_outcome=resolve_criterion_filter_outcome,
+        upsert_interest_filter_result=upsert_interest_filter_result,
+        build_interest_filter_explain=build_interest_filter_explain,
+        upsert_system_feed_result=upsert_system_feed_result,
+        should_dispatch_clustering=should_dispatch_clustering,
+        insert_outbox_event=insert_outbox_event,
+        record_processed_event=record_processed_event,
+        render_llm_prompt_template=render_llm_prompt_template,
+        review_with_gemini=review_with_gemini,
+        persist_criterion_review_resolution=persist_criterion_review_resolution,
+        resolve_user_interest_filter_outcome=resolve_user_interest_filter_outcome,
     )
 
 

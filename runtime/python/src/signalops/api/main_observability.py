@@ -1,115 +1,35 @@
-# ruff: noqa: F401
 from __future__ import annotations
 
-from signalops.api.main_route_prelude import (
-    Any,
-    ApiAppContext,
-    ApiRouteDependencyValues,
-    HTTPException,
-    Literal,
-    Mapping,
-    Query,
-    RESERVED_CONTEXT_KEYS,
-    SEQUENCE_RUN_CANCELLABLE_STATUSES,
-    SequenceQueueDispatchError,
-    TASK_REGISTRY,
-    _channel_read_model,
-    _cluster_read_model,
-    _content_analysis_backfill,
-    _content_analysis_payloads,
-    _content_analysis_policies,
-    _content_analysis_read_model,
-    _content_detail_read_model,
-    _content_item_list_read_model,
-    _content_selection_query_count,
-    _dashboard_read_model,
-    _llm_review_read_model,
-    _notification_read_model,
-    _reindex_read_model,
-    _sequence_commands,
-    _sequence_payloads,
-    _sequence_read_model,
-    _sequence_route_compat,
-    _signal_candidate_list_read_model,
-    _signal_candidate_residual_read_model,
-    _system_interest_read_model,
-    _user_interest_read_model,
-    _user_match_read_model,
-    _web_resource_read_model,
-    apply_reindex_selection_profile_payload,
-    apply_resource_selection_payload,
-    apply_signal_candidate_selection_payload,
-    as_json_bool,
-    as_json_int,
-    as_json_object,
-    as_json_str,
-    build_content_item_id,
-    build_content_kind_selection_explain_payload,
-    build_database_url,
-    build_editorial_content_item_preview_from_signal_candidate,
-    build_fallback_selection_blocker_payload,
-    build_paginated_response,
-    build_reindex_selection_profile_payload,
-    build_resource_selection_explain_payload,
-    build_route_deps,
-    build_selection_diagnostics_payload,
-    build_selection_diagnostics_payload_from_counts,
-    build_selection_explain_payload,
-    build_selection_guidance_payload,
-    build_web_content_order_clause,
-    build_web_content_search_clause,
-    build_web_content_search_pattern,
+from typing import Any
+
+from fastapi import HTTPException, Query
+
+from signalops.api import channel_read_model as _channel_read_model
+from signalops.api import cluster_read_model as _cluster_read_model
+from signalops.api import dashboard_read_model as _dashboard_read_model
+from signalops.api import llm_review_read_model as _llm_review_read_model
+from signalops.api import notification_read_model as _notification_read_model
+from signalops.api import reindex_read_model as _reindex_read_model
+from signalops.api import system_interest_read_model as _system_interest_read_model
+from signalops.api import user_interest_read_model as _user_interest_read_model
+from signalops.api import user_match_read_model as _user_match_read_model
+from signalops.api.content_selection_read_model import (
     canonical_signal_candidate_family_expr,
-    canonical_signal_candidate_family_order_clause,
-    coerce_llm_review_cost_usd,
-    combined_content_items_select_sql,
-    create_api_app,
-    default_max_entry_age_hours_for_adapter,
-    dict_row,
-    dispatch_sequence_run_job,
-    editorial_content_select_sql,
     feed_eligible_signal_candidate_clause,
     final_selection_join_clause,
-    get_selected_content_item_preview,
-    infer_feed_ingress_adapter_strategy,
-    is_fastapi_param_default,
-    llm_review_accept_gray_zone_on_budget_exhaustion,
-    llm_review_cost_usd_to_cents,
-    llm_review_enabled,
-    llm_review_month_start_utc,
-    llm_review_monthly_budget_cents,
-    normalize_optional_query_string,
-    normalize_system_interest_selection_profile_payload,
-    normalize_web_content_list_sort,
-    normalize_web_content_search_query,
-    parse_content_item_id,
-    parse_cron_expression,
-    primary_media_join_clause,
     processed_signal_candidate_clause,
-    psycopg,
-    query_all,
-    query_one,
-    resolve_feed_ingress_adapter_strategy,
-    resolve_feed_ingress_max_entry_age_hours,
-    resolve_pagination,
-    resource_content_select_sql,
-    signal_candidate_observation_join_clause,
-    signal_candidate_preview_projection,
-    strip_web_content_internal_fields,
     system_feed_join_clause,
-    system_interest_kind_enabled_clause,
-    uuid,
+)
+from signalops.api.database import query_all, query_one
+from signalops.api.main_common import (
+    apply_reindex_selection_profile_payload,
+    query_count,
     with_resolved_channel_adapter_fields,
 )
-
-def normalize_optional_query_bool(value: Any) -> bool | None:
-    if value is None or is_fastapi_param_default(value):
-        return None
-    return bool(value)
-
-
-def query_count(sql: str, params: tuple[Any, ...] = ()) -> int:
-    return _content_selection_query_count(sql, params, query_one_func=query_one)
+from signalops.api.pagination import build_paginated_response, resolve_pagination
+from signalops.api.content_selection_read_model import (
+    normalize_system_interest_selection_profile_payload,
+)
 
 def get_dashboard_summary() -> dict[str, Any]:
     return _dashboard_read_model.get_dashboard_summary(
@@ -290,4 +210,3 @@ def list_reindex_jobs(
         build_paginated_response_func=build_paginated_response,
         apply_payload_func=apply_reindex_selection_profile_payload,
     )
-

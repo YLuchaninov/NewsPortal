@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os as os
 import sys
 from pathlib import Path
@@ -48,17 +47,17 @@ from .matching_read_repository import (
 )
 from .selection_gate_repository import (
     fetch_final_selection_result_row,
-    fetch_selection_gate_result_row,
+    fetch_selection_gate_result_row as fetch_selection_gate_result_row_from_repository,
     fetch_system_feed_result_row,
-    is_signal_candidate_eligible_for_personalization,
+    is_signal_candidate_eligible_for_personalization as is_signal_candidate_eligible_for_personalization_from_repository,
 )
 from .selection_write_repository import (
     find_reusable_criterion_llm_review,
-    persist_criterion_review_resolution,
+    persist_criterion_review_resolution as persist_criterion_review_resolution_from_repository,
     resolve_criterion_review_final_decision,
     should_dispatch_clustering,
-    upsert_final_selection_result,
-    upsert_system_feed_result,
+    upsert_final_selection_result as upsert_final_selection_result_from_repository,
+    upsert_system_feed_result as upsert_system_feed_result_from_repository,
 )
 from .criteria_match_processor import (
     CriteriaMatchProcessorDependencies,
@@ -84,36 +83,37 @@ from .reindex_processor import (
     ReindexProcessorDependencies,
     process_reindex_with_dependencies,
 )
-from .reindex_backfill_runtime import (
+from .reindex_content_analysis_backfill import (
     build_content_analysis_backfill_progress_patch,
     build_content_analysis_missing_clause,
-    build_interest_auto_repair_job_options,
     count_content_analysis_backfill_targets,
-    count_historical_backfill_snapshot_targets,
-    find_current_prompt_template_id,
     list_content_analysis_backfill_targets,
-    list_gray_zone_target_ids,
-    list_historical_backfill_snapshot_batch,
     normalize_content_analysis_backfill_modules,
     normalize_content_analysis_backfill_subject_types,
+    replay_content_analysis,
+    replay_content_analysis_subject,
+)
+from .reindex_historical_replay_runtime import (
+    count_historical_backfill_snapshot_targets,
+    find_current_prompt_template_id,
+    list_gray_zone_target_ids,
+    list_historical_backfill_snapshot_batch,
     prepare_historical_backfill_snapshot,
+    replay_gray_zone_reviews_for_doc,
+    replay_historical_signal_candidates,
+)
+from .reindex_interest_auto_repair import (
+    build_interest_auto_repair_job_options,
     queue_interest_auto_repair_job,
+)
+from .reindex_runtime_jobs import (
     is_reindex_job_cancel_requested,
     read_active_selection_profile_snapshot,
     read_reindex_job_context,
-    replay_content_analysis,
-    replay_content_analysis_subject,
-    replay_gray_zone_reviews_for_doc,
-    replay_historical_signal_candidates,
     update_reindex_job_options,
 )
 from .delivery import dispatch_channel_message
-from signalops.indexer import InterestCentroidIndexer, load_indexer_config
 from signalops.ml import (
-    CriterionBaselineCompiler,
-    HeuristicSignalCandidateFeatureExtractor,
-    InterestBaselineCompiler,
-    load_embedding_provider,
     mix_weighted_vectors,
     truncate_text_for_embedding,
 )
@@ -212,7 +212,15 @@ from .worker_bootstrap import (
     run_user_digest_scheduler_until_stopped as run_user_digest_scheduler_runtime,
     run_workers as run_worker_runtime,
 )
-from .worker_runtime_deps import build_worker_runtime_deps_from_namespace
+from .worker_runtime_deps import WorkerRuntimeDeps, worker_runtime_deps_to_dict
+from .worker_runtime_singletons import (
+    CRITERION_COMPILER,
+    EMBEDDING_PROVIDER,
+    FEATURE_EXTRACTOR,
+    INTEREST_COMPILER,
+    INTEREST_INDEXER,
+    LOGGER,
+)
 from .worker_events import (
     advance_processing_state,
     compute_content_hash,
@@ -246,7 +254,66 @@ from .worker_queues import (
     SEQUENCE_QUEUE,
 )
 
-LOGGER = logging.getLogger("signalops.workers")
+
+async def fetch_selection_gate_result_row(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
+    kwargs.setdefault(
+        "fetch_final_selection_result_row_func",
+        fetch_final_selection_result_row,
+    )
+    kwargs.setdefault("fetch_system_feed_result_row_func", fetch_system_feed_result_row)
+    return await fetch_selection_gate_result_row_from_repository(*args, **kwargs)
+
+
+async def is_signal_candidate_eligible_for_personalization(
+    *args: Any,
+    **kwargs: Any,
+) -> bool:
+    kwargs.setdefault("open_connection_func", open_connection)
+    kwargs.setdefault(
+        "fetch_selection_gate_result_row_func",
+        fetch_selection_gate_result_row,
+    )
+    return await is_signal_candidate_eligible_for_personalization_from_repository(
+        *args,
+        **kwargs,
+    )
+
+
+async def upsert_system_feed_result(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    kwargs.setdefault(
+        "fetch_signal_candidate_for_update_func",
+        fetch_signal_candidate_for_update,
+    )
+    kwargs.setdefault("upsert_final_selection_result_func", upsert_final_selection_result)
+    kwargs.setdefault("fetch_system_feed_result_row_func", fetch_system_feed_result_row)
+    return await upsert_system_feed_result_from_repository(*args, **kwargs)
+
+
+async def persist_criterion_review_resolution(
+    *args: Any,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    kwargs.setdefault("resolve_interest_filter_context_func", resolve_interest_filter_context)
+    kwargs.setdefault(
+        "resolve_criterion_filter_outcome_func",
+        resolve_criterion_filter_outcome,
+    )
+    kwargs.setdefault("upsert_interest_filter_result_func", upsert_interest_filter_result)
+    kwargs.setdefault("build_interest_filter_explain_func", build_interest_filter_explain)
+    kwargs.setdefault("upsert_system_feed_result_func", upsert_system_feed_result)
+    kwargs.setdefault("should_dispatch_clustering_func", should_dispatch_clustering)
+    kwargs.setdefault("insert_outbox_event_func", insert_outbox_event)
+    return await persist_criterion_review_resolution_from_repository(*args, **kwargs)
+
+
+async def upsert_final_selection_result(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    kwargs.setdefault(
+        "fetch_final_selection_result_row_func",
+        fetch_final_selection_result_row,
+    )
+    kwargs.setdefault("resolve_interest_filter_context_func", resolve_interest_filter_context)
+    return await upsert_final_selection_result_from_repository(*args, **kwargs)
+
 
 # Compatibility exports for worker smoke helpers that import queue consumer names from main.
 WORKER_MAIN_COMPAT_EXPORTS = (
@@ -315,13 +382,6 @@ WORKER_MAIN_COMPAT_EXPORTS = (
     user_digest_poll_interval_seconds,
     user_digest_scheduler_enabled,
 )
-
-EMBEDDING_PROVIDER = load_embedding_provider()
-FEATURE_EXTRACTOR = HeuristicSignalCandidateFeatureExtractor()
-INTEREST_COMPILER = InterestBaselineCompiler()
-CRITERION_COMPILER = CriterionBaselineCompiler()
-INTEREST_INDEXER = InterestCentroidIndexer(load_indexer_config())
-
 
 async def process_normalize(job: Job, _job_token: str) -> dict[str, Any]:
     return await process_normalize_with_dependencies(
@@ -594,7 +654,50 @@ async def process_criterion_compile(job: Job, _job_token: str) -> dict[str, Any]
 
 
 def build_worker_runtime_deps() -> dict[str, Any]:
-    return build_worker_runtime_deps_from_namespace(globals())
+    return worker_runtime_deps_to_dict(
+        WorkerRuntimeDeps(
+            CLUSTER_QUEUE=CLUSTER_QUEUE,
+            CRITERIA_MATCH_QUEUE=CRITERIA_MATCH_QUEUE,
+            CRITERION_COMPILE_QUEUE=CRITERION_COMPILE_QUEUE,
+            DEDUP_QUEUE=DEDUP_QUEUE,
+            EMBED_QUEUE=EMBED_QUEUE,
+            FEEDBACK_INGEST_QUEUE=FEEDBACK_INGEST_QUEUE,
+            INTEREST_COMPILE_QUEUE=INTEREST_COMPILE_QUEUE,
+            INTEREST_MATCH_QUEUE=INTEREST_MATCH_QUEUE,
+            LLM_REVIEW_QUEUE=LLM_REVIEW_QUEUE,
+            NORMALIZE_QUEUE=NORMALIZE_QUEUE,
+            NOTIFY_QUEUE=NOTIFY_QUEUE,
+            REINDEX_QUEUE=REINDEX_QUEUE,
+            SEQUENCE_QUEUE=SEQUENCE_QUEUE,
+            PostgresSequenceRepository=PostgresSequenceRepository,
+            SequenceCronScheduler=SequenceCronScheduler,
+            SequenceRunJobProcessor=SequenceRunJobProcessor,
+            build_redis_connection_options=build_redis_connection_options,
+            enqueue_sequence_run_job_async=enqueue_sequence_run_job_async,
+            process_cluster=process_cluster,
+            process_criterion_compile=process_criterion_compile,
+            process_dedup=process_dedup,
+            process_due_scheduled_digests=process_due_scheduled_digests,
+            process_embed=process_embed,
+            process_feedback_ingest=process_feedback_ingest,
+            process_interest_compile=process_interest_compile,
+            process_llm_review=process_llm_review,
+            process_match_criteria=process_match_criteria,
+            process_match_interests=process_match_interests,
+            process_normalize=process_normalize,
+            process_notify=process_notify,
+            process_queued_manual_digests=process_queued_manual_digests,
+            process_reindex=process_reindex,
+            sequence_cron_poll_interval_seconds=sequence_cron_poll_interval_seconds,
+            sequence_cron_scheduler_enabled=sequence_cron_scheduler_enabled,
+            sequence_runner_concurrency=sequence_runner_concurrency,
+            sequence_runner_enabled=sequence_runner_enabled,
+            sequence_runner_lock_duration_ms=sequence_runner_lock_duration_ms,
+            sequence_runner_stalled_interval_ms=sequence_runner_stalled_interval_ms,
+            user_digest_poll_interval_seconds=user_digest_poll_interval_seconds,
+            user_digest_scheduler_enabled=user_digest_scheduler_enabled,
+        )
+    )
 
 
 def on_worker_error(label: str):
@@ -610,6 +713,8 @@ async def run_workers() -> None:
 
 
 def main() -> None:
+    import logging
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     check_database()
     check_redis()

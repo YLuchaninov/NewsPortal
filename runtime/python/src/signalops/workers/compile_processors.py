@@ -4,11 +4,33 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .compile_repository import fetch_criterion_for_update, fetch_interest_for_update
+from .reindex_interest_auto_repair import queue_interest_auto_repair_job
+from .runtime_db import open_connection
 from .runtime_values import coerce_bool, coerce_positive_int
+from .vector_registry import (
+    mark_interest_hnsw_dirty,
+    resolve_interest_hnsw_label,
+    update_criterion_compile_status,
+    update_interest_compile_status,
+    upsert_criterion_compiled_row,
+    upsert_embedding_registry,
+    upsert_interest_compiled_row,
+    upsert_interest_vector_registry,
+)
+from .worker_events import compute_content_hash, is_event_processed, record_processed_event
 from .worker_queues import (
     CRITERION_COMPILE_CONSUMER,
     INTEREST_CENTROIDS_INDEX_NAME,
     INTEREST_COMPILE_CONSUMER,
+)
+from .worker_runtime_singletons import (
+    CRITERION_COMPILER,
+    EMBEDDING_PROVIDER,
+    FEATURE_EXTRACTOR,
+    INTEREST_COMPILER,
+    INTEREST_INDEXER,
+    LOGGER,
 )
 
 
@@ -49,44 +71,40 @@ class CriterionCompileProcessorDependencies:
 
 
 def build_interest_compile_processor_dependencies() -> InterestCompileProcessorDependencies:
-    from . import main as legacy_main
-
     return InterestCompileProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        is_event_processed=legacy_main.is_event_processed,
-        fetch_interest_for_update=legacy_main.fetch_interest_for_update,
-        interest_compiler=legacy_main.INTEREST_COMPILER,
-        embedding_provider=legacy_main.EMBEDDING_PROVIDER,
-        feature_extractor=legacy_main.FEATURE_EXTRACTOR,
-        upsert_embedding_registry=legacy_main.upsert_embedding_registry,
-        compute_content_hash=legacy_main.compute_content_hash,
-        upsert_interest_vector_registry=legacy_main.upsert_interest_vector_registry,
-        resolve_interest_hnsw_label=legacy_main.resolve_interest_hnsw_label,
-        mark_interest_hnsw_dirty=legacy_main.mark_interest_hnsw_dirty,
-        upsert_interest_compiled_row=legacy_main.upsert_interest_compiled_row,
-        update_interest_compile_status=legacy_main.update_interest_compile_status,
-        record_processed_event=legacy_main.record_processed_event,
-        queue_interest_auto_repair_job=legacy_main.queue_interest_auto_repair_job,
-        interest_indexer=legacy_main.INTEREST_INDEXER,
-        logger=legacy_main.LOGGER,
+        open_connection=open_connection,
+        is_event_processed=is_event_processed,
+        fetch_interest_for_update=fetch_interest_for_update,
+        interest_compiler=INTEREST_COMPILER,
+        embedding_provider=EMBEDDING_PROVIDER,
+        feature_extractor=FEATURE_EXTRACTOR,
+        upsert_embedding_registry=upsert_embedding_registry,
+        compute_content_hash=compute_content_hash,
+        upsert_interest_vector_registry=upsert_interest_vector_registry,
+        resolve_interest_hnsw_label=resolve_interest_hnsw_label,
+        mark_interest_hnsw_dirty=mark_interest_hnsw_dirty,
+        upsert_interest_compiled_row=upsert_interest_compiled_row,
+        update_interest_compile_status=update_interest_compile_status,
+        record_processed_event=record_processed_event,
+        queue_interest_auto_repair_job=queue_interest_auto_repair_job,
+        interest_indexer=INTEREST_INDEXER,
+        logger=LOGGER,
     )
 
 
 def build_criterion_compile_processor_dependencies() -> CriterionCompileProcessorDependencies:
-    from . import main as legacy_main
-
     return CriterionCompileProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        is_event_processed=legacy_main.is_event_processed,
-        fetch_criterion_for_update=legacy_main.fetch_criterion_for_update,
-        criterion_compiler=legacy_main.CRITERION_COMPILER,
-        embedding_provider=legacy_main.EMBEDDING_PROVIDER,
-        feature_extractor=legacy_main.FEATURE_EXTRACTOR,
-        upsert_embedding_registry=legacy_main.upsert_embedding_registry,
-        compute_content_hash=legacy_main.compute_content_hash,
-        upsert_criterion_compiled_row=legacy_main.upsert_criterion_compiled_row,
-        update_criterion_compile_status=legacy_main.update_criterion_compile_status,
-        record_processed_event=legacy_main.record_processed_event,
+        open_connection=open_connection,
+        is_event_processed=is_event_processed,
+        fetch_criterion_for_update=fetch_criterion_for_update,
+        criterion_compiler=CRITERION_COMPILER,
+        embedding_provider=EMBEDDING_PROVIDER,
+        feature_extractor=FEATURE_EXTRACTOR,
+        upsert_embedding_registry=upsert_embedding_registry,
+        compute_content_hash=compute_content_hash,
+        upsert_criterion_compiled_row=upsert_criterion_compiled_row,
+        update_criterion_compile_status=update_criterion_compile_status,
+        record_processed_event=record_processed_event,
     )
 
 

@@ -6,6 +6,8 @@ from typing import Any
 
 from psycopg.types.json import Json
 
+from .runtime_db import open_connection
+from .worker_events import is_event_processed, record_processed_event
 from .worker_queues import FEEDBACK_INGEST_CONSUMER
 
 
@@ -17,12 +19,10 @@ class FeedbackIngestProcessorDependencies:
 
 
 def build_feedback_ingest_processor_dependencies() -> FeedbackIngestProcessorDependencies:
-    from . import main as legacy_main
-
     return FeedbackIngestProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        is_event_processed=legacy_main.is_event_processed,
-        record_processed_event=legacy_main.record_processed_event,
+        open_connection=open_connection,
+        is_event_processed=is_event_processed,
+        record_processed_event=record_processed_event,
     )
 
 

@@ -7,6 +7,14 @@ from typing import Any
 
 import psycopg
 
+from .cluster_repository import (
+    create_or_update_cluster as default_create_or_update_cluster,
+    fetch_cluster_event_vector as default_fetch_cluster_event_vector,
+    load_recent_cluster_candidates as default_load_recent_cluster_candidates,
+)
+from .selection_write_repository import (
+    upsert_system_feed_result as default_upsert_system_feed_result,
+)
 from .signal_candidate_repository import fetch_signal_candidate_for_update as default_fetch_signal_candidate_for_update
 from .runtime_json import coerce_text_list
 from .runtime_values import coerce_positive_int
@@ -105,16 +113,14 @@ def build_signal_candidate_cluster_processor_dependencies(
         or load_recent_cluster_candidates is None
         or create_or_update_cluster is None
     ):
-        from . import main as legacy_main
-
         if upsert_system_feed_result is None:
-            upsert_system_feed_result = legacy_main.upsert_system_feed_result
+            upsert_system_feed_result = default_upsert_system_feed_result
         if fetch_cluster_event_vector is None:
-            fetch_cluster_event_vector = legacy_main.fetch_cluster_event_vector
+            fetch_cluster_event_vector = default_fetch_cluster_event_vector
         if load_recent_cluster_candidates is None:
-            load_recent_cluster_candidates = legacy_main.load_recent_cluster_candidates
+            load_recent_cluster_candidates = default_load_recent_cluster_candidates
         if create_or_update_cluster is None:
-            create_or_update_cluster = legacy_main.create_or_update_cluster
+            create_or_update_cluster = default_create_or_update_cluster
 
     return SignalCandidateClusterProcessorDependencies(
         open_connection=open_connection,

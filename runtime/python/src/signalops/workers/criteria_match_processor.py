@@ -12,8 +12,55 @@ from .criteria_review_policy import (
     is_candidate_recovery_protected,
     should_queue_criterion_llm_review,
 )
+from .final_selection import apply_document_candidate_signal_uplift
+from .interest_filters import (
+    build_interest_filter_explain,
+    resolve_criterion_filter_outcome,
+    resolve_interest_filter_context,
+    upsert_interest_filter_result,
+)
+from .llm_budget import (
+    build_llm_budget_gate_explain,
+    get_llm_review_monthly_quota_snapshot,
+    resolve_criterion_gray_zone_runtime_resolution,
+)
+from .matching_read_repository import find_prompt_template, list_compiled_criteria
 from .runtime_json import coerce_json_object, coerce_text_list, make_json_safe
 from .runtime_values import coerce_bool
+from .runtime_db import open_connection
+from .scoring import (
+    compute_criterion_final_score,
+    compute_criterion_meta_score,
+    decide_criterion,
+    semantic_prototype_score,
+)
+from .selection_profiles import (
+    build_selection_profile_runtime_explain,
+    coerce_selection_profile_runtime,
+    resolve_profile_gray_zone_decision,
+    resolve_strict_candidate_signal_guard,
+    selection_profile_allows_llm_review,
+)
+from .selection_runtime import passes_allowed_content_kind, passes_hard_filters
+from .selection_write_repository import (
+    find_reusable_criterion_llm_review,
+    persist_criterion_review_resolution,
+    should_dispatch_clustering,
+    upsert_system_feed_result,
+)
+from .signal_candidate_repository import fetch_signal_candidate_for_update
+from .vector_registry import (
+    compute_lexical_score,
+    fetch_embedding_vectors_by_ids,
+    fetch_signal_candidate_features_row,
+    fetch_signal_candidate_vectors,
+)
+from .worker_events import (
+    insert_outbox_event,
+    is_event_processed,
+    record_processed_event,
+    suppress_downstream_outbox,
+)
 from .worker_queues import (
     SIGNAL_CANDIDATE_CRITERIA_MATCHED_EVENT,
     CRITERIA_MATCH_CONSUMER,
@@ -61,44 +108,42 @@ class CriteriaMatchProcessorDependencies:
 
 
 def build_criteria_match_processor_dependencies() -> CriteriaMatchProcessorDependencies:
-    from . import main as legacy_main
-
     return CriteriaMatchProcessorDependencies(
-        open_connection=legacy_main.open_connection,
-        suppress_downstream_outbox=legacy_main.suppress_downstream_outbox,
-        is_event_processed=legacy_main.is_event_processed,
-        fetch_signal_candidate_for_update=legacy_main.fetch_signal_candidate_for_update,
-        fetch_signal_candidate_features_row=legacy_main.fetch_signal_candidate_features_row,
-        fetch_signal_candidate_vectors=legacy_main.fetch_signal_candidate_vectors,
-        list_compiled_criteria=legacy_main.list_compiled_criteria,
-        find_prompt_template=legacy_main.find_prompt_template,
-        get_llm_review_monthly_quota_snapshot=legacy_main.get_llm_review_monthly_quota_snapshot,
-        resolve_interest_filter_context=legacy_main.resolve_interest_filter_context,
-        passes_hard_filters=legacy_main.passes_hard_filters,
-        passes_allowed_content_kind=legacy_main.passes_allowed_content_kind,
-        compute_lexical_score=legacy_main.compute_lexical_score,
-        fetch_embedding_vectors_by_ids=legacy_main.fetch_embedding_vectors_by_ids,
-        semantic_prototype_score=legacy_main.semantic_prototype_score,
-        compute_criterion_meta_score=legacy_main.compute_criterion_meta_score,
-        compute_criterion_final_score=legacy_main.compute_criterion_final_score,
-        decide_criterion=legacy_main.decide_criterion,
-        apply_document_candidate_signal_uplift=legacy_main.apply_document_candidate_signal_uplift,
-        coerce_selection_profile_runtime=legacy_main.coerce_selection_profile_runtime,
-        build_selection_profile_runtime_explain=legacy_main.build_selection_profile_runtime_explain,
-        selection_profile_allows_llm_review=legacy_main.selection_profile_allows_llm_review,
-        resolve_strict_candidate_signal_guard=legacy_main.resolve_strict_candidate_signal_guard,
-        resolve_criterion_gray_zone_runtime_resolution=legacy_main.resolve_criterion_gray_zone_runtime_resolution,
-        build_llm_budget_gate_explain=legacy_main.build_llm_budget_gate_explain,
-        resolve_profile_gray_zone_decision=legacy_main.resolve_profile_gray_zone_decision,
-        resolve_criterion_filter_outcome=legacy_main.resolve_criterion_filter_outcome,
-        upsert_interest_filter_result=legacy_main.upsert_interest_filter_result,
-        build_interest_filter_explain=legacy_main.build_interest_filter_explain,
-        find_reusable_criterion_llm_review=legacy_main.find_reusable_criterion_llm_review,
-        persist_criterion_review_resolution=legacy_main.persist_criterion_review_resolution,
-        insert_outbox_event=legacy_main.insert_outbox_event,
-        upsert_system_feed_result=legacy_main.upsert_system_feed_result,
-        should_dispatch_clustering=legacy_main.should_dispatch_clustering,
-        record_processed_event=legacy_main.record_processed_event,
+        open_connection=open_connection,
+        suppress_downstream_outbox=suppress_downstream_outbox,
+        is_event_processed=is_event_processed,
+        fetch_signal_candidate_for_update=fetch_signal_candidate_for_update,
+        fetch_signal_candidate_features_row=fetch_signal_candidate_features_row,
+        fetch_signal_candidate_vectors=fetch_signal_candidate_vectors,
+        list_compiled_criteria=list_compiled_criteria,
+        find_prompt_template=find_prompt_template,
+        get_llm_review_monthly_quota_snapshot=get_llm_review_monthly_quota_snapshot,
+        resolve_interest_filter_context=resolve_interest_filter_context,
+        passes_hard_filters=passes_hard_filters,
+        passes_allowed_content_kind=passes_allowed_content_kind,
+        compute_lexical_score=compute_lexical_score,
+        fetch_embedding_vectors_by_ids=fetch_embedding_vectors_by_ids,
+        semantic_prototype_score=semantic_prototype_score,
+        compute_criterion_meta_score=compute_criterion_meta_score,
+        compute_criterion_final_score=compute_criterion_final_score,
+        decide_criterion=decide_criterion,
+        apply_document_candidate_signal_uplift=apply_document_candidate_signal_uplift,
+        coerce_selection_profile_runtime=coerce_selection_profile_runtime,
+        build_selection_profile_runtime_explain=build_selection_profile_runtime_explain,
+        selection_profile_allows_llm_review=selection_profile_allows_llm_review,
+        resolve_strict_candidate_signal_guard=resolve_strict_candidate_signal_guard,
+        resolve_criterion_gray_zone_runtime_resolution=resolve_criterion_gray_zone_runtime_resolution,
+        build_llm_budget_gate_explain=build_llm_budget_gate_explain,
+        resolve_profile_gray_zone_decision=resolve_profile_gray_zone_decision,
+        resolve_criterion_filter_outcome=resolve_criterion_filter_outcome,
+        upsert_interest_filter_result=upsert_interest_filter_result,
+        build_interest_filter_explain=build_interest_filter_explain,
+        find_reusable_criterion_llm_review=find_reusable_criterion_llm_review,
+        persist_criterion_review_resolution=persist_criterion_review_resolution,
+        insert_outbox_event=insert_outbox_event,
+        upsert_system_feed_result=upsert_system_feed_result,
+        should_dispatch_clustering=should_dispatch_clustering,
+        record_processed_event=record_processed_event,
     )
 
 
